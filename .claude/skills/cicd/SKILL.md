@@ -163,14 +163,16 @@ only when the user explicitly asks for one of them.
 
 For every comment, decide **FIX** or **PUSHBACK** with reasoning.
 
-Default to **FIX** for: portability complaints (always valid for
-Steward — recurring bug class), test or doc requests, style nits
+Default to **FIX** for: portability complaints (a recurring bug
+class across AgentCulture repos), test or doc requests, style nits
 aligned with workspace conventions.
 
 Default to **PUSHBACK** for: architecture opinions that conflict with
-workspace `CLAUDE.md` or the all-backends rule; greenfield
-false-positives (e.g. "add tests" before there's any source — defer
-to a later PR, don't refuse).
+`CLAUDE.md` or the all-backends rule; scaffold false-positives — this
+repo has no MicroDuck control code yet, so "this CLI doesn't do
+anything with the robot" is a roadmap item, not a PR defect. Anything
+proposing a second runtime loop in `microduck_cli/` is a PUSHBACK too:
+that code belongs upstream in `neurosymbolic-system` (see `CLAUDE.md`).
 
 ### Alignment-delta rule
 
@@ -179,18 +181,29 @@ If the PR touches `CLAUDE.md`, `culture.yaml`, or anything under
 PUSHBACK on each comment. Note any sibling that needs a follow-up PR
 and mention it in your reply.
 
-## Greenfield-aware steps
+## Pre-PR steps (microduck-cli)
 
-The lint and the workflow script are always-on. Stack-specific steps
-are conditional and currently no-op (greenfield repo):
+**Consumer adaptation** — upstream ships this section as conditional
+"greenfield-aware" no-ops. microduck-cli's stack has landed, so the steps
+below are unconditional here; run all of them before `workflow.sh open`.
+Recorded as a tracked divergence in `docs/skill-sources.md`.
 
 ```bash
-[ -d tests ] && [ -f pyproject.toml ] && uv run pytest tests/ -x -q
-[ -f pyproject.toml ] && bump_version_per_project_convention   # see project README
-[ -f .markdownlint-cli2.yaml ] && markdownlint-cli2 "$(git diff --name-only --cached '*.md')"
+uv run pytest -n auto                                # full suite must be green
+uv run black --check microduck_cli tests             # the CI lint job, locally
+uv run isort --check-only microduck_cli tests
+uv run flake8 microduck_cli tests
+uv run bandit -c pyproject.toml -r microduck_cli
+uv run teken cli doctor . --strict                   # the agent-first rubric gate
+markdownlint-cli2 "**/*.md" "#node_modules" "#.local" "#.claude/skills" "#.teken"
+/version-bump patch|minor|major                      # REQUIRED on every PR
 ```
 
-Revisit each line as the corresponding stack element actually lands.
+The version bump is not optional: the `version-check` job compares
+`pyproject.toml` against `origin/main` and fails the PR when they match — even
+for docs/config/CI-only changes. Use the `version-bump` skill so `CHANGELOG.md`
+gets its Keep-a-Changelog entry in the same pass.
+
 A `pr lint --extra=tests,version,markdown` ask is filed upstream
 ([devex#41](https://github.com/agentculture/devex/issues/41)).
 
@@ -203,6 +216,9 @@ in the fix-up commit message.
 The `status` extension queries SonarCloud directly (it predates the
 upstream Sonar integration in `devex pr read`). Both surfaces are
 trustworthy — `devex pr read` for display in the briefing, `status` for
-the gate. Steward isn't yet a registered mesh agent, so the
+the gate. microduck-cli isn't yet a registered mesh agent, so the
 post-merge IRC ping that Culture's `pr-review` includes is still
-skipped — that returns when Steward joins the mesh.
+skipped — that returns when microduck-cli joins the mesh. (Until then,
+a cross-repo follow-up — e.g. a runtime gap that belongs to
+`neurosymbolic-system` — goes out as a tracked issue via the
+`communicate` skill.)

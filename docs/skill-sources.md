@@ -31,7 +31,7 @@ is load-bearing, even where guildmaster's upstream copy omits it.
 
 | Skill | Upstream | Origin | Notes | Last synced |
 |-------|----------|--------|-------|-------------|
-| `cicd` | `../guildmaster/.claude/skills/cicd/` | guildmaster | CI/CD lane layered on `devex pr`: the 5 thin scripts (`workflow.sh`, `pr-status.sh`, `pr-reply.sh`, `_resolve-nick.sh`, `portability-lint.sh`) delegate lint/open/read/reply/delta to `devex` and add the `status` / `await` SonarCloud-gating extensions. Consumer-identifying prose (`guildmaster` → `microduck-cli`) adapted in the description + heading; upstream history (`Renamed from pr-review in steward 0.7.0; rebased on devex in 0.12.0`) and env-var literals (`STEWARD_*`) kept verbatim. The PR signature resolves at runtime from `culture.yaml` via `_resolve-nick.sh` (→ `microduck-cli`). Requires `devex` on PATH. | 2026-05-26 (guildmaster 0.6.0) |
+| `cicd` | `../guildmaster/.claude/skills/cicd/` | guildmaster | CI/CD lane layered on `devex pr`: the 5 thin scripts (`workflow.sh`, `pr-status.sh`, `pr-reply.sh`, `_resolve-nick.sh`, `portability-lint.sh`) delegate lint/open/read/reply/delta to `devex` and add the `status` / `await` SonarCloud-gating extensions. Consumer-identifying prose (`guildmaster` → `microduck-cli`) adapted in the description + heading; upstream history (`Renamed from pr-review in steward 0.7.0; rebased on devex in 0.12.0`) and env-var literals (`STEWARD_*`) kept verbatim. The PR signature resolves at runtime from `culture.yaml` via `_resolve-nick.sh` (→ `microduck-cli`). Requires `devex` on PATH. **Prose divergence (2026-08-29):** the "Greenfield-aware steps", triage-defaults and mesh-ping paragraphs were adapted to this repo's actual stack — see [local divergence](#local-divergence--cicd-pre-pr-steps-adapted-to-this-repos-stack-2026-08-29). | 2026-05-26 (guildmaster 0.6.0) |
 | `communicate` | `../guildmaster/.claude/skills/communicate/` | guildmaster | Cross-repo + mesh communication. Consumer-identifying prose adapted in the description (incl. the `- microduck-cli (Claude)` signature line). **No hard-coded signature literal in the scripts** — `post-issue.sh` is `agtag`-backed and resolves the signing nick from `culture.yaml`; requires `agtag` (>=0.1) on PATH. The supplier `scripts/templates/` (`skill-update-brief.md`, `skill-new-brief.md`) are kept verbatim — inert for a consumer (they cite guildmaster as upstream). Renamed from `coordinate` in steward 0.8.0; absorbed `gh-issues` in 0.9.1. | 2026-05-26 (guildmaster 0.6.0) |
 | `version-bump` | `../guildmaster/.claude/skills/version-bump/` | guildmaster | Pure-Python, CWD-aware (`scripts/bump.py`). Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
 | `agent-config` | `../guildmaster/.claude/skills/agent-config/` | guildmaster (origin steward) | Shows a Culture agent's full config; run `scripts/show.sh` directly (no `guild` binary required). `scripts/show.sh` + `data/backend-fingerprints.yaml` verbatim. Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
@@ -173,6 +173,33 @@ If guildmaster ever re-broadcasts these four **without** the extra `scripts/`
 wrapper (i.e. its copy goes back to matching devague byte-for-byte), switch
 the upstream column back to `../guildmaster/.claude/skills/<skill>/` and
 re-sync from there per the normal procedure.
+
+### Local divergence — `cicd` pre-PR steps adapted to this repo's stack (2026-08-29)
+
+Guildmaster ships `cicd`'s `SKILL.md` with a **"Greenfield-aware steps"** section
+whose pre-PR commands are conditional no-ops (`[ -d tests ] && …`), plus triage
+defaults phrased for a greenfield supplier repo. microduck-cli's stack has
+landed — tests, the lint stack, the rubric gate and the `version-check` job all
+run — so those steps are unconditional here and the section is rewritten as
+**"Pre-PR steps (microduck-cli)"**, listing the commands this repo's CI actually
+enforces. Two smaller prose adaptations ride along: the triage defaults name this
+repo's real false-positive class (scaffold complaints, and any proposal to grow a
+second runtime loop in `microduck_cli/` instead of upstream in
+`neurosymbolic-system`), and the closing mesh-ping paragraph names microduck-cli
+rather than steward.
+
+**No script bodies are edited** — the divergence is confined to `SKILL.md` prose,
+which is the sanctioned adaptation surface. On a re-sync, pull guildmaster's copy
+fresh and re-apply the three edits:
+
+```bash
+diff -u ../guildmaster/.claude/skills/cicd/SKILL.md .claude/skills/cicd/SKILL.md
+```
+
+If guildmaster's upstream ever grows a per-consumer pre-PR mechanism (the
+`pr lint --extra=tests,version,markdown` ask filed at
+[devex#41](https://github.com/agentculture/devex/issues/41)), drop this
+divergence and delegate to it instead.
 
 ## Tooling prerequisites
 

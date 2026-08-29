@@ -1,28 +1,273 @@
-# CLAUDE.md — seed / bootstrap placeholder
+# CLAUDE.md
 
-> **This is a self-initializing seed, not a finished runtime prompt.**
-> Run `/init` (or describe the agent's domain to your AI assistant) to
-> re-initialize this file into a full runtime prompt, using the description
-> below and the scaffolded repo as context.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Agent
+## What this repo actually is right now
 
-This repository hosts the **microduck-cli** agent.
+`microduck-cli` is an **AgentCulture mesh agent** whose destination is
+*controlling the MicroDuck robot — one CLI that any agent or human drives*
+(`culture.yaml`, [README](README.md)).
 
-## Description
+**No MicroDuck control code exists yet.** What is on disk is the mesh-agent
+scaffold cloned from `culture-agent-template` (`git log` is two commits: the
+initial commit and the scaffold): an agent-first introspection CLI (`whoami`,
+`learn`, `explain`, `overview`, `doctor`, `cli`), a mesh identity, the vendored
+guildmaster skill kit, and a build/CI/deploy baseline. Treat that CLI as the
+chassis you extend, and the three sibling repos below as the architecture you
+extend it *toward*.
 
-Agent-agnostic CLI for controlling the MicroDuck robot. Any agent, any human, one CLI. Built on the neurosymbolic-system runtime and following the reachy-mini-cli architecture.
+Two things to internalize before touching anything:
 
-## Re-init instruction
+- **The runtime agent prompt is `AGENTS.colleague.md`, not this file.**
+  `culture.yaml` declares `backend: colleague`, and the backend→prompt-file map
+  (see `doctor`) resolves `colleague` → `AGENTS.colleague.md`. This `CLAUDE.md`
+  is guidance for *Claude Code working in the repo*; editing it does not change
+  the mesh agent's runtime behavior.
+- **The installed console script is `microduck`, not `microduck-cli`.**
+  `[project.scripts]` defines `microduck = "microduck_cli.cli:main"`, so
+  `uv run microduck-cli whoami` fails with "Failed to spawn." Use `uv run
+  microduck …` or `python -m microduck_cli …`. The *internal* prog name is
+  `microduck-cli`, so `--help` text, error messages, `learn`/`explain` bodies and
+  JSON payloads all say `microduck-cli` — that string is intentional in output,
+  just not as the binary. (Same half-rename `arm101-cli` carries; `reachy-mini-cli`
+  resolved its by shipping *both* console scripts. Either fix is fine — do it as
+  one deliberate pass across `pyproject.toml`, `prog=`, `_commands/`,
+  `explain/catalog.py`, the README and the test assertions, never piecemeal.)
 
-This file is a seed. To expand it into your full runtime prompt:
+## Common commands
 
-1. Open this repo in Claude Code (or your preferred AI assistant).
-2. Run `/init` — the assistant will read the repo, incorporate the description
-   above, and replace this seed with a complete `CLAUDE.md`.
-3. Commit the result.
+```bash
+uv sync                                              # create .venv, install runtime + dev deps
+uv run microduck whoami                              # run the CLI (note: 'microduck')
+uv run pytest -n auto                                # full suite (xdist parallel)
+uv run pytest tests/test_cli.py::test_whoami_text    # a single test
+uv run pytest -n auto --cov=microduck_cli --cov-report=term   # coverage (CI gate: fail_under=60)
+uv run teken cli doctor . --strict                   # the agent-first rubric gate CI enforces
+```
 
-Until you run `/init`, `microduck-cli` satisfies the `steward doctor`
-`prompt-file-present` and `backend-consistency` invariants (a `CLAUDE.md`
-exists and `culture.yaml` declares `backend: claude`) but the prompt is not
-yet tailored to this agent's domain.
+Lint stack (the CI `lint` job runs all of these; line length is 100 everywhere):
+
+```bash
+uv run black --check microduck_cli tests
+uv run isort --check-only microduck_cli tests
+uv run flake8 microduck_cli tests
+uv run bandit -c pyproject.toml -r microduck_cli     # B101/B404/B603 skipped in pyproject
+markdownlint-cli2 "**/*.md" "#node_modules" "#.local" "#.claude/skills" "#.teken"
+```
+
+## Architecture: the agent-first CLI
+
+Everything routes through `microduck_cli/cli/__init__.py:main()` → `_build_parser()`.
+Three cross-cutting contracts are enforced by tests and by the rubric gate.
+
+- **Adding a verb.** Write `cli/_commands/<verb>.py` exposing `register(sub)`
+  (add `--json`, `set_defaults(func=…)`), then add one import + call inside
+  `_build_parser()`. That is the only wiring step; `whoami.py` is the canonical
+  example. For a **noun group** (a subcommand with its own verbs — how duck
+  control will land, e.g. `microduck duck walk`), mirror `_commands/cli.py`:
+  build the child subparsers with `parser_class=type(p)` so nested parse errors
+  keep the structured error contract instead of argparse's default exit-2. A noun
+  with action-verbs must also expose its own `overview` (rubric requirement).
+- **Error contract** (`cli/_errors.py` + `_dispatch`/`_CliArgumentParser`).
+  Every failure raises `CliError(code, message, remediation)`; `_dispatch` catches
+  it and wraps *any* other exception, so no Python traceback ever leaks. Argparse
+  errors route through `_CliArgumentParser.error()` too — and because parse errors
+  fire before `args.json` exists, `main()` pre-scans raw argv for `--json` into the
+  class-level `_json_hint`. **Handlers raise `CliError` — never `sys.exit`, never
+  print-and-return.** Text errors are always two lines: `error: …` then `hint: …`
+  (the `hint:` prefix is rubric-required).
+- **Output contract** (`cli/_output.py`). Results → stdout, errors and diagnostics
+  → stderr, **never mixed**, in text and JSON mode alike. Use `emit_result` /
+  `emit_error` / `emit_diagnostic`, not `print`. Exit codes: `0` success, `1`
+  user-input error, `2` environment error, `3+` reserved (constants in `_errors.py`).
+- **The explain catalog** (`microduck_cli/explain/catalog.py`). `ENTRIES` is keyed
+  by command-path tuples (`("whoami",)`, `("cli","overview")`; `()`,
+  `("microduck-cli",)` and `("microduck",)` all resolve to root).
+  `test_every_catalog_path_resolves` asserts each *existing* entry renders, but
+  nothing forces a *new* verb to have one — so adding a verb means updating
+  **three places in lockstep** or the docs silently drift: the catalog entry, the
+  `_VERBS` list in `overview.py`, and the `_TEXT` + `_as_json_payload` blocks in
+  `learn.py`.
+- **Identity** (`_commands/whoami.py`). `culture.yaml` is hand-parsed line by line
+  (no YAML dependency, to keep runtime deps empty) — only the documented flat
+  `suffix`/`backend`/`model` shape is understood. `find_culture_yaml()` walks up
+  from `__file__`, so identity is the agent's own even when invoked elsewhere; a
+  wheel install (no `culture.yaml` beside the package) falls back to literal
+  defaults and `doctor` reports a single info check.
+
+### The agent-first rubric (why some code looks odd)
+
+`teken cli doctor . --strict` gates CI on a seven-bundle rubric. Several shapes
+exist only to satisfy it — don't "simplify" them away:
+
+- `learn` must be ≥200 chars and mention purpose, command map, exit codes,
+  `--json`, and `explain`.
+- Any noun with action-verbs must also expose `overview` — the entire reason the
+  `cli` noun group exists (`cli overview` describes the CLI; the global `overview`
+  describes the *agent*).
+- Descriptive verbs must never hard-fail on a bad path — hence `overview` takes an
+  ignored positional `target` and still exits 0.
+
+Separate from the in-package `microduck doctor`, which checks **agent-identity
+invariants**: `prompt-file-present`, `backend-consistency` (`claude`→`CLAUDE.md`,
+`colleague`→`AGENTS.colleague.md`, `acp`→`AGENTS.md`, `gemini`→`GEMINI.md`), and
+`skills-present`. Change the backend in `culture.yaml` and you must teach `doctor`
+the matching prompt file.
+
+## The three sibling repos, and what to take from each
+
+The duck domain is meant to be built by *composing* these, not by inventing a
+fourth architecture. Read the named file before you start the corresponding work.
+
+### `../neurosymbolic-system` — the intended runtime (not usable yet)
+
+The description says microduck-cli is "built on the neurosymbolic-system runtime":
+senses, rules, arbitration and motion composed onto one 50 Hz tick, extracted from
+reachy-mini-cli and imported as a library by robot CLIs. **That library does not
+exist yet.** `neurosymbolic-system` 0.7.0 is the *same* bare template scaffold this
+repo is — `neurosymbolic_system/` contains only `cli/` and `explain/`, no runtime
+modules, and its `CLAUDE.md` is still the un-`/init`'ed seed.
+
+Consequences: it is **not** a dependency of this repo and must not be added as one
+until it actually ships runtime modules. When it does, **import it — do not
+re-implement the tick here.** If you find yourself writing an engine loop,
+arbitration, or a sense driver in `microduck_cli/`, that code belongs upstream in
+`neurosymbolic-system`; file it there (the `communicate` skill posts cross-repo
+issues) rather than forking a second runtime. Until then, duck work that needs a
+runtime is blocked on that repo, and a CLI-only surface (config, discovery,
+inventory, dry-run planning) is what can land here.
+
+### `../reachy-mini-cli` — the architecture to follow
+
+The mature robot CLI in the family (`reachy/`, ~2000-line `CLAUDE.md`). Its
+`CLAUDE.md` "Architecture: the agent-first CLI" and "Noun internals" sections are
+the reference. The load-bearing lessons:
+
+- **One noun per capability, each with `overview`**, engine logic in a sibling
+  package (`reachy/behavior/`, `reachy/motion/`…) and only argparse wiring in
+  `_commands/`. Keep that split here: `microduck_cli/cli/_commands/` stays thin.
+- **The single-SDK-owner model.** The hardware exposes one client and one head;
+  every sense process contends for them, and the loser throttles. So **compose
+  senses onto ONE tick seam, never as two processes** (`_compose_run_seam`). Two
+  standalone sense nouns were deleted for exactly this reason — don't recreate the
+  mistake in duck form.
+- **Don't arbitrate across processes on a flag file.** A flag cannot expire; a
+  heartbeat in `state.json` can. Refuse early (`refuse_if_engine_live()`) instead
+  of running a silently useless second process.
+- **Sense-stage logging.** A named drop reason (`self-mute`, `cooldown`,
+  `audio-muted`…) on a dedicated logger, stderr-only, so JSONL export on stdout
+  stays pure. A layer whose drops are invisible is indistinguishable from one that
+  silently no-ops.
+
+### `../arm101-cli` — the hardware-safety patterns at this maturity
+
+The closest peer: same template, same half-rename gotcha, a real hardware layer
+grown on top (`arm101/hardware/`, `arm101/explore/`). Copy its two shipped
+disciplines when duck motion lands:
+
+- **Gated motion.** Every verb that moves hardware confirms on a TTY, prints a
+  zero-side-effect dry-run plan on a non-TTY without `--apply`, and proceeds on a
+  non-TTY *with* `--apply` (agent mode).
+- **Own what you energize.** Release on any abnormal exit (exception, bus fault,
+  Ctrl-C), each actuator released independently so one failure doesn't abort the
+  rest; leave torque untouched on a *clean* exit so a deliberate hold survives.
+  State the limits you cannot cover (a bus that is physically gone) rather than
+  implying safety you don't have.
+- **Hardware deps go in an extra, lazy-imported** (`[seeed]` there), so the base
+  install stays zero-dep and introspection works on a box with no robot attached.
+
+## Hard constraints
+
+- **Zero third-party runtime dependencies** (`dependencies = []`) — on purpose.
+  `teken`, pytest and the lint stack are dev-only. Keep it that way unless the duck
+  layer genuinely needs a hardware library, and if it does, put it behind an extra
+  with a lazy import so the introspection CLI still imports clean on a bare box.
+  Adding a *base* dep (including `neurosymbolic-system`, once it exists) is an
+  explicit decision, not a drive-by.
+- **Python ≥ 3.12** (`X | None`, `tomllib`).
+- **Every PR bumps the version — even docs/config/CI-only changes.** The
+  `version-check` job in `.github/workflows/tests.yml` compares `pyproject.toml`
+  against `origin/main` and fails the PR when they match (a duplicate version would
+  fail the PyPI publish on merge). Use the `version-bump` skill; it also prepends
+  the Keep-a-Changelog entry.
+
+## CI / release
+
+- `.github/workflows/tests.yml`: `test` (pytest + coverage + SonarCloud), `lint`
+  (the stack above + the rubric gate), `version-check` (PR-only).
+- SonarCloud gates the `test` job (`sonar-project.properties`,
+  `sonar.qualitygate.wait=true`) — but only when `SONAR_TOKEN` is set; token-less
+  repos and fork PRs skip the scan and stay green. `coverage.run.relative_files =
+  true` is load-bearing: without it `coverage.xml` paths don't map to
+  `sonar.sources=microduck_cli` and coverage reports 0%.
+- `publish.yml`: PyPI Trusted Publishing over OIDC — push to `main` → PyPI,
+  same-repo PR → a `.devN` build to TestPyPI. No stored credentials.
+
+## Skills (`.claude/skills/`) — cite-don't-import
+
+The kit is **vendored** from `guildmaster` (a few from `colleague`/`devague`);
+`docs/skill-sources.md` is the authoritative provenance ledger and holds the
+per-skill re-sync procedure. **Do not hand-edit skill script bodies** — lift real
+changes upstream and re-vendor; a copy that diverges silently is the failure mode
+that rule exists to prevent. The sanctioned local edits are (a) consumer-identifying
+prose in `SKILL.md` and (b) adding `type: command` to the frontmatter (load-bearing:
+the culture backend's `core.skill_loader` silently skips any `SKILL.md` without it).
+Every divergence beyond that gets a row in the ledger — `cicd`'s repo-specific
+pre-PR steps and `ask-colleague`'s direct-from-colleague vendoring are the tracked
+ones today. There are **no first-party skills here yet**; when you add one (a duck
+wrapper would be the natural first, as `find-reachy` is in reachy-mini-cli), say so
+in this section — otherwise a reviewer can't tell "ours" from "vendored".
+
+Day to day: **`cicd`** (the PR lane; needs `devex` ≥0.21 on PATH),
+**`communicate`** (cross-repo issues + mesh messages; needs `agtag`; posts auto-sign
+`- microduck-cli (Claude)`), **`version-bump`**, **`run-tests`**, **`sonarclaude`**,
+**`ask-colleague`**, and the devague chain (`scope` → `think` → `challenge` →
+`spec-to-plan` → `assign-to-workforce` → `summarize-delivery`, with `deviate` as the
+mid-run escape hatch).
+
+Reach for **`ask-colleague`** reflexively for a diverse second opinion —
+`review`/`explore` are read-only and always safe; side-effecting `write --apply` /
+`--pr` needs the user's go-ahead.
+
+## Conventions and workflow
+
+**Git worktrees live in `../.worktrees.microduck-cli/<name>/`.** ALL worktrees of
+this repo, without exception — workforce fan-out lanes, `ask-colleague` throwaways,
+scratch checkouts:
+
+```bash
+git worktree add ../.worktrees.microduck-cli/<name> -b <branch>
+```
+
+Never `/tmp`, never a shared `../worktrees/`. This workspace holds many sibling
+projects, and a generic shared folder accumulates orphaned trees from several repos
+with nothing indicating ownership — a stale-tree sweep can't tell a live lane from
+junk. Use a branch prefix scoped to the work (`duck/t2`, not plain `agent/t2`, which
+collides with leftovers from earlier fan-outs and makes `git worktree add -b` fail).
+Remove with `git worktree remove <path>`; `git worktree prune` only clears metadata.
+The vendored `assign-to-workforce` skill's fan-out example uses the shared path *and*
+`agent/<task-id>` branches — it is cited verbatim and must not be edited, so override
+both when following it.
+
+**Memory discipline — recall before, remember after.** This repo's eidetic memory is
+**in-repo and public**: records resolve to `<repo-root>/.eidetic/memory` (committed,
+shared with the team and mesh peers — the `claude` and `colleague` backends read the
+same `microduck-cli` scope). Note the `/remember` and `/recall` skill *descriptions*
+still claim a private `~/.eidetic` default; the vendored wrappers here default to
+`--visibility public`, and the script is what runs.
+
+- **`/recall` before you start** a non-trivial task — prior decisions, gotchas,
+  "have we done this before?" — so you build on what's known instead of re-deriving it.
+- **`/remember` when something worth keeping surfaces** — a decision and its
+  rationale, a constraint, a fix and *why*, a gotcha that cost time. Capture it as it
+  happens.
+
+Pass `--visibility private` to keep a record in `$HOME` (uncommitted); `/recall` reads
+both stores and merges. In-repo routing needs `eidetic >= 0.10.0`. Don't store what the
+repo already records (code structure, git history, this file, `CHANGELOG.md`) — store
+what you'd have to re-derive.
+
+**PR flow.** Branch (`fix/…`, `feat/…`, `docs/…`, `skill/…`), implement, bump the
+version, then go straight to `workflow.sh open` — in AgentCulture the standing default
+is always "push and create a Pull Request", no interactive merge/keep/discard menu.
+Signatures resolve from `culture.yaml` via `devex`; don't hand-sign inside `cicd`.

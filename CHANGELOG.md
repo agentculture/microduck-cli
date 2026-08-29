@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-29
+
+### Changed
+
+- **`CLAUDE.md` re-initialized from the seed into a real runtime prompt** (`/init`).
+  Replaces the self-initializing placeholder with: what the repo actually is today
+  (the mesh-agent scaffold — **no MicroDuck control code exists yet**), the
+  `microduck` vs `microduck-cli` console-script gotcha, the common command + lint
+  stack, the agent-first CLI contracts (registration, error, output, explain
+  catalog, identity/`doctor`) and the rubric shapes that must not be "simplified"
+  away, hard constraints, CI/release, the vendored-skill rule, and the workflow
+  conventions (worktrees in `../.worktrees.microduck-cli/`, in-repo public eidetic
+  memory, PR flow).
+- **A "three sibling repos" section** naming what to take from each and what not
+  to: `neurosymbolic-system` is the runtime to **import** — but it is itself still
+  a bare scaffold, so it is not a dependency yet and a tick loop must never be
+  re-implemented here; `reachy-mini-cli` is the architecture (noun groups, one tick
+  seam, single-SDK-owner model); `arm101-cli` is the hardware-safety baseline
+  (gated motion, release-on-abnormal-exit, hardware deps behind an extra).
+- **README rewritten** — a `Status: scaffold` section stating plainly that no duck
+  control code ships yet, a corrected quickstart (`uv run microduck …`; the old
+  `uv run microduck-cli …` line failed with "Failed to spawn"), a sibling-projects
+  table, and the removal of the template's "Make it your own" rename instructions.
+- **`cicd` skill adapted to this repo's landed stack** — the upstream
+  "Greenfield-aware steps" no-ops become unconditional "Pre-PR steps
+  (microduck-cli)", the triage defaults name this repo's real false-positive class
+  (scaffold complaints; a second runtime loop that belongs in
+  `neurosymbolic-system`), and the mesh-ping paragraph names microduck-cli.
+  `SKILL.md` prose only — no script bodies touched — and recorded as a tracked
+  divergence in `docs/skill-sources.md`.
+- **`.claude/skills.local.yaml.example`** lists the three robot-family siblings
+  under `sibling_projects`, so `cicd`'s alignment-delta step sees them.
+
 ## [0.7.0] - 2026-08-24
 
 ### Added
