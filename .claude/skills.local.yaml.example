@@ -14,3 +14,8 @@ sibling_projects:
   - ../guildmaster
   - ../steward
   - ../teken
+  # Robot-family siblings — the architecture microduck-cli composes.
+  # See CLAUDE.md "The three sibling repos, and what to take from each".
+  - ../neurosymbolic-system
+  - ../reachy-mini-cli
+  - ../arm101-cli
