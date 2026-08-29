@@ -1,4 +1,4 @@
 agents:
-- suffix: culture-agent-template
+- suffix: microduck-cli
   backend: colleague
   model: sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP

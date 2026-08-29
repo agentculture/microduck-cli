@@ -1,4 +1,4 @@
-"""``culture-agent-template learn`` — the learnability affordance.
+"""``microduck-cli learn`` — the learnability affordance.
 
 Prints a structured self-teaching prompt. Must satisfy the agent-first rubric:
 >=200 chars and mention purpose, command map, exit codes, --json, and explain.
@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import argparse
 
-from culture_agent_template import __version__
-from culture_agent_template.cli._output import emit_result
+from microduck_cli import __version__
+from microduck_cli.cli._output import emit_result
 
 _TEXT = """\
-culture-agent-template — a clonable template for AgentCulture mesh agents.
+microduck-cli — a clonable template for AgentCulture mesh agents.
 
 Purpose
 -------
@@ -23,12 +23,12 @@ rename the package, and edit culture.yaml to mint a new agent.
 
 Commands
 --------
-  culture-agent-template whoami             Identity from culture.yaml.
-  culture-agent-template learn              This self-teaching prompt.
-  culture-agent-template explain <path>...  Markdown docs for any noun/verb path.
-  culture-agent-template overview           Descriptive snapshot of the agent.
-  culture-agent-template doctor             Check the agent-identity invariants.
-  culture-agent-template cli overview       Describe the CLI surface itself.
+  microduck-cli whoami             Identity from culture.yaml.
+  microduck-cli learn              This self-teaching prompt.
+  microduck-cli explain <path>...  Markdown docs for any noun/verb path.
+  microduck-cli overview           Descriptive snapshot of the agent.
+  microduck-cli doctor             Check the agent-identity invariants.
+  microduck-cli cli overview       Describe the CLI surface itself.
 
 Machine-readable output
 -----------------------
@@ -44,13 +44,13 @@ Exit-code policy
 
 More detail
 -----------
-  culture-agent-template explain culture-agent-template
+  microduck-cli explain microduck-cli
 """
 
 
 def _as_json_payload() -> dict[str, object]:
     return {
-        "tool": "culture-agent-template",
+        "tool": "microduck-cli",
         "version": __version__,
         "purpose": "Clonable scaffold for a new AgentCulture mesh agent.",
         "commands": [
@@ -67,7 +67,7 @@ def _as_json_payload() -> dict[str, object]:
             "2": "environment/setup error",
         },
         "json_support": True,
-        "explain_pointer": "culture-agent-template explain <path>",
+        "explain_pointer": "microduck-cli explain <path>",
     }
 
 

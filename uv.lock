@@ -155,7 +155,7 @@ wheels = [
 ]
 
 [[package]]
-name = "culture-agent-template"
+name = "microduck-cli"
 version = "0.7.0"
 source = { editable = "." }
 
