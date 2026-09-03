@@ -1020,8 +1020,10 @@ def register(sub: argparse._SubParsersAction) -> None:
         _common(noun_sub.add_parser("look", help="Point the camera at a trunk-frame point."))
     )
     look.add_argument("--x", type=float, required=True, help="Forward, metres.")
-    look.add_argument("--y", type=float, required=True, help="Left, metres.")
-    look.add_argument("--z", type=float, required=True, help="Up, metres.")
+    look.add_argument(
+        "--y", type=float, default=0.0, help="Left, metres (default 0: straight ahead)."
+    )
+    look.add_argument("--z", type=float, default=0.0, help="Up, metres.")
     look.add_argument(
         "--neck-pitch",
         type=float,
