@@ -196,7 +196,16 @@ class IntentSpool:
     # -- reading (the engine side) -----------------------------------------
 
     def _new_lines(self) -> list[str]:
-        """Everything appended since the last drain. Never raises."""
+        """Every COMPLETE line appended since the last drain. Never raises.
+
+        Only bytes up to the last ``\\n`` are consumed. A writer appending a
+        record is not atomic — the engine can read the file mid-``write`` and see
+        half a line — and advancing the offset through EOF would swallow that
+        record's tail, so the partial remainder is left behind and picked up on
+        the next drain once its newline lands. Offsets are BYTE offsets from a
+        binary read: a text handle's ``tell()`` is an opaque cookie that cannot be
+        compared with ``st_size``.
+        """
         try:
             size = self.spool_path.stat().st_size
         except OSError:
@@ -206,13 +215,18 @@ class IntentSpool:
         if size == self._offset:
             return []
         try:
-            with self.spool_path.open("r", encoding="utf-8") as handle:
+            with self.spool_path.open("rb") as handle:
                 handle.seek(self._offset)
-                text = handle.read()
-                self._offset = handle.tell()
+                chunk = handle.read(size - self._offset)
         except OSError as exc:
             senselog.drop(STAGE_INTENT, str(self.spool_path), "spool-unreadable", str(exc))
             return []
+        cut = chunk.rfind(b"\n")
+        if cut < 0:  # a record is still being written: keep it for the next drain
+            return []
+        consumed = chunk[: cut + 1]
+        self._offset += len(consumed)
+        text = consumed.decode("utf-8", "replace")
         return [line for line in text.splitlines() if line.strip()]
 
     def drain(self, ctx: TickContext) -> list[dict[str, object]]:
