@@ -32,7 +32,7 @@ is load-bearing, even where guildmaster's upstream copy omits it.
 
 | Skill | Upstream | Origin | Notes | Last synced |
 |-------|----------|--------|-------|-------------|
-| `cicd` | `../guildmaster/.claude/skills/cicd/` | guildmaster | CI/CD lane layered on `devex pr`: the 5 thin scripts (`workflow.sh`, `pr-status.sh`, `pr-reply.sh`, `_resolve-nick.sh`, `portability-lint.sh`) delegate lint/open/read/reply/delta to `devex` and add the `status` / `await` SonarCloud-gating extensions. Consumer-identifying prose (`guildmaster` → `microduck-cli`) adapted in the description + heading; upstream history (`Renamed from pr-review in steward 0.7.0; rebased on devex in 0.12.0`) and env-var literals (`STEWARD_*`) kept verbatim. The PR signature resolves at runtime from `culture.yaml` via `_resolve-nick.sh` (→ `microduck-cli`). Requires `devex` on PATH. **Prose divergence (2026-08-29):** the "Greenfield-aware steps", triage-defaults and mesh-ping paragraphs were adapted to this repo's actual stack — see [local divergence](#local-divergence--cicd-pre-pr-steps-adapted-to-this-repos-stack-2026-08-29). | 2026-05-26 (guildmaster 0.6.0) |
+| `cicd` | `../guildmaster/.claude/skills/cicd/` | guildmaster | CI/CD lane layered on `devex pr`: the 5 thin scripts (`workflow.sh`, `pr-status.sh`, `pr-reply.sh`, `_resolve-nick.sh`, `portability-lint.sh`) delegate lint/open/read/reply/delta to `devex` and add the `status` / `await` SonarCloud-gating extensions. Consumer-identifying prose (`guildmaster` → `microduck-cli`) adapted in the description + heading; upstream history (`Renamed from pr-review in steward 0.7.0; rebased on devex in 0.12.0`) and env-var literals (`STEWARD_*`) kept verbatim. The PR signature resolves at runtime from `culture.yaml` via `_resolve-nick.sh` (→ `microduck-cli`). Requires `devex` on PATH. **Prose divergence (2026-08-29, amended 2026-09-03):** the "Greenfield-aware steps", triage-defaults and mesh-ping paragraphs were adapted to this repo's actual stack, and the triage defaults were rewritten again for decision c20 (the engine lives in `microduck_cli/behavior/`) — see [local divergence](#local-divergence--cicd-pre-pr-steps-adapted-to-this-repos-stack-2026-08-29). | 2026-05-26 (guildmaster 0.6.0) |
 | `communicate` | `../guildmaster/.claude/skills/communicate/` | guildmaster | Cross-repo + mesh communication. Consumer-identifying prose adapted in the description (incl. the `- microduck-cli (Claude)` signature line). **No hard-coded signature literal in the scripts** — `post-issue.sh` is `agtag`-backed and resolves the signing nick from `culture.yaml`; requires `agtag` (>=0.1) on PATH. The supplier `scripts/templates/` (`skill-update-brief.md`, `skill-new-brief.md`) are kept verbatim — inert for a consumer (they cite guildmaster as upstream). Renamed from `coordinate` in steward 0.8.0; absorbed `gh-issues` in 0.9.1. | 2026-05-26 (guildmaster 0.6.0) |
 | `version-bump` | `../guildmaster/.claude/skills/version-bump/` | guildmaster | Pure-Python, CWD-aware (`scripts/bump.py`). Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
 | `agent-config` | `../guildmaster/.claude/skills/agent-config/` | guildmaster (origin steward) | Shows a Culture agent's full config; run `scripts/show.sh` directly (no `guild` binary required). `scripts/show.sh` + `data/backend-fingerprints.yaml` verbatim. Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
@@ -189,6 +189,17 @@ repo's real false-positive class (scaffold complaints, and any proposal to grow 
 second runtime loop in `microduck_cli/` instead of upstream in
 `neurosymbolic-system`), and the closing mesh-ping paragraph names microduck-cli
 rather than steward.
+
+**Amended 2026-09-03 (t12, decision c20).** The triage-defaults paragraph was
+rewritten again: the tick engine landed in `microduck_cli/behavior/`
+(extraction-first — `neurosymbolic-system` is extracted later from
+reachy-mini-cli plus this engine), so "a second runtime loop belongs upstream" is
+no longer the false-positive class it names. The paragraph now says an engine
+here is *expected* and tells a reviewer to check the extraction seams instead —
+`TargetSink` / `SenseProviders` / ONE `tick_seam` / rules-as-data / one admission
+registry / heartbeat-not-flag-file / no transport or SDK import under
+`behavior/`. Same sanctioned surface, same re-apply step below; the edit count is
+three sections, with triage defaults now carrying the c20 wording.
 
 **No script bodies are edited** — the divergence is confined to `SKILL.md` prose,
 which is the sanctioned adaptation surface. On a re-sync, pull guildmaster's copy
