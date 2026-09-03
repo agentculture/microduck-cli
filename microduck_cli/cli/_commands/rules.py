@@ -79,7 +79,7 @@ from microduck_cli.behavior.replay import replay as replay_records
 from microduck_cli.behavior.rules import RulesConfig, load_rules, merge_rules
 from microduck_cli.cli._commands.overview import emit_overview
 from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_SUCCESS, EXIT_USER_ERROR, CliError
-from microduck_cli.cli._output import emit_diagnostic, emit_result
+from microduck_cli.cli._output import PROG, emit_diagnostic, emit_result
 from microduck_cli.duck import addressing
 from microduck_cli.duck.gate import Consent, confirm_on_tty, consent, render_dry_run
 from microduck_cli.explain.rules import _DUCKCTL_URL, VERBS
@@ -544,10 +544,9 @@ def _render_check(payload: dict[str, object]) -> str:
 
 
 def _apply_command(args: argparse.Namespace, verb: str = "run") -> str:
-    # TODO(prog-constant): a sibling task adds a shared constant for the parser's
     # prog name; until then the literal `microduck-cli` is what this CLI answers
     # to in its own --help and error text.
-    parts = ["microduck-cli", "rules", "engine", verb]
+    parts = [PROG, "rules", "engine", verb]
     for flag in ("duck", "socket", "state", "rules"):
         value = getattr(args, flag, None)
         if value:
@@ -1054,8 +1053,7 @@ def _wait_for_ack(spool: compose.IntentSpool, intent_id: str) -> dict | None:
 
 
 def _intent_apply_command(args: argparse.Namespace) -> str:
-    # TODO(prog-constant): shared prog-name constant lands in a sibling task.
-    parts = ["microduck-cli", "rules", "intent", str(args.kind)]
+    parts = [PROG, "rules", "intent", str(args.kind)]
     if getattr(args, "payload", None):
         parts += ["--payload", f"'{args.payload}'"]
     if getattr(args, "state", None):
@@ -1165,7 +1163,6 @@ def cmd_rules_intent(args: argparse.Namespace) -> int:
             EXIT_ENV_ERROR,
             f"the engine (pid {live.pid}) did not acknowledge intent {intent_id} "
             f"within {INTENT_WAIT_S:g}s",
-            # TODO(prog-constant): shared prog-name constant lands in a sibling task.
             remediation=(
                 "check 'microduck-cli rules engine status' — the intent is still on the "
                 "spool and a running engine drains it on its next tick"

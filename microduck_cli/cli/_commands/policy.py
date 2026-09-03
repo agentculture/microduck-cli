@@ -81,7 +81,7 @@ from typing import Any, Callable
 
 from microduck_cli.cli._commands.overview import emit_overview
 from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_USER_ERROR, CliError
-from microduck_cli.cli._output import emit_result
+from microduck_cli.cli._output import PROG, emit_result
 from microduck_cli.duck import addressing
 from microduck_cli.duck.gate import (
     SAFETY_COMMUNITY_POLICY,
@@ -95,7 +95,7 @@ from microduck_cli.ipc.client import RobotClient, RpcError
 from microduck_cli.ipc.proto import METHOD_NOT_FOUND
 from microduck_cli.train import artifacts, lane
 
-_SUBJECT = "microduck-cli policy"
+_SUBJECT = f"{PROG} policy"
 _PURPOSE = "Train, export, publish and install MicroDuck policies."
 _STATUS = "policy lifecycle over robotd/updaterd's documented wire shapes (see module docstring)"
 
@@ -407,10 +407,9 @@ def _do_gated_policy_call(
                 "target": address.name,
                 "socket": address.socket_path,
                 "calls": [call_desc],
-                # TODO(prog-constant): swap for the shared prog constant once a sibling
                 # lane adds one to cli/_output.py — see CLAUDE.md's noun-internals note.
                 "apply_command": (
-                    f"microduck-cli policy {verb} {' '.join(_positional_for(args, verb))} --apply"
+                    f"{PROG} policy {verb} {' '.join(_positional_for(args, verb))} --apply"
                 ),
             }
             body = render_dry_run(plan) + "\n\n" + _DURABILITY_NOTE
@@ -501,9 +500,8 @@ def cmd_policy_reset(args: argparse.Namespace) -> int:
                 "target": address.name,
                 "socket": address.socket_path,
                 "calls": [call_desc],
-                # TODO(prog-constant): swap for the shared prog constant once a sibling
                 # lane adds one to cli/_output.py — see CLAUDE.md's noun-internals note.
-                "apply_command": "microduck-cli policy reset --apply",
+                "apply_command": f"{PROG} policy reset --apply",
             }
             body = render_dry_run(plan) + "\n\n" + _DURABILITY_NOTE
             emit_result(
