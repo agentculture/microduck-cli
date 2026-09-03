@@ -2,6 +2,11 @@
 
 Prints a structured self-teaching prompt. Must satisfy the agent-first rubric:
 >=200 chars and mention purpose, command map, exit codes, --json, and explain.
+
+The command map (text) and the ``commands`` payload (JSON) are both derived at
+import time from the canonical verb list in
+:mod:`microduck_cli.explain.catalog`, so a noun task that adds a verb to its own
+``explain/<noun>.py`` shows up here without editing this file.
 """
 
 from __future__ import annotations
@@ -10,30 +15,38 @@ import argparse
 
 from microduck_cli import __version__
 from microduck_cli.cli._output import emit_result
+from microduck_cli.explain.catalog import TAGLINE, VERBS, split_verb, verb_path
 
-_TEXT = """\
-microduck-cli — a clonable template for AgentCulture mesh agents.
+_PURPOSE = (
+    "Agent-agnostic control surface for the MicroDuck robot: bring up the sim or real\n"
+    "environment (`env`), operate the duck in robotctl's words (`duck`), train/export/\n"
+    "publish/install policies (`policy`), and run the data-only rules layer (`rules`).\n"
+    "The domain nouns are registered scaffolds today — each answers `overview` while its\n"
+    "action verbs land."
+)
+
+
+def _command_map() -> str:
+    rows = [(f"microduck-cli {path}", summary) for path, summary in map(split_verb, VERBS)]
+    width = max(len(invocation) for invocation, _ in rows)
+    return "\n".join(f"  {invocation.ljust(width)}  {summary}" for invocation, summary in rows)
+
+
+_TEXT = f"""\
+microduck-cli — {TAGLINE}
 
 Purpose
 -------
-Scaffold for a new Culture mesh agent: an agent-first CLI (cited from the teken
-`python-cli` reference), an identity (culture.yaml + CLAUDE.md), the canonical
-guildmaster skill kit under .claude/skills/, and a deploy/CI baseline. Clone it,
-rename the package, and edit culture.yaml to mint a new agent.
+{_PURPOSE}
 
 Commands
 --------
-  microduck-cli whoami             Identity from culture.yaml.
-  microduck-cli learn              This self-teaching prompt.
-  microduck-cli explain <path>...  Markdown docs for any noun/verb path.
-  microduck-cli overview           Descriptive snapshot of the agent.
-  microduck-cli doctor             Check the agent-identity invariants.
-  microduck-cli cli overview       Describe the CLI surface itself.
+{_command_map()}
 
 Machine-readable output
 -----------------------
 Every command supports --json. Errors in JSON mode emit
-{"code", "message", "remediation"} to stderr. Stdout and stderr never mix.
+{{"code", "message", "remediation"}} to stderr. Stdout and stderr never mix.
 
 Exit-code policy
 ----------------
@@ -45,6 +58,7 @@ Exit-code policy
 More detail
 -----------
   microduck-cli explain microduck-cli
+  microduck-cli explain <noun>
 """
 
 
@@ -52,14 +66,9 @@ def _as_json_payload() -> dict[str, object]:
     return {
         "tool": "microduck-cli",
         "version": __version__,
-        "purpose": "Clonable scaffold for a new AgentCulture mesh agent.",
+        "purpose": TAGLINE,
         "commands": [
-            {"path": ["whoami"], "summary": "Identity probe from culture.yaml."},
-            {"path": ["learn"], "summary": "Self-teaching prompt."},
-            {"path": ["explain"], "summary": "Markdown docs by path."},
-            {"path": ["overview"], "summary": "Descriptive snapshot of the agent."},
-            {"path": ["doctor"], "summary": "Check the agent-identity invariants."},
-            {"path": ["cli", "overview"], "summary": "Describe the CLI surface."},
+            {"path": list(verb_path(entry)), "summary": split_verb(entry)[1]} for entry in VERBS
         ],
         "exit_codes": {
             "0": "success",
