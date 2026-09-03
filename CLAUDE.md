@@ -8,13 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 *controlling the MicroDuck robot — one CLI that any agent or human drives*
 (`culture.yaml`, [README](README.md)).
 
-**No MicroDuck control code exists yet.** What is on disk is the mesh-agent
-scaffold cloned from `culture-agent-template` (`git log` is two commits: the
-initial commit and the scaffold): an agent-first introspection CLI (`whoami`,
-`learn`, `explain`, `overview`, `doctor`, `cli`), a mesh identity, the vendored
-guildmaster skill kit, and a build/CI/deploy baseline. Treat that CLI as the
-chassis you extend, and the three sibling repos below as the architecture you
-extend it *toward*.
+The mesh-agent scaffold cloned from `culture-agent-template` is still the
+chassis — an agent-first introspection CLI (`whoami`, `learn`, `explain`,
+`overview`, `doctor`, `cli`), a mesh identity, the vendored guildmaster skill
+kit, and a build/CI/deploy baseline. **The duck layer has started landing on top
+of it**: `ipc/` (the pinned JSON-RPC wire table), `duck/` (socket addressing, the
+motion gate), `env/` (train-host detection), `explain/` (per-noun catalogs), and
+`behavior/` — the pure model, the sense snapshot, the rules schema, and now the
+tick engine itself (`engine.py`, `liveness.py`, `senselog.py`). A `train/`
+package for the policy lane is planned, not present. Nothing here drives real
+hardware yet: there is no transport client wired to a socket, so every module
+below the composition root is exercised through injected seams.
 
 Two things to internalize before touching anything:
 
@@ -23,16 +27,13 @@ Two things to internalize before touching anything:
   (see `doctor`) resolves `colleague` → `AGENTS.colleague.md`. This `CLAUDE.md`
   is guidance for *Claude Code working in the repo*; editing it does not change
   the mesh agent's runtime behavior.
-- **The installed console script is `microduck`, not `microduck-cli`.**
-  `[project.scripts]` defines `microduck = "microduck_cli.cli:main"`, so
-  `uv run microduck-cli whoami` fails with "Failed to spawn." Use `uv run
-  microduck …` or `python -m microduck_cli …`. The *internal* prog name is
-  `microduck-cli`, so `--help` text, error messages, `learn`/`explain` bodies and
-  JSON payloads all say `microduck-cli` — that string is intentional in output,
-  just not as the binary. (Same half-rename `arm101-cli` carries; `reachy-mini-cli`
-  resolved its by shipping *both* console scripts. Either fix is fine — do it as
-  one deliberate pass across `pyproject.toml`, `prog=`, `_commands/`,
-  `explain/catalog.py`, the README and the test assertions, never piecemeal.)
+- **Both console scripts install now.** `[project.scripts]` defines `microduck`
+  *and* `microduck-cli` (t9 shipped both, the same fix `reachy-mini-cli` made), so
+  the old "Failed to spawn" gotcha is history: `uv run microduck …`,
+  `uv run microduck-cli …` and `python -m microduck_cli …` are all equivalent. The
+  *internal* prog name stays `microduck-cli`, so `--help` text, error messages,
+  `learn`/`explain` bodies and JSON payloads all say `microduck-cli` — keep it
+  that way; the test assertions pin it.
 
 ## Common commands
 
@@ -95,6 +96,22 @@ Three cross-cutting contracts are enforced by tests and by the rubric gate.
   wheel install (no `culture.yaml` beside the package) falls back to literal
   defaults and `doctor` reports a single info check.
 
+### The packages beside `cli/`
+
+Engine logic lives in a sibling package and `cli/_commands/` stays thin argparse
+wiring (reachy-mini-cli's split). What is on disk today:
+
+| Package | What it holds |
+|---|---|
+| `microduck_cli/ipc/` | `proto.py` — the duck-ipc-proto wire table, transcribed from the pinned commit in `docs/upstream-pins.md`. No client yet. |
+| `microduck_cli/duck/` | `addressing.py` (name → sockets, pure: env and `listdir` injected), `gate.py` (the TTY / dry-run / `--apply` motion gate). |
+| `microduck_cli/env/` | `hosts.py` — train-host detection (GB10 / Thor / AGX Orin). |
+| `microduck_cli/behavior/` | The engine and everything it composes — see the next section. |
+| `microduck_cli/explain/` | `catalog.py` plus one module per noun (`duck`, `env`, `policy`, `rules`). |
+
+`microduck_cli/train/` (the policy train → export → publish lane) is planned and
+not present; don't cite it as if it exists.
+
 ### The agent-first rubric (why some code looks odd)
 
 `teken cli doctor . --strict` gates CI on a seven-bundle rubric. Several shapes
@@ -114,28 +131,97 @@ invariants**: `prompt-file-present`, `backend-consistency` (`claude`→`CLAUDE.m
 `skills-present`. Change the backend in `culture.yaml` and you must teach `doctor`
 the matching prompt file.
 
+## Architecture: the behaviour engine
+
+`microduck_cli/behavior/` is the duck's runtime. Everything below describes code
+that is on disk; nothing here is a roadmap entry.
+
+- **`model.py` / `sense.py` / `rules.py`** — pure value objects and pure
+  functions: channels + `StopClass` priorities + `Lifetime` + `arbitrate` /
+  `admit`; the frozen `Sense` snapshot and the `SenseProviders` peek seam; the
+  data-only rules schema. No I/O, no loop.
+- **`engine.py`** — `Engine(sink, providers, clock=…, sleep=…, hz=50)` and its
+  loop. Per tick, in this order: read ONE `Sense`; ask each live behaviour for its
+  contribution once; `arbitrate` a single owner per channel; compose the pose;
+  **write it through the sink exactly once**; call `tick_seam(ctx)` **exactly once,
+  after the write**; expire finished lifetimes; sleep to an absolute deadline.
+  `TickContext` is what a rider gets (`now`, `tick`, `sense`, `active`,
+  `ownership`, `pose`, `emit`, `admit`, `evict`, `active_names`). `TickBus` is the
+  ordered, fault-isolating fan-out. `TickMetrics` wraps the whole tick and reports
+  `overruns` / `max_tick_ms` / `achieved_hz`.
+- **`liveness.py`** — the `state.json` heartbeat (`Heartbeat.beat`, temp file +
+  `os.replace`) and `refuse_if_engine_live()`.
+- **`senselog.py`** — the `microduck.sense` logger, the fixed
+  `[SENSE stage=… source=… event=…] detail` line, and `install_logging()`.
+
+Four rules the code enforces and a change must keep:
+
+- **ONE tick seam, never a second process.** A duck has one control socket and
+  robotd arbitrates nothing between clients, so a second process is two authors
+  fighting over every channel. Riders compose onto `tick_seam` via `TickBus`;
+  reachy-mini-cli deleted two standalone sense nouns to learn this.
+- **Drop, don't block, and never silently.** A provider that raises degrades to
+  `None`; a seam driver that raises is caught, counted as a named `TickFault` and
+  logged as a `tick-driver-fault` drop while its siblings still run. The engine
+  never dies from a consumer — and never no-ops invisibly either: every drop gets
+  a named reason on `microduck.sense`, stderr-only, so stdout stays pure JSONL.
+- **A heartbeat, not a flag file.** A flag cannot expire and a `SIGKILL`ed writer
+  locks the operator out forever. `refuse_if_engine_live()` refuses (exit 1,
+  "engine live") only when the stamp is fresh **and** its pid is alive; stale,
+  absent or corrupt all mean "no evidence", are reported, and let the next engine
+  start.
+- **No wall-clock read anywhere in the loop.** `clock` and `sleep` are injected,
+  which is what makes a 500-tick run bit-for-bit reproducible in a test. An
+  overrunning tick is counted and sleeps zero — it is never compensated for by
+  skipping the seam, because a skipped seam is a rule that silently did not run.
+
 ## The three sibling repos, and what to take from each
 
 The duck domain is meant to be built by *composing* these, not by inventing a
 fourth architecture. Read the named file before you start the corresponding work.
 
-### `../neurosymbolic-system` — the intended runtime (not usable yet)
+### `../neurosymbolic-system` — the later home, not a current dependency
 
 The description says microduck-cli is "built on the neurosymbolic-system runtime":
 senses, rules, arbitration and motion composed onto one 50 Hz tick, extracted from
 reachy-mini-cli and imported as a library by robot CLIs. **That library does not
 exist yet.** `neurosymbolic-system` 0.7.0 is the *same* bare template scaffold this
-repo is — `neurosymbolic_system/` contains only `cli/` and `explain/`, no runtime
-modules, and its `CLAUDE.md` is still the un-`/init`'ed seed.
+repo started as — `neurosymbolic_system/` contains only `cli/` and `explain/`, no
+runtime modules.
 
-Consequences: it is **not** a dependency of this repo and must not be added as one
-until it actually ships runtime modules. When it does, **import it — do not
-re-implement the tick here.** If you find yourself writing an engine loop,
-arbitration, or a sense driver in `microduck_cli/`, that code belongs upstream in
-`neurosymbolic-system`; file it there (the `communicate` skill posts cross-repo
-issues) rather than forking a second runtime. Until then, duck work that needs a
-runtime is blocked on that repo, and a CLI-only surface (config, discovery,
-inventory, dry-run planning) is what can land here.
+**Decision c20 (recorded here in the first engine PR): the engine lives in
+`microduck_cli/behavior/` now, and it is built extraction-first.** Blocking the
+duck on a library nobody has written would have blocked the whole repo; the
+alternative — write the tick here as if it will never move — would have made the
+extraction impossible later. So it is written *behind the seams the extraction
+needs*, and `neurosymbolic-system` gets extracted later from reachy-mini-cli plus
+this engine, not written from scratch. The seams, all six of them load-bearing:
+
+- **`TargetSink`** — a `write(pose)` Protocol. The only way a pose leaves the
+  engine, and the only thing a transport has to satisfy.
+- **`SenseProviders`** — peek callables in, `Sense` out. The only way a reading
+  gets in.
+- **`tick_seam`** — ONE per-tick integration point (`TickBus` fans it out). Every
+  rider composes onto it.
+- **Rules as data**, never code (`behavior/rules.py`), so an operator's overlay
+  can migrate to a versioned schema upstream.
+- **One admission registry** for rule-fired and CLI-injected intents alike.
+- **Heartbeat liveness** (`behavior/liveness.py`), not a flag file.
+
+The consequences of that decision, in the order a reviewer meets them:
+
+- An engine loop, arbitration, or a sense driver in `microduck_cli/behavior/` is
+  **expected**, not a defect to reject. What *is* a defect is a seam violation:
+  nothing under `behavior/` may import a transport, an SDK, or a CLI module other
+  than `cli/_errors` (and even that import is on the extraction bill — see
+  `liveness.py`).
+- `neurosymbolic-system` is still **not** a dependency and must not become one
+  until it ships runtime modules; adding it is an explicit decision, not a
+  drive-by (see Hard constraints).
+- When the extraction happens, it is a *move*: the same seams, the same tests.
+  Anything that would make a module hard to lift out — a hidden global, a
+  wall-clock read in the loop, a CLI error type raised three layers down — is
+  worth fixing now rather than at extraction time.
 
 ### `../reachy-mini-cli` — the architecture to follow
 

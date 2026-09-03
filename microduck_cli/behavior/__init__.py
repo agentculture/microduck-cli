@@ -1,10 +1,15 @@
-"""The duck behavior package: a data-only rules schema (:mod:`.rules`).
+"""The duck behaviour runtime: model, sense, rules, and the tick engine.
 
-This package holds no engine, no I/O beyond reading a rules file, and no
-transport. It is deliberately pure so it can be validated, tested, and reused
-by whatever evaluator eventually composes it onto the neurosymbolic-system
-tick — see ``microduck_cli/CLAUDE.md`` for why that runtime lives upstream and
-is not implemented here.
+Layered leaf-first. :mod:`.model`, :mod:`.sense` and :mod:`.rules` are pure —
+value objects and pure functions, no I/O beyond reading a rules file — and
+:mod:`.engine` is the only module with a loop. :mod:`.liveness` and
+:mod:`.senselog` are its two side-effecting helpers (one file, one logger).
+
+The engine lives HERE by decision c20 (see ``CLAUDE.md``), built extraction-first
+behind the seams a later move to ``neurosymbolic-system`` needs: ``TargetSink``,
+``SenseProviders``, ``tick_seam``, rules-as-data, one admission registry, and a
+heartbeat rather than a flag file. Nothing in this package imports a transport or
+an SDK.
 """
 
 from __future__ import annotations
