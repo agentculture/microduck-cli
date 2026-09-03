@@ -344,7 +344,7 @@ def test_module_is_a_leaf_with_no_cli_or_transport_imports():
             {"sound": {"name": "wheee", "hold": True}, "mouth": 0.5},
         ),
         ("stop", {}, {"twist": (0.0, 0.0, 0.0)}),
-        ("mode", {"mode": "walk"}, {"twist": (0.0, 0.0, 0.0)}),
+        ("mode", {"mode": "walk"}, {"twist": (0.0, 0.0, 0.0), "mode": "walk"}),
         ("idle", {}, {"pose": {}}),
     ],
 )
@@ -353,12 +353,25 @@ def test_each_kind_contributes_its_validated_params_on_its_channel(kind, payload
     assert behavior is not None
     contribution = behavior.contribute(0.0, EMPTY_SENSE)
     assert contribution == expected
-    assert set(contribution) <= set(behavior.channels)
+    # "mode" is a deliberate exception: it rides as an extra key beyond the
+    # arbitrated channels, exactly like sink.DISCRETE_CHANNELS treats "mode"/
+    # "stop" as extra keys beyond model.CHANNELS (see intents._contribute_mode).
+    assert set(contribution) - {"mode"} <= set(behavior.channels)
 
 
 def test_a_mode_intent_keeps_the_mode_on_the_behaviors_params():
     behavior = default_registry().admit(Intent("mode", {"mode": "roller"})).behavior
     assert behavior is not None and behavior.params["mode"] == "roller"
+
+
+def test_a_mode_intent_also_contributes_mode_so_set_mode_is_reachable():
+    """Rules cannot switch modes without this: CHANNELS excludes 'mode', so if the
+    mode behaviour only ever contributed a zero twist, the sink's mode encoder
+    would be unreachable and robot.setMode would never be sent."""
+    behavior = default_registry().admit(Intent("mode", {"mode": "roller"})).behavior
+    assert behavior is not None
+    contribution = behavior.contribute(0.0, EMPTY_SENSE)
+    assert contribution["mode"] == "roller"
 
 
 def test_validate_refuses_a_payload_with_non_string_keys():

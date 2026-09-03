@@ -52,7 +52,9 @@ from microduck_cli.env.hosts import default_probe as default_host_probe
 # stays valid even as the pinned commit in docs/upstream-pins.md moves on
 # a deliberate re-pin. See docs/upstream-pins.md for the exact commit this
 # CLI is validated against.
-_MICRODUCK_SIM_DOC_URL = "https://github.com/pollen-robotics/microduck/blob/sim-remote-io/docs/design/simulation.md"  # noqa: E501
+_MICRODUCK_SIM_DOC_URL = (
+    "https://github.com/pollen-robotics/microduck/blob/sim-remote-io" "/docs/design/simulation.md"
+)
 _MICRODUCK_DUCK_SIM_URL = (
     "https://github.com/pollen-robotics/microduck/blob/sim-remote-io/scripts/duck-sim"
 )

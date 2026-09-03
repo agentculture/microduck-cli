@@ -220,6 +220,53 @@ def test_refuses_negative_hysteresis():
     assert "hysteresis" in exc.value.message
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_refuses_nonfinite_cooldown_s(bad):
+    """A NaN cooldown makes every comparison false, so the rule would fire every
+    tick — non-finite numbers must be refused fail-closed, not silently pass the
+    ``>= 0`` check (``nan < 0`` is ``False``)."""
+    data = {**_base(), "react": [_react(cooldown_s=bad)]}
+    with pytest.raises(CliError) as exc:
+        RulesConfig.from_dict(data)
+    assert "r1" in exc.value.message
+    assert "cooldown_s" in exc.value.message
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_refuses_nonfinite_hysteresis(bad):
+    data = {**_base(), "react": [_react(hysteresis=bad)]}
+    with pytest.raises(CliError) as exc:
+        RulesConfig.from_dict(data)
+    assert "r1" in exc.value.message
+    assert "hysteresis" in exc.value.message
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_refuses_nonfinite_duration_s(bad):
+    data = {**_base(), "react": [_react(duration_s=bad)]}
+    with pytest.raises(CliError) as exc:
+        RulesConfig.from_dict(data)
+    assert "r1" in exc.value.message
+    assert "duration_s" in exc.value.message
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_refuses_nonfinite_predicate_value(bad):
+    data = {**_base(), "react": [_react(when={"field": "battery_frac", "op": "lt", "value": bad})]}
+    with pytest.raises(CliError) as exc:
+        RulesConfig.from_dict(data)
+    assert "r1" in exc.value.message
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_refuses_nonfinite_numeric_param(bad):
+    data = {**_base(), "react": [_react(params={"speed": bad})]}
+    with pytest.raises(CliError) as exc:
+        RulesConfig.from_dict(data)
+    assert "r1" in exc.value.message
+    assert "speed" in exc.value.message
+
+
 def test_refuses_duplicate_ids():
     data = {**_base(), "react": [_react(id="dup")], "inhibit": [_inhibit(id="dup")]}
     with pytest.raises(CliError) as exc:

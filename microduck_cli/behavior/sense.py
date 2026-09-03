@@ -266,8 +266,19 @@ def _peek(provider):
 
 
 def _as_bool(value) -> bool | None:
-    """A present value -> ``bool``; a missing one stays ``None``."""
-    return None if value is None else bool(value)
+    """A real ``bool`` (or the ints 0/1) -> ``bool``; anything else is a non-reading.
+
+    Python truthiness is deliberately NOT used here: the string ``"false"`` is
+    truthy in Python and would otherwise coerce to ``True``, which could
+    authorise idle motion or corrupt ``fallen``/``limp``/``remote_session``. A
+    string, a float, a container, or any other non-bool, non-0/1 value is a
+    malformed reading, not a guess.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    return None
 
 
 def _as_float(value) -> float | None:
