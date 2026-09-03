@@ -24,7 +24,9 @@ Every rule (react or inhibit) is uniquely ``id``-entified and carries
 (the anti-flap margin around a threshold, default 0.0) — both validated ``>= 0``
 numbers. A :class:`Predicate` is DATA (``field``/``op``/``value``), never a
 string of code: ``field`` is one of :data:`SENSE_FIELDS` and ``op`` is one of
-:data:`COMPARATORS`.
+:data:`COMPARATORS`. :data:`SENSE_FIELDS` and :data:`ACTIONS` are IMPORTED from
+:mod:`microduck_cli.behavior.sense`, which declares that vocabulary once, and
+re-exported here so a rules-schema reader finds them where the schema uses them.
 
 A REACT rule may additionally carry ``duration_s`` (a validated ``> 0`` number).
 When present it bounds how long the admitted action may run. A react rule whose
@@ -80,7 +82,22 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from microduck_cli.behavior.sense import ACTIONS, SENSE_FIELDS
 from microduck_cli.cli._errors import EXIT_USER_ERROR, CliError
+
+__all__ = [
+    "ACTIONS",
+    "SENSE_FIELDS",
+    "COMPARATORS",
+    "LOOPING_ACTIONS",
+    "SCHEMA_VERSION",
+    "Mode",
+    "Predicate",
+    "Rule",
+    "RulesConfig",
+    "load_rules",
+    "merge_rules",
+]
 
 # --------------------------------------------------------------------------- #
 # Schema constants                                                            #
@@ -88,28 +105,6 @@ from microduck_cli.cli._errors import EXIT_USER_ERROR, CliError
 
 #: The only ``schema_version`` this module currently accepts.
 SCHEMA_VERSION = 1
-
-# TODO(t4/t11): import from behavior.sense once it lands. Defined locally here
-# so t3 (this module) does not block on t4's behavior/sense.py landing in a
-# parallel task — these are PROVISIONAL duck values, not a final vocabulary.
-SENSE_FIELDS: frozenset[str] = frozenset(
-    {
-        "fallen",
-        "battery_frac",
-        "hottest_servo_c",
-        "loop_hz",
-        "pad_active",
-        "remote_session",
-        "tof_nearest_m",
-        "skills_ready",
-        "self_moving",
-    }
-)
-
-# TODO(t4/t11): import from behavior.sense once it lands. Defined locally here
-# so t3 (this module) does not block on t4's behavior/sense.py landing in a
-# parallel task — these are PROVISIONAL duck values, not a final vocabulary.
-ACTIONS: frozenset[str] = frozenset({"do", "look", "move", "sound", "stop", "mode", "idle"})
 
 #: Actions that loop indefinitely by nature. A react rule that ``run``s one of
 #: these MUST carry ``duration_s`` — see :meth:`RulesConfig.from_dict`.
