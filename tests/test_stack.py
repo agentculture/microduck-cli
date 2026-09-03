@@ -394,6 +394,67 @@ def test_stale_pidfile_is_removed_without_signalling_the_recycled_pid(tmp_path: 
     assert not Path(stack.state_dir, "duck-a.pid").exists()
 
 
+# --- finding 1: re-validate the cmdline marker immediately before EVERY ----
+# --- signal (TERM and KILL), not just once up front -------------------------
+
+
+def test_down_reports_recycled_when_pid_is_reused_between_admission_and_term(
+    tmp_path: Path,
+) -> None:
+    """A pid that still matched when ``down()`` first looked, but was reused
+    for an unrelated process by the time ``_terminate`` is about to send
+    SIGTERM, must never be signalled — the whole point of re-validating
+    immediately before the signal rather than trusting an earlier check.
+    """
+    calls = {"n": 0}
+
+    def cmdline(pid: int) -> str | None:
+        calls["n"] += 1
+        # The very first read (down()'s own pre-flight check) still matches;
+        # every read after that (the immediate-before-TERM re-check inside
+        # _terminate) reports a different process — recycled in between.
+        if calls["n"] == 1:
+            return "target/debug/robotd --fake"
+        return "/usr/bin/login -- someone"
+
+    killer = FakeSignals()
+    stack = _stack(tmp_path, kill=killer, proc_cmdline=cmdline)
+    _write_pidfiles(stack, {"duck-a": 11})
+
+    results = stack.down()
+
+    assert killer.sent == [], "a pid recycled just before SIGTERM must never be signalled"
+    assert results[0].outcome == "recycled"
+    assert "not signalled" in results[0].detail
+    assert calls["n"] >= 2, "the re-check before SIGTERM must actually re-read /proc"
+
+
+def test_down_reports_recycled_when_pid_is_reused_before_kill(tmp_path: Path) -> None:
+    """A pid that matched through SIGTERM, then got reused for an unrelated
+    process while ``down()`` was waiting out the grace period, must never
+    receive the follow-up SIGKILL — only the SIGTERM already in flight is
+    sent.
+    """
+    killer = FakeSignals()
+
+    def cmdline(pid: int) -> str | None:
+        # Once SIGTERM has actually gone out, every subsequent /proc read
+        # reports a different process — the kernel reused the pid during the
+        # grace-period wait, before SIGKILL would otherwise be sent.
+        if any(sig == signal.SIGTERM for _, sig in killer.sent):
+            return "/usr/bin/login -- someone"
+        return "target/debug/robotd --fake"
+
+    stack = _stack(tmp_path, kill=killer, proc_cmdline=cmdline)
+    _write_pidfiles(stack, {"duck-a": 11})
+
+    results = stack.down()
+
+    assert results[0].outcome == "recycled"
+    assert killer.sent == [(11, signal.SIGTERM)], "a recycled pid must never receive SIGKILL"
+    assert "not signalled" in results[0].detail
+
+
 def test_pidfile_for_a_process_that_already_exited_is_reported_gone(tmp_path: Path) -> None:
     killer = FakeSignals()
     stack = _stack(tmp_path, kill=killer, proc_cmdline=lambda pid: None)

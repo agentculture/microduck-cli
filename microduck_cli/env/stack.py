@@ -231,7 +231,10 @@ class StopResult:
     name: str
     pid: int | None
     marker: str
-    #: ``"terminated"``, ``"killed"``, ``"stale"``, ``"gone"`` or ``"unreadable"``.
+    #: ``"terminated"``, ``"killed"``, ``"stale"``, ``"recycled"``, ``"gone"`` or
+    #: ``"unreadable"``. ``"stale"`` is a pid that never matched at ``down()``'s own
+    #: pre-flight check; ``"recycled"`` is one that matched then stopped matching in
+    #: the window before a signal was actually sent — see :meth:`SimStack._terminate`.
     outcome: str
     detail: str = ""
 
@@ -578,21 +581,99 @@ class SimStack:
         cmdline = self.proc_cmdline(pid)
         return cmdline is not None and marker in cmdline
 
+    def _recycled(self, pid: int, marker: str) -> bool:
+        """True when *pid* names a live process whose cmdline no longer has
+        ``marker`` in it — the pid was reused for something else since the
+        last time we looked, as opposed to having simply exited (``gone``,
+        checked separately via :meth:`_still_alive` returning ``False`` with
+        no cmdline at all).
+        """
+        cmdline = self.proc_cmdline(pid)
+        return cmdline is not None and marker not in cmdline
+
     def _terminate(self, pid: int, marker: str, name: str) -> StopResult:
+        """Signal *pid* through SIGTERM, then SIGKILL if it ignores that.
+
+        The cmdline marker is re-validated immediately before EVERY signal —
+        TERM and KILL alike, not only once up front. A pid is not an
+        identity: the kernel can recycle it for an unrelated process in the
+        window between an earlier check (``down()``'s own pre-flight check,
+        or this method's previous iteration) and the moment a signal is
+        actually sent, and that is exactly the "kill -TERM -<recycled pid>"
+        accident the module docstring describes. A mismatch found here is
+        reported ``recycled`` and the signal is skipped rather than sent.
+
+        This still leaves a residual window between the check below and the
+        `os.kill` syscall itself — that gap belongs to the kernel, not to
+        userspace, and upstream's own launcher has the identical gap; no
+        cmdline check taken from Python can close it, only pidfd-based
+        signalling (`pidfd_open`/`pidfd_send_signal`) could, and this module
+        does not use it.
+        """
+        if self._recycled(pid, marker):
+            return StopResult(
+                name=name,
+                pid=pid,
+                marker=marker,
+                outcome="recycled",
+                detail=(
+                    f"pid {pid} no longer matches {marker!r} just before SIGTERM "
+                    "(recycled since the last check); not signalled"
+                ),
+            )
+        if not self._still_alive(pid, marker):
+            return StopResult(
+                name=name,
+                pid=pid,
+                marker=marker,
+                outcome="gone",
+                detail="no /proc entry just before SIGTERM; the process had already exited",
+            )
+
         self.kill(pid, signal.SIGTERM)
         deadline = self.monotonic() + _TERM_GRACE_S
-        while self._still_alive(pid, marker):
-            if self.monotonic() >= deadline:
-                self.kill(pid, signal.SIGKILL)
+        while True:
+            if self._recycled(pid, marker):
                 return StopResult(
                     name=name,
                     pid=pid,
                     marker=marker,
-                    outcome="killed",
-                    detail=f"still running {_TERM_GRACE_S:g}s after SIGTERM; sent SIGKILL",
+                    outcome="recycled",
+                    detail=(
+                        f"pid {pid} no longer matches {marker!r} after SIGTERM "
+                        "(recycled while waiting); not signalled further"
+                    ),
                 )
+            if not self._still_alive(pid, marker):
+                return StopResult(name=name, pid=pid, marker=marker, outcome="terminated")
+            if self.monotonic() >= deadline:
+                break
             self.sleep(_POLL_INTERVAL_S)
-        return StopResult(name=name, pid=pid, marker=marker, outcome="terminated")
+
+        # Re-validate immediately before SIGKILL too — the grace-period wait
+        # above is exactly the kind of window a recycled pid slips through.
+        if self._recycled(pid, marker):
+            return StopResult(
+                name=name,
+                pid=pid,
+                marker=marker,
+                outcome="recycled",
+                detail=(
+                    f"pid {pid} no longer matches {marker!r} just before SIGKILL "
+                    "(recycled since the grace-period wait); not signalled"
+                ),
+            )
+        if not self._still_alive(pid, marker):
+            return StopResult(name=name, pid=pid, marker=marker, outcome="terminated")
+
+        self.kill(pid, signal.SIGKILL)
+        return StopResult(
+            name=name,
+            pid=pid,
+            marker=marker,
+            outcome="killed",
+            detail=f"still running {_TERM_GRACE_S:g}s after SIGTERM; sent SIGKILL",
+        )
 
     def down(self) -> list[StopResult]:
         """Stop everything this stack's pidfiles name — by pid, never by name.

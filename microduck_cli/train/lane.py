@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -89,6 +90,40 @@ def _resolve_rl_clone(
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def git_head(repo: str | os.PathLike[str] | None) -> str:
+    """The checked-out commit of *repo*, read from ``.git`` without spawning git.
+
+    Falls back to ``"unknown"`` — a smoke record with an unknown commit still
+    proves a pass happened; only its provenance is weaker, and :func:`train`
+    treats ``"unknown"`` as never matching the current checkout (there is
+    nothing to compare it against).
+
+    Moved here (from ``cli/_commands/policy.py``) so :func:`train` can gate
+    on the same commit both the smoke record and the checkout resolve to,
+    without ``cli/_commands/policy.py`` re-implementing the read.
+    """
+    if not repo:
+        return "unknown"
+    try:
+        git = pathlib.Path(repo) / ".git"
+        if git.is_file():  # a worktree: "gitdir: <path>"
+            git = pathlib.Path(git.read_text().split(":", 1)[1].strip())
+        head = (git / "HEAD").read_text().strip()
+        if head.startswith("ref: "):
+            ref = git / head[5:]
+            if ref.is_file():
+                return ref.read_text().strip()
+            packed = git / "packed-refs"
+            if packed.is_file():
+                for line in packed.read_text().splitlines():
+                    if line.endswith(" " + head[5:]):
+                        return line.split()[0]
+            return "unknown"
+        return head
+    except OSError:
+        return "unknown"
 
 
 # --------------------------------------------------------------------------
@@ -150,6 +185,41 @@ def _build_train_argv(
     return argv
 
 
+def _enforce_smoke_gate(
+    smoke_cmd: str,
+    force: bool,
+    reason: str | None,
+    *,
+    refuse_message: str,
+) -> None:
+    """Raise the smoke-gate :class:`CliError` unless `force=True` and `reason` are given.
+
+    Shared by both gate failures :func:`train` can hit — no recorded pass at
+    all, and a recorded pass on the wrong commit — so the force/reason
+    bypass behaves identically either way.
+    """
+    if not force:
+        raise CliError(
+            EXIT_USER_ERROR,
+            refuse_message,
+            remediation=(
+                f"run `{smoke_cmd}` (microduck_rl AGENTS.md: 'never launch a long run "
+                "without one'), or pass force=True with a reason to bypass this gate — see "
+                f"{_RL_AGENTS_URL}"
+            ),
+        )
+    if not reason:
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"force=True bypasses the smoke gate but needs a stated reason ({refuse_message}; "
+            f"smoke command: {smoke_cmd})",
+            remediation=(
+                "pass reason=<why> explaining why the smoke gate is being bypassed — see "
+                f"{_RL_AGENTS_URL}"
+            ),
+        )
+
+
 def train(
     task_id: str,
     num_envs: int = 4096,
@@ -174,8 +244,12 @@ def train(
 
     Refuses (raises :class:`CliError`, exit 1) to build anything other than
     the exact smoke-test argv (see :func:`smoke`) unless a `SmokeRecord` for
-    `task_id` has already been recorded under `state_dir`, or the caller
-    passes `force=True` with a `reason` stating why the gate is bypassed.
+    `task_id` has already been recorded under `state_dir` **and its commit
+    matches the RL checkout's current HEAD** (:func:`git_head`), or the
+    caller passes `force=True` with a `reason` stating why the gate is
+    bypassed. A record whose `commit` is `"unknown"` never matches — there is
+    nothing to compare it against, so switching the checkout after an
+    unprovenanced pass cannot silently satisfy the gate either.
     """
     cwd = _resolve_rl_clone(rl_clone)
     argv = _build_train_argv(
@@ -199,27 +273,28 @@ def train(
     record = load_smoke_record(state_dir, task_id)
     smoke_cmd = " ".join(smoke_argv)
     if record is None:
-        if not force:
-            raise CliError(
-                EXIT_USER_ERROR,
-                f"no recorded smoke pass for task {task_id!r}; "
-                f"run the smoke test first: {smoke_cmd}",
-                remediation=(
-                    f"run `{smoke_cmd}` (microduck_rl AGENTS.md: 'never launch a long run "
-                    "without one'), or pass force=True with a reason to bypass this gate — see "
-                    f"{_RL_AGENTS_URL}"
-                ),
-            )
-        if not reason:
-            raise CliError(
-                EXIT_USER_ERROR,
-                (
-                    "force=True bypasses the smoke gate but needs a stated reason "
-                    f"(no recorded smoke pass for task {task_id!r}; smoke command: {smoke_cmd})"
-                ),
-                remediation=(
-                    "pass reason=<why> explaining why the smoke gate is being bypassed — see "
-                    f"{_RL_AGENTS_URL}"
+        _enforce_smoke_gate(
+            smoke_cmd,
+            force,
+            reason,
+            refuse_message=(
+                f"no recorded smoke pass for task {task_id!r}; run the smoke test first: "
+                f"{smoke_cmd}"
+            ),
+        )
+    else:
+        current_commit = git_head(cwd)
+        # "unknown" (an unprovenanced record) never matches — there is
+        # nothing to compare it against.
+        if record.commit == "unknown" or record.commit != current_commit:
+            _enforce_smoke_gate(
+                smoke_cmd,
+                force,
+                reason,
+                refuse_message=(
+                    f"recorded smoke pass for task {task_id!r} was on commit "
+                    f"{record.commit!r}, but the checkout at {cwd!r} is now on "
+                    f"{current_commit!r}; the smoke gate needs a fresh pass: {smoke_cmd}"
                 ),
             )
 

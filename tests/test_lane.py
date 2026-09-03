@@ -21,6 +21,19 @@ TASK = "Mjlab-Velocity-Flat-MicroDuck"
 RL_CLONE = "/fixture/microduck_rl"
 
 
+def _rl_clone_at_commit(tmp_path: Path, sha: str) -> str:
+    """A real (detached-HEAD) ``.git`` under *tmp_path* whose HEAD is *sha*.
+
+    Just enough of a checkout for :func:`lane.git_head` to read: a plain sha
+    in ``.git/HEAD`` (no ``ref:`` indirection needed for a detached head).
+    """
+    clone = tmp_path / "rl_clone"
+    git = clone / ".git"
+    git.mkdir(parents=True)
+    (git / "HEAD").write_text(f"{sha}\n", encoding="utf-8")
+    return str(clone)
+
+
 # ---------------------------------------------------------------------------
 # 1. Table test: each builder's argv equals the upstream-documented command.
 # ---------------------------------------------------------------------------
@@ -335,14 +348,72 @@ def test_train_without_smoke_record_refuses_naming_smoke_command(tmp_path):
     assert smoke_cmd == expected_smoke_cmd
 
 
-def test_train_succeeds_after_recorded_smoke_pass(tmp_path):
+def test_train_succeeds_after_recorded_smoke_pass_on_the_same_commit(tmp_path):
+    """Finding 2, 'match': a smoke pass recorded on the checkout's current
+    HEAD unblocks train() with no force/reason needed."""
     state_dir = tmp_path / "state"
+    rl_clone = _rl_clone_at_commit(tmp_path, "abc1234")
     lane.record_smoke_pass(state_dir, TASK, commit="abc1234")
 
-    argv, cwd = lane.train(TASK, num_envs=4096, state_dir=state_dir, rl_clone=RL_CLONE)
+    argv, cwd = lane.train(TASK, num_envs=4096, state_dir=state_dir, rl_clone=rl_clone)
 
     assert argv == ["uv", "run", "train", TASK, "--env.scene.num-envs", "4096"]
-    assert cwd == RL_CLONE
+    assert cwd == rl_clone
+
+
+def test_train_refuses_when_smoke_pass_commit_does_not_match_checkout(tmp_path):
+    """Finding 2, 'mismatch': a smoke pass on one commit does not authorize a
+    long run against a checkout now on a *different* commit — the error
+    names both commits and the smoke command."""
+    state_dir = tmp_path / "state"
+    rl_clone = _rl_clone_at_commit(tmp_path, "deadbeef")
+    lane.record_smoke_pass(state_dir, TASK, commit="abc1234")
+
+    with pytest.raises(CliError) as excinfo:
+        lane.train(TASK, num_envs=4096, state_dir=state_dir, rl_clone=rl_clone)
+
+    err = excinfo.value
+    assert err.code == 1
+    assert "abc1234" in err.message
+    assert "deadbeef" in err.message
+    smoke_argv, _ = lane.smoke(TASK, rl_clone=rl_clone)
+    assert " ".join(smoke_argv) in err.message
+
+
+def test_train_refuses_when_smoke_pass_commit_is_unknown(tmp_path):
+    """Finding 2, 'unknown': a record with commit 'unknown' never matches,
+    even a checkout whose own HEAD cannot be read either (also 'unknown')."""
+    state_dir = tmp_path / "state"
+    # No .git at all under this path, so lane.git_head(rl_clone) is "unknown"
+    # too — the mismatch must still be refused, not treated as a match.
+    rl_clone = str(tmp_path / "no_git_here")
+    lane.record_smoke_pass(state_dir, TASK, commit="unknown")
+
+    with pytest.raises(CliError) as excinfo:
+        lane.train(TASK, num_envs=4096, state_dir=state_dir, rl_clone=rl_clone)
+
+    assert excinfo.value.code == 1
+    assert "unknown" in excinfo.value.message
+
+
+def test_train_force_with_reason_bypasses_a_commit_mismatch(tmp_path):
+    """Finding 2, 'force': force=True with a reason bypasses a mismatched
+    commit too, not just a missing record."""
+    state_dir = tmp_path / "state"
+    rl_clone = _rl_clone_at_commit(tmp_path, "deadbeef")
+    lane.record_smoke_pass(state_dir, TASK, commit="abc1234")
+
+    argv, cwd = lane.train(
+        TASK,
+        num_envs=4096,
+        state_dir=state_dir,
+        rl_clone=rl_clone,
+        force=True,
+        reason="known-good config on the new commit",
+    )
+
+    assert argv == ["uv", "run", "train", TASK, "--env.scene.num-envs", "4096"]
+    assert cwd == rl_clone
 
 
 def test_train_smoke_record_is_keyed_by_task_id(tmp_path):
@@ -418,6 +489,9 @@ def test_no_secrets_leak_into_any_built_argv(tmp_path):
     }
     fake_env = {**sentinels, "PATH": "/usr/bin"}
     state_dir = tmp_path / "state"
+    # train() now gates on the recorded commit matching the checkout's HEAD
+    # (finding 2), so this needs a real checkout the record's commit matches.
+    train_rl_clone = _rl_clone_at_commit(tmp_path, "abc1234")
     lane.record_smoke_pass(state_dir, TASK, commit="abc1234")
 
     calls = []
@@ -429,7 +503,7 @@ def test_no_secrets_leak_into_any_built_argv(tmp_path):
     built = [
         lane.list_envs(rl_clone=RL_CLONE),
         lane.smoke(TASK, rl_clone=RL_CLONE),
-        lane.train(TASK, num_envs=4096, state_dir=state_dir, rl_clone=RL_CLONE),
+        lane.train(TASK, num_envs=4096, state_dir=state_dir, rl_clone=train_rl_clone),
         lane.train(
             TASK,
             num_envs=4096,
@@ -439,7 +513,7 @@ def test_no_secrets_leak_into_any_built_argv(tmp_path):
             timeout="12h",
             detach=True,
             state_dir=state_dir,
-            rl_clone=RL_CLONE,
+            rl_clone=train_rl_clone,
         ),
         lane.play(TASK, wandb_run_path="entity/project/run_id", rl_clone=RL_CLONE),
         lane.export(TASK, wandb_run_path="entity/project/run_id", rl_clone=RL_CLONE),

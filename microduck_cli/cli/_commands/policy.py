@@ -75,7 +75,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import pathlib
 import subprocess  # nosec B404 - only used with fixed argv, never shell=True
 import time
 from typing import Any, Callable
@@ -230,34 +229,6 @@ def _resolve_duck(args: argparse.Namespace) -> addressing.DuckAddress:
         env=_env_with_state(args),
         listdir=os.listdir,
     )
-
-
-def _git_head(repo: str | None) -> str:
-    """The checked-out commit of *repo*, read from .git without spawning git.
-
-    Falls back to "unknown" — the smoke record still proves a pass happened;
-    only its provenance is weaker, and it says so.
-    """
-    if not repo:
-        return "unknown"
-    try:
-        git = pathlib.Path(repo) / ".git"
-        if git.is_file():  # a worktree: "gitdir: <path>"
-            git = pathlib.Path(git.read_text().split(":", 1)[1].strip())
-        head = (git / "HEAD").read_text().strip()
-        if head.startswith("ref: "):
-            ref = git / head[5:]
-            if ref.is_file():
-                return ref.read_text().strip()
-            packed = git / "packed-refs"
-            if packed.is_file():
-                for line in packed.read_text().splitlines():
-                    if line.endswith(" " + head[5:]):
-                        return line.split()[0]
-            return "unknown"
-        return head
-    except OSError:
-        return "unknown"
 
 
 def _state_dir(args: argparse.Namespace) -> str:
@@ -436,8 +407,10 @@ def _do_gated_policy_call(
                 "target": address.name,
                 "socket": address.socket_path,
                 "calls": [call_desc],
+                # TODO(prog-constant): swap for the shared prog constant once a sibling
+                # lane adds one to cli/_output.py — see CLAUDE.md's noun-internals note.
                 "apply_command": (
-                    f"microduck policy {verb} {' '.join(_positional_for(args, verb))} --apply"
+                    f"microduck-cli policy {verb} {' '.join(_positional_for(args, verb))} --apply"
                 ),
             }
             body = render_dry_run(plan) + "\n\n" + _DURABILITY_NOTE
@@ -528,7 +501,9 @@ def cmd_policy_reset(args: argparse.Namespace) -> int:
                 "target": address.name,
                 "socket": address.socket_path,
                 "calls": [call_desc],
-                "apply_command": "microduck policy reset --apply",
+                # TODO(prog-constant): swap for the shared prog constant once a sibling
+                # lane adds one to cli/_output.py — see CLAUDE.md's noun-internals note.
+                "apply_command": "microduck-cli policy reset --apply",
             }
             body = render_dry_run(plan) + "\n\n" + _DURABILITY_NOTE
             emit_result(
@@ -663,7 +638,7 @@ def cmd_policy_smoke(args: argparse.Namespace) -> int:
     result = lane.run(argv, os.environ, _runner, cwd=cwd)
     ok = _runner_ok(result)
     if ok:
-        lane.record_smoke_pass(state_dir, args.task, commit=_git_head(cwd))
+        lane.record_smoke_pass(state_dir, args.task, commit=lane.git_head(cwd))
     payload = {"argv": argv, "cwd": cwd, "ok": ok, **_run_result_payload(result)}
     if json_mode:
         emit_result(payload, json_mode=True)
@@ -797,7 +772,14 @@ def cmd_policy_install(args: argparse.Namespace) -> int:
 
 
 def _add_json(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    # default=SUPPRESS so a verb's own --json never clobbers a --json already
+    # set on the noun (`microduck-cli policy --json list`) with its own False
+    # default; argparse only applies an action's default when the namespace
+    # has no value for that dest yet, so SUPPRESS leaves an inherited True in
+    # place while `--json` typed on the verb itself still sets it.
+    p.add_argument(
+        "--json", action="store_true", default=argparse.SUPPRESS, help="Emit structured JSON."
+    )
 
 
 def _add_conn(p: argparse.ArgumentParser) -> None:
