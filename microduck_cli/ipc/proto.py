@@ -105,28 +105,31 @@ ROBOT_HEALTH = "robot.health"
 ROBOT_MODEL_API = "robot.modelApi"
 ROBOT_SESSION_ACTIVE = "robot.remoteSessionActive"
 
-# robot.* -- intents
-ROBOT_MOVE = "robot.move"  # continuous; notification
-ROBOT_HEAD = "robot.head"  # continuous; notification
-ROBOT_LOOK = "robot.look"  # discrete; request
-ROBOT_STOP = "robot.stop"  # discrete; request
-ROBOT_ENABLE = "robot.enable"  # discrete; request
+# robot.* -- intents.
+# Whether each robot.* method rides the wire as a continuous notification or as a discrete
+# request is recorded once, in NOTIFICATION_METHODS at the foot of this module, rather than
+# in a comment beside every name -- see is_notification().
+ROBOT_MOVE = "robot.move"
+ROBOT_HEAD = "robot.head"
+ROBOT_LOOK = "robot.look"
+ROBOT_STOP = "robot.stop"
+ROBOT_ENABLE = "robot.enable"
 
 # robot.* -- power to the joints
-ROBOT_INIT = "robot.init"  # discrete; request
-ROBOT_RELAX = "robot.relax"  # discrete; request
+ROBOT_INIT = "robot.init"
+ROBOT_RELAX = "robot.relax"
 
 # robot.* -- skills
-ROBOT_DO = "robot.do"  # discrete; request
-ROBOT_POSE = "robot.pose"  # continuous; notification
-ROBOT_MOUTH = "robot.mouth"  # continuous; notification
-ROBOT_SOUND = "robot.sound"  # continuous (hold semantics); notification
-ROBOT_THEREMIN = "robot.theremin"  # discrete; request
-ROBOT_CHORALE = "robot.chorale"  # discrete; request
-ROBOT_SHUTDOWN = "robot.shutdown"  # discrete; request
-ROBOT_MODE = "robot.mode"  # discrete; request
-ROBOT_SET_MODE = "robot.setMode"  # discrete; request
-ROBOT_SUBSCRIBE = "robot.subscribe"  # discrete; request
+ROBOT_DO = "robot.do"
+ROBOT_POSE = "robot.pose"
+ROBOT_MOUTH = "robot.mouth"
+ROBOT_SOUND = "robot.sound"
+ROBOT_THEREMIN = "robot.theremin"
+ROBOT_CHORALE = "robot.chorale"
+ROBOT_SHUTDOWN = "robot.shutdown"
+ROBOT_MODE = "robot.mode"
+ROBOT_SET_MODE = "robot.setMode"
+ROBOT_SUBSCRIBE = "robot.subscribe"
 ROBOT_STATE = "robot.state"  # server -> client notification, never carries an id
 
 # net.*

@@ -37,9 +37,10 @@ import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from microduck_cli.behavior.intents import MODES, SOUND_NAMES
-from microduck_cli.behavior.rules import KIND_REACT, RulesConfig
+from microduck_cli.behavior.rules import KIND_REACT, Rule, RulesConfig
 from microduck_cli.cli._errors import EXIT_USER_ERROR, CliError
 
 __all__ = [
@@ -217,6 +218,38 @@ def _skill_problem(rule_id: str, skill: object, skills: tuple[str, ...]) -> str:
     return f"rule '{rule_id}': {skill} not in [{', '.join(sorted(skills))}]"
 
 
+def _do_problem(rule: Rule, snapshot: SkillsSnapshot) -> str | None:
+    """A ``do`` rule's skill must be one the daemon reported."""
+    skill = rule.params.get("skill")
+    if skill in snapshot.skills:
+        return None
+    return _skill_problem(rule.id, skill, snapshot.skills)
+
+
+def _mode_problem(rule: Rule, _snapshot: SkillsSnapshot) -> str | None:
+    """``mode`` is checked against the known modes — no daemon reports those."""
+    mode = rule.params.get("mode")
+    if mode in MODES:
+        return None
+    return f"rule '{rule.id}': {mode} not in [{', '.join(sorted(MODES))}]"
+
+
+def _sound_problem(rule: Rule, _snapshot: SkillsSnapshot) -> str | None:
+    """``sound`` is checked against the voice-bank tags; an absent name is fine."""
+    name = rule.params.get("name")
+    if name is None or name in SOUND_NAMES:
+        return None
+    return f"rule '{rule.id}': {name} not in [{', '.join(sorted(SOUND_NAMES))}]"
+
+
+#: One checker per validated react action; an action absent here is not validated.
+_ACTION_CHECKS: dict[str, Callable[[Rule, SkillsSnapshot], str | None]] = {
+    "do": _do_problem,
+    "mode": _mode_problem,
+    "sound": _sound_problem,
+}
+
+
 def validate_rule_actions(config: RulesConfig, snapshot: SkillsSnapshot) -> list[str]:
     """Every problem found matching *config*'s react rules against *snapshot*.
 
@@ -237,18 +270,8 @@ def validate_rule_actions(config: RulesConfig, snapshot: SkillsSnapshot) -> list
     for rule in config.react:
         if rule.kind != KIND_REACT:
             continue  # pragma: no cover - defensive: react tuple is react-only
-        if rule.action == "do":
-            skill = rule.params.get("skill")
-            if skill not in snapshot.skills:
-                problems.append(_skill_problem(rule.id, skill, snapshot.skills))
-        elif rule.action == "mode":
-            mode = rule.params.get("mode")
-            if mode not in MODES:
-                problems.append(f"rule '{rule.id}': {mode} not in [{', '.join(sorted(MODES))}]")
-        elif rule.action == "sound":
-            name = rule.params.get("name")
-            if name is not None and name not in SOUND_NAMES:
-                problems.append(
-                    f"rule '{rule.id}': {name} not in [{', '.join(sorted(SOUND_NAMES))}]"
-                )
+        check = _ACTION_CHECKS.get(rule.action)
+        problem = check(rule, snapshot) if check is not None else None
+        if problem is not None:
+            problems.append(problem)
     return problems

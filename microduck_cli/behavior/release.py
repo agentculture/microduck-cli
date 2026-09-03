@@ -200,12 +200,17 @@ def release_on_exit(
     return ReleaseReport(tuple(steps))
 
 
-class SignalExit(BaseException):
+class SignalExit(Exception):
     """Raised inside :func:`owning` when a SIGTERM arrives.
 
-    A ``BaseException`` deliberately: it means "the process was told to stop", the
-    same class of event as ``KeyboardInterrupt``, and an ``except Exception:``
-    somewhere in a rule must not be able to swallow it and keep driving.
+    It means "the process was told to stop", the same class of event as
+    ``KeyboardInterrupt``, and it must not be possible for an ``except
+    Exception:`` somewhere in a rule to swallow it and keep driving. That
+    guarantee does NOT come from the base class here — it comes from
+    :class:`_Owner`, which LATCHES the signal number when the handler fires and
+    re-raises :class:`SignalExit` from ``__exit__`` after the release even when
+    the original raise was swallowed. Catching this type deliberately (as
+    ``microduck rules engine run`` does) still works exactly as before.
     """
 
     def __init__(self, signum: int) -> None:
@@ -231,6 +236,10 @@ class _Owner:
     #: clean exit sent nothing.
     report: ReleaseReport | None = None
     _previous: dict[int, Any] = field(default_factory=dict, repr=False)
+    #: The SIGTERM this context saw, latched by :meth:`_on_signal`. It survives an
+    #: ``except Exception:`` that swallowed the raise, so ``__exit__`` can still
+    #: release and end the run non-zero.
+    _signalled: int | None = field(default=None, repr=False)
 
     def __enter__(self) -> "_Owner":
         self._install_handlers()
@@ -248,13 +257,19 @@ class _Owner:
         makes ``KeyboardInterrupt``, ``SystemExit`` and :class:`SignalExit`
         abnormal for free — ``__exit__`` is handed any ``BaseException``, not just
         ``Exception`` — and equally makes a plain ``return`` clean. Returns
-        ``None`` on every path: this releases the duck, it does not decide what
-        the failure meant, and swallowing the exception would hide a crash behind
-        a zero exit code.
+        ``None`` on every path except one: this releases the duck, it does not
+        decide what the failure meant, and swallowing the exception would hide a
+        crash behind a zero exit code. The exception is a LATCHED SIGTERM whose
+        :class:`SignalExit` was swallowed inside the block — the block then looks
+        clean but the process was told to stop, so the release runs and the
+        signal is re-raised rather than reported as success.
         """
         try:
             if exc_type is None:
-                return  # A DELIBERATE HOLD SURVIVES: a clean exit sends nothing.
+                if self._signalled is None:
+                    return  # A DELIBERATE HOLD SURVIVES: a clean exit sends nothing.
+                self.release()
+                raise SignalExit(self._signalled)
             self.release()
         finally:
             self._restore_handlers()
@@ -309,6 +324,7 @@ class _Owner:
         senselog.stage(STAGE, "signal", "signal", f"received signal {signum}; releasing")
         if signum == signal.SIGINT:
             raise KeyboardInterrupt
+        self._signalled = signum
         raise SignalExit(signum)
 
 

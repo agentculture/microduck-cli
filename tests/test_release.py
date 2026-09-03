@@ -232,6 +232,31 @@ def test_sigterm_inside_the_context_releases_and_propagates(
     threading.current_thread() is not threading.main_thread(),
     reason="signal handlers can only be installed on the main thread",
 )
+def test_a_swallowed_sigterm_still_releases_and_propagates(
+    fake: FakeRobotd, client: RobotClient
+) -> None:
+    """``SignalExit`` is an ``Exception``, so a rule's ``except Exception:`` CAN catch it.
+
+    The guarantee that a SIGTERM still ends the run therefore does not live in the
+    base class: the context LATCHES the signal when the handler fires and re-raises
+    it from ``__exit__`` after the release, so a block that looks clean only because
+    it swallowed the raise still releases the duck and still exits non-zero.
+    """
+    with pytest.raises(SignalExit):
+        with owning(client) as owner:
+            try:
+                os.kill(os.getpid(), signal.SIGTERM)
+                time.sleep(0.5)  # pragma: no cover - the signal lands first
+            except Exception:  # noqa: BLE001 - the swallow this test is about
+                pass
+    assert _wait_for(lambda: _released(fake))
+    assert owner.report is not None and owner.report.complete
+
+
+@pytest.mark.skipif(
+    threading.current_thread() is not threading.main_thread(),
+    reason="signal handlers can only be installed on the main thread",
+)
 def test_sigint_inside_the_context_raises_keyboard_interrupt(
     fake: FakeRobotd, client: RobotClient
 ) -> None:

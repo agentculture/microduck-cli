@@ -402,7 +402,7 @@ class RobotClient:
         self._reconnect.set()
         self._shutdown_socket()
         self._fail_pending("the client is closing")
-        for thread in list(self._threads):
+        for thread in self._threads:
             thread.join(timeout=2.0)
         self._threads.clear()
 
