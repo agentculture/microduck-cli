@@ -31,7 +31,7 @@ _DEADLINE_S = 5.0
 AWAKE = Sense(fallen=False, limp=False, enabled=True)
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake() -> Iterator[FakeRobotd]:
     with FakeRobotd() as running:
         yield running
@@ -174,7 +174,8 @@ def test_the_idle_behaviour_is_passive_looping_and_sense_fed() -> None:
     behavior = idle_mod.idle_behavior()
     assert behavior.stop_class is StopClass.PASSIVE
     assert behavior.channels == frozenset({"head", "sound"})
-    assert behavior.lifetime.looping and behavior.lifetime.duration is None
+    assert behavior.lifetime.looping
+    assert behavior.lifetime.duration is None
     assert behavior.wants_sense, "without this the engine feeds EMPTY_SENSE and idle never moves"
     assert behavior.contribute(1.0, AWAKE)["head"]
     assert behavior.contribute(1.0) == {}, "EMPTY_SENSE means no reading, so no motion"
@@ -202,12 +203,14 @@ def test_any_non_passive_behaviour_owns_the_head_over_idle() -> None:
 def test_registering_idle_replaces_the_placeholder_kind_but_not_its_validator() -> None:
     registry = default_registry()
     placeholder = registry.admit(Intent(kind="idle", payload={}))
-    assert placeholder.admitted and placeholder.behavior is not None
+    assert placeholder.admitted
+    assert placeholder.behavior is not None
     assert placeholder.behavior.channels == frozenset({"pose"})
 
     idle_mod.register(registry, HumanGate())
     admission = registry.admit(Intent(kind="idle", payload={"duration_s": 5.0}))
-    assert admission.admitted and admission.behavior is not None
+    assert admission.admitted
+    assert admission.behavior is not None
     assert admission.behavior.channels == frozenset({"head", "sound"})
     assert admission.behavior.lifetime.duration == 5.0
 

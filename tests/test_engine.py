@@ -475,6 +475,7 @@ def test_compose_pose_passes_a_channel_owners_stop_and_mode_through():
     contribs = {owner.id: {"twist": (0.0, 0.0, 0.0), "mode": "roller", "stop": True}}
     pose = compose_pose(ownership, contribs)
     assert pose["twist"] == (0.0, 0.0, 0.0)
-    assert pose["mode"] == "roller" and pose["stop"] is True
+    assert pose["mode"] == "roller"
+    assert pose["stop"] is True
     # An unowned extra never leaks: a contribution from a non-owner is ignored.
     assert compose_pose({}, contribs) == {}

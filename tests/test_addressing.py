@@ -120,11 +120,12 @@ def test_explicit_socket_takes_precedence_over_duck_and_env() -> None:
 
 def test_socket_path_over_limit_raises_env_error() -> None:
     long_name = "d" * 90
+    listdir = _listdir([f"{long_name}.sock", f"{long_name}-tof.sock"])
     with pytest.raises(CliError) as excinfo:
         resolve(
             name=long_name,
             env={"DUCK_SIM_STATE": "/state"},
-            listdir=_listdir([f"{long_name}.sock", f"{long_name}-tof.sock"]),
+            listdir=listdir,
         )
     err = excinfo.value
     assert err.code == EXIT_ENV_ERROR
@@ -134,11 +135,12 @@ def test_socket_path_over_limit_raises_env_error() -> None:
 
 def test_explicit_socket_over_limit_also_checked() -> None:
     long_path = "/state/" + ("x" * 100) + ".sock"
+    listdir = _listdir([])
     with pytest.raises(CliError) as excinfo:
         resolve(
             socket=long_path,
             env={"DUCK_SIM_STATE": "/state"},
-            listdir=_listdir([]),
+            listdir=listdir,
         )
     assert excinfo.value.code == EXIT_ENV_ERROR
 
@@ -147,11 +149,12 @@ def test_explicit_socket_over_limit_also_checked() -> None:
 
 
 def test_unknown_duck_name_lists_present_sockets() -> None:
+    listdir = _listdir(["duck-a.sock", "duck-a-tof.sock"])
     with pytest.raises(CliError) as excinfo:
         resolve(
             name="duck-nope",
             env={"DUCK_SIM_STATE": "/state"},
-            listdir=_listdir(["duck-a.sock", "duck-a-tof.sock"]),
+            listdir=listdir,
         )
     err = excinfo.value
     assert err.code == EXIT_USER_ERROR
@@ -159,11 +162,12 @@ def test_unknown_duck_name_lists_present_sockets() -> None:
 
 
 def test_unknown_duck_name_empty_state_dir() -> None:
+    listdir = _listdir([])
     with pytest.raises(CliError) as excinfo:
         resolve(
             name="duck-nope",
             env={"DUCK_SIM_STATE": "/state"},
-            listdir=_listdir([]),
+            listdir=listdir,
         )
     assert "empty or missing" in excinfo.value.message
 
@@ -179,6 +183,7 @@ def test_missing_state_dir_reports_missing() -> None:
 
 
 def test_no_ducks_present_at_all_without_name() -> None:
+    listdir = _listdir([])
     with pytest.raises(CliError) as excinfo:
-        resolve(env={"DUCK_SIM_STATE": "/state"}, listdir=_listdir([]))
+        resolve(env={"DUCK_SIM_STATE": "/state"}, listdir=listdir)
     assert excinfo.value.code == EXIT_USER_ERROR

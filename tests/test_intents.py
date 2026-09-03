@@ -77,8 +77,9 @@ def test_validate_accepts_a_well_formed_payload_per_kind():
 
 
 def test_validate_refuses_an_unknown_kind_naming_the_known_ones():
+    registry = default_registry()
     with pytest.raises(CliError) as excinfo:
-        default_registry().validate("teleport", {})
+        registry.validate("teleport", {})
     assert "teleport" in excinfo.value.message
     assert "move" in excinfo.value.remediation
 
@@ -111,8 +112,9 @@ def test_validate_refuses_an_unknown_kind_naming_the_known_ones():
 )
 def test_validate_is_fail_closed(kind, payload, needle):
     """Every bad shape is REFUSED with a named message — never clamped."""
+    registry = default_registry()
     with pytest.raises(CliError) as excinfo:
-        default_registry().validate(kind, payload)
+        registry.validate(kind, payload)
     assert needle in excinfo.value.message
     assert excinfo.value.message.startswith(f"{kind}:")
 
@@ -126,8 +128,9 @@ def test_validate_never_clamps_an_out_of_range_value():
 
 
 def test_validate_refuses_a_non_object_payload():
+    registry = default_registry()
     with pytest.raises(CliError) as excinfo:
-        default_registry().validate("move", [1, 2, 3])
+        registry.validate("move", [1, 2, 3])
     assert "must be an object" in excinfo.value.message
 
 
@@ -161,7 +164,8 @@ def test_max_duration_is_the_one_ceiling_for_every_kind():
 def test_admit_builds_a_behavior_with_the_right_claim_and_lifetime():
     registry = default_registry()
     admission = registry.admit(Intent("move", {"vx": 0.2, "duration_s": 3.0}), now=1.0)
-    assert admission.admitted and admission.code == REASON_ADMITTED
+    assert admission.admitted
+    assert admission.code == REASON_ADMITTED
     assert admission.reason == REASON_ADMITTED
     assert admission.at == 1.0
     behavior = admission.behavior
@@ -175,13 +179,17 @@ def test_admit_builds_a_behavior_with_the_right_claim_and_lifetime():
 def test_do_is_unstoppable_and_idle_is_a_passive_loop():
     registry = default_registry()
     do = registry.admit(Intent("do", {"skill": "standup"})).behavior
-    assert do is not None and do.stop_class is StopClass.UNSTOPPABLE
+    assert do is not None
+    assert do.stop_class is StopClass.UNSTOPPABLE
     assert do.channels == frozenset({"skill"})
     idle = registry.admit(Intent("idle", {})).behavior
-    assert idle is not None and idle.stop_class is StopClass.PASSIVE
-    assert idle.lifetime.looping and idle.lifetime.duration is None
+    assert idle is not None
+    assert idle.stop_class is StopClass.PASSIVE
+    assert idle.lifetime.looping
+    assert idle.lifetime.duration is None
     bounded = registry.admit(Intent("idle", {"duration_s": 4.0})).behavior
-    assert bounded is not None and bounded.lifetime == Lifetime(duration=4.0, looping=True)
+    assert bounded is not None
+    assert bounded.lifetime == Lifetime(duration=4.0, looping=True)
 
 
 def test_stop_and_mode_are_stopping_and_evict_a_stoppable_incumbent():
@@ -194,7 +202,8 @@ def test_stop_and_mode_are_stopping_and_evict_a_stoppable_incumbent():
     assert [b.id for b in admission.evicted] == [incumbent.id]
 
     mode = registry.admit(Intent("mode", {"mode": "roller"}), now=0.0, active=[incumbent])
-    assert mode.admitted and [b.id for b in mode.evicted] == [incumbent.id]
+    assert mode.admitted
+    assert [b.id for b in mode.evicted] == [incumbent.id]
 
 
 def test_admit_refuses_behind_a_blocking_incumbent_with_a_named_reason():
@@ -247,13 +256,15 @@ def test_inject_calls_the_same_admit(monkeypatch):
 def test_inject_defaults_to_the_cli_origin_and_stamps_the_clock():
     registry = default_registry()
     admission = registry.inject("stop", now=7.5)
-    assert admission.admitted and admission.at == 7.5
+    assert admission.admitted
+    assert admission.at == 7.5
     assert Intent("stop", {}).origin == ORIGIN_CLI
 
 
 def test_inject_refuses_an_unknown_origin():
+    registry = default_registry()
     with pytest.raises(CliError) as excinfo:
-        default_registry().inject("stop", {}, origin="daemon")
+        registry.inject("stop", {}, origin="daemon")
     assert "origin" in excinfo.value.message
     assert ORIGIN_RULE in excinfo.value.remediation
 
@@ -279,7 +290,9 @@ def test_the_same_over_limit_payload_refuses_identically_from_any_origin(kind, p
     )
     injected = registry.inject(kind, dict(payload), now=99.0, origin=ORIGIN_CLI)
     agent = registry.inject(kind, dict(payload), origin=ORIGIN_AGENT)
-    assert not (from_rule.admitted or injected.admitted or agent.admitted)
+    assert not from_rule.admitted
+    assert not injected.admitted
+    assert not agent.admitted
     assert from_rule.reason == injected.reason == agent.reason
     assert from_rule.code == injected.code == REASON_INVALID
 
@@ -361,7 +374,8 @@ def test_each_kind_contributes_its_validated_params_on_its_channel(kind, payload
 
 def test_a_mode_intent_keeps_the_mode_on_the_behaviors_params():
     behavior = default_registry().admit(Intent("mode", {"mode": "roller"})).behavior
-    assert behavior is not None and behavior.params["mode"] == "roller"
+    assert behavior is not None
+    assert behavior.params["mode"] == "roller"
 
 
 def test_a_mode_intent_also_contributes_mode_so_set_mode_is_reachable():
@@ -375,6 +389,7 @@ def test_a_mode_intent_also_contributes_mode_so_set_mode_is_reachable():
 
 
 def test_validate_refuses_a_payload_with_non_string_keys():
+    registry = default_registry()
     with pytest.raises(CliError) as excinfo:
-        default_registry().validate("move", {1: 0.1})
+        registry.validate("move", {1: 0.1})
     assert "keys must be strings" in excinfo.value.message

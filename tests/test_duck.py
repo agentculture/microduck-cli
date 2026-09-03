@@ -40,7 +40,7 @@ from tests.test_no_secrets_in_output import assert_no_secrets
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake() -> Iterator[FakeRobotd]:
     """A fake daemon with a policy loaded and driving, so no verb is refused for setup."""
     with FakeRobotd() as running:
@@ -231,7 +231,8 @@ def test_dry_run_json_carries_the_plan_and_sends_nothing(
     rc = main(_sock(fake, "init", "--json"))
     payload = json.loads(capsys.readouterr().out)
     assert rc == 0
-    assert payload["dry_run"] is True and payload["sent"] is False
+    assert payload["dry_run"] is True
+    assert payload["sent"] is False
     assert payload["safety"] == SAFETY_INIT
     assert any(proto.ROBOT_INIT in call for call in payload["calls"])
     assert "--apply" in payload["apply_command"]
@@ -244,7 +245,8 @@ def test_relax_apply_without_yes_is_refused_before_anything_is_sent(
     rc = main(_sock(fake, "relax", "--apply"))
     err = capsys.readouterr().err
     assert rc == 1
-    assert "--yes" in err and SAFETY_RELAX in err
+    assert "--yes" in err
+    assert SAFETY_RELAX in err
     assert err.splitlines()[1].startswith("hint: ")
     assert fake.methods_called() == []
 
@@ -318,10 +320,12 @@ def test_health_unhealthy_exits_two_and_still_prints_the_report(
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert rc == 2, "mirrors robotctl health's non-zero exit on an unhealthy robot"
-    assert payload["healthy"] is False and payload["reason"] == "bus is down"
+    assert payload["healthy"] is False
+    assert payload["reason"] == "bus is down"
     # JSON mode: the error is one structured object on stderr, never the two text lines.
     error = json.loads(captured.err)
-    assert error["code"] == 2 and error["remediation"]
+    assert error["code"] == 2
+    assert error["remediation"]
 
 
 def test_version_reports_the_handshake(
@@ -343,7 +347,8 @@ def test_monitor_json_is_pure_ndjson(fake: FakeRobotd, capsys: pytest.CaptureFix
     assert len(lines) == 3
     for line in lines:
         frame = json.loads(line)
-        assert "joints" in frame and "loop" in frame
+        assert "joints" in frame
+        assert "loop" in frame
 
 
 def test_monitor_text_prints_one_line_per_frame(
@@ -411,7 +416,8 @@ def test_quack_sends_the_chirp_tag_as_a_notification(
     assert rc == 0
     assert payload["tag"] == duck_cmd.QUACK_TAG == "chirp"
     sounds = [rec for rec in fake.call_log if rec.method == proto.ROBOT_SOUND]
-    assert sounds and sounds[0].is_notification
+    assert sounds
+    assert sounds[0].is_notification
     assert sounds[0].params == {"tag": "chirp"}
 
 

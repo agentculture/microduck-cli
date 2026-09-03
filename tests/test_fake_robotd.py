@@ -90,13 +90,13 @@ class _Client:
         self.sock.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake():
     with FakeRobotd() as instance:
         yield instance
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(fake: FakeRobotd):
     conn = _Client(fake.socket_path)
     try:

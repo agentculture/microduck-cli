@@ -71,18 +71,18 @@ class _Records(logging.Handler):
         self.lines.append(record.getMessage())
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake() -> Iterator[FakeRobotd]:
     with FakeRobotd() as running:
         yield running
 
 
-@pytest.fixture()
+@pytest.fixture
 def clock() -> _Clock:
     return _Clock()
 
 
-@pytest.fixture()
+@pytest.fixture
 def sense_log() -> Iterator[_Records]:
     handler = _Records()
     logger = logging.getLogger("microduck.sense")
@@ -96,7 +96,7 @@ def sense_log() -> Iterator[_Records]:
         logger.setLevel(previous)
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(fake: FakeRobotd, clock: _Clock) -> Iterator[RobotClient]:
     connected = RobotClient(fake.socket_path, clock=clock)
     connected.connect()
@@ -336,8 +336,9 @@ def test_api_skew_is_reported_never_refused(fake: FakeRobotd, clock: _Clock) -> 
 
 
 def test_connect_to_a_missing_socket_is_an_environment_error(clock: _Clock) -> None:
+    disconnected = RobotClient("/nonexistent/robotd.sock", clock=clock)
     with pytest.raises(CliError) as caught:
-        RobotClient("/nonexistent/robotd.sock", clock=clock).connect()
+        disconnected.connect()
     assert caught.value.code == EXIT_ENV_ERROR
     assert "/nonexistent/robotd.sock" in caught.value.message
 
@@ -456,7 +457,8 @@ def test_state_frames_land_in_a_peek_slot_and_are_never_consumed(
     assert _wait_for(lambda: client.peek(proto.ROBOT_STATE) is not None)
     first = client.peek(proto.ROBOT_STATE)
     second = client.peek(proto.ROBOT_STATE)
-    assert first is not None and second is not None
+    assert first is not None
+    assert second is not None
     assert first[1] == clock.now, "a slot is stamped with the injected clock"
     assert second[0] is not None, "peeking must not consume the slot"
 
