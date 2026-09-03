@@ -14,23 +14,51 @@ and nothing else.
 
 The pinned daemon (``docs/upstream-pins.md``, ``sim-remote-io`` @
 ``0cd676d6fbb6e90a762c84aa63abe7a02dbc9495``) answers ``API_VERSION = 16`` and
-has no ``robot.policies`` / ``robot.loadPolicy`` / ``robot.reloadPolicies``
-methods at all (``tests/fake_robotd.py`` transcribes this: those three answer
-``-32601`` below its ``POLICY_API_VERSION = 18``). This module is written
-against **main**'s documented wire shapes instead —
+has no ``robot.policies`` / ``robot.loadPolicy`` / ``robot.reloadPolicies`` /
+``robot.skills`` / ``robot.setSkill`` / ``robot.removeSkill`` methods at all
+(``tests/fake_robotd.py`` transcribes this: those methods answer ``-32601``
+below its ``POLICY_API_VERSION = 18``). This module is written against
+**main**'s documented wire shapes instead — read from
+``duck-ipc-proto/src/lib.rs`` at main commit ``2f7812086e20310db4f9c07d51fb4b46bdfc99bc``
+(``gh api "repos/pollen-robotics/microduck/contents/duck-ipc-proto/src/lib.rs"
+--jq .content | base64 -d``), not the pinned commit above —
 
 * ``robot.policies`` — read slots + skills (API >= 18 only);
-* ``robot.loadPolicy {slot, source}`` — write one slot;
+* ``robot.loadPolicy {slot: Option<String>, path: Option<String>}`` — write
+  one slot. ``path`` is an *absolute* filesystem path the daemon opens
+  directly (``LoadPolicyParams`` doc comment: "the daemon resolves nothing
+  relative"); it is **not** a fetch — there is no ``source``/HF-repo field on
+  this call at all, on main or on the pinned build;
 * ``robot.reloadPolicies`` — put every slot back to its own default;
+* ``robot.skills`` / ``robot.setSkill(SkillParams)`` /
+  ``robot.removeSkill(SkillNameParams {name})`` (main's v22) — the skill
+  table (``[[policy.skill]]``), added/removed by name. ``SkillParams`` carries
+  ``name`` and optional ``path`` (same "absolute, not fetched" contract as
+  ``robot.loadPolicy``), ``duration``, ``command``, ``unwind``, ``unwind_s``,
+  ``chain``, ``action_scale``, ``gain_ratio``. Per main's ``destination()``
+  table, ``Call::RobotSkills | Call::RobotSetSkill(_) | Call::RobotRemoveSkill(_)
+  => (Robot, Slow)`` — **robotd's own socket serves these**, the same one
+  ``robot.loadPolicy`` uses, so this CLI sends them as real requests rather
+  than printing a ``robotctl`` line.
 
-and against a daemon whose ``hello`` answers an ``api_version`` below 18 (or
-that answers ``METHOD_NOT_FOUND`` for one of those three), every verb that
+Against a daemon whose ``hello`` answers an ``api_version`` below 18 (or that
+answers ``METHOD_NOT_FOUND`` for one of the calls above), every verb that
 needs them raises :class:`~microduck_cli.cli._errors.CliError` (exit 2) with
 :data:`D1_REMEDIATION`, naming the daemon's actual version, rather than being
 silently absent. ``policy list`` is the one exception: on API 16 it falls back
 to ``robot.subscribe``'s ``walk``/``stand``/``unavailable``/skill-file fields
 (:meth:`~microduck_cli.ipc.client.RobotClient.skills_from_subscribe`), and
 labels its answer with the source it actually used.
+
+**Neither ``robot.loadPolicy`` nor ``robot.setSkill`` can fetch a Hub repo —**
+their only file field is an absolute local path the daemon opens as-is.
+``policy load <slot> <source>`` and ``policy add <name> <repo>`` therefore
+inspect ``source``/``repo``: an absolute path is sent as ``path`` in a real,
+gated request; anything else (an ``org/name`` Hub id — the CLI cannot resolve
+that to bytes on the robot's disk) prints the ``sudo robotctl policy load|add
+...`` line for a human to run on the robot instead, and exits 0 without
+opening a socket — the same pattern ``policy search``/``check``/``update``
+already use for updaterd's fetch namespace this CLI cannot reach either.
 
 ``policy search`` / ``check`` / ``update`` need updater's ``policy.*`` fetch
 namespace, which lives on ``updaterd`` (a separate socket this CLI does not
@@ -111,6 +139,8 @@ _ROBOTCTL_UPDATE = "sudo robotctl policy update"
 _ROBOTCTL_PAD_BINDINGS = "robotctl pad bindings"
 _ROBOTCTL_PAD_BIND = "sudo robotctl pad bind {button} {skill}"
 _ROBOTCTL_PAD_RESET = "sudo robotctl pad reset"
+_ROBOTCTL_POLICY_LOAD = "sudo robotctl policy load {slot} {source}"
+_ROBOTCTL_POLICY_ADD = "sudo robotctl policy add {name} {repo}"
 
 _UPDATERD_NOTE = (
     "the policy.* fetch namespace this needs lives on updaterd, a socket this CLI "
@@ -121,6 +151,13 @@ _PAD_NOTE = (
     "pad.bindings / pad.bind are not in the pinned duck-ipc-proto method table "
     "(configd owns [pad] in robotd.toml; padd's socket only forwards pad.input / "
     "pad.report); run the line above on the robot"
+)
+_FETCH_NOTE = (
+    "not an absolute path — robot.loadPolicy/robot.setSkill open a path on the "
+    "robot's own disk, they do not fetch one, and microduck-cli cannot fetch a Hub "
+    "repo to bytes on the robot either (that fetch, when it exists, lives in "
+    "updaterd's policy.* namespace, the same socket 'policy search'/'check'/"
+    "'update' cannot reach); run the line above on the robot"
 )
 
 # ---------------------------------------------------------------------------
@@ -303,12 +340,22 @@ def cmd_policy_list(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# load / reset / add / remove — gated writes through robot.loadPolicy
+# load / reset — gated writes through robot.loadPolicy / robot.reloadPolicies
+# add / remove — gated writes through robot.setSkill / robot.removeSkill
 # ---------------------------------------------------------------------------
 
 
 def _is_pollen_source(source: str) -> bool:
     return source.startswith("pollen-robotics/")
+
+
+def _is_local_path(source: str) -> bool:
+    """True when *source* is a filesystem path ``robot.loadPolicy``/``robot.setSkill``
+    can open directly, rather than a Hub id (``org/name``) this CLI would need to
+    fetch first and cannot. Both calls document their file field as an absolute
+    path the daemon opens as-is — see the module docstring.
+    """
+    return os.path.isabs(source)
 
 
 def _load_policy_result_text(verb: str, detail: str, accepted: bool) -> str:
@@ -328,10 +375,11 @@ def _positional_for(args: argparse.Namespace, verb: str) -> list[str]:
     return []
 
 
-def _do_gated_load_policy(
+def _do_gated_policy_call(
     args: argparse.Namespace,
     *,
     verb: str,
+    method: str,
     call_params: dict[str, object],
     detail: str,
     trusted_source: bool,
@@ -341,7 +389,7 @@ def _do_gated_load_policy(
     client, address = _build_client(args)
     try:
         _require_policy_channel(client)
-        call_desc = f"robot.loadPolicy {call_params!r}"
+        call_desc = f"{method} {call_params!r}"
         gate_state = consent(apply_flag)
 
         if gate_state is Consent.DRY_RUN:
@@ -376,7 +424,7 @@ def _do_gated_load_policy(
                 )
 
         try:
-            result = client.request("robot.loadPolicy", call_params)
+            result = client.request(method, call_params)
         except RpcError as exc:
             if exc.code == METHOD_NOT_FOUND:
                 raise _d1_from_method_not_found(client, exc) from exc
@@ -390,7 +438,7 @@ def _do_gated_load_policy(
         emit_result(
             {
                 "mode": "apply",
-                "call": "robot.loadPolicy",
+                "call": method,
                 "params": call_params,
                 "result": result,
                 "text": body,
@@ -403,10 +451,15 @@ def _do_gated_load_policy(
 
 
 def cmd_policy_load(args: argparse.Namespace) -> int:
-    return _do_gated_load_policy(
+    json_mode = bool(getattr(args, "json", False))
+    if not _is_local_path(args.source):
+        line = _ROBOTCTL_POLICY_LOAD.format(slot=args.slot, source=args.source)
+        return _emit_robotctl_line(line, _FETCH_NOTE, json_mode=json_mode)
+    return _do_gated_policy_call(
         args,
         verb="load",
-        call_params={"slot": args.slot, "source": args.source},
+        method="robot.loadPolicy",
+        call_params={"slot": args.slot, "path": args.source},
         detail=f"slot {args.slot!r} <- {args.source!r}",
         trusted_source=_is_pollen_source(args.source),
     )
@@ -415,10 +468,11 @@ def cmd_policy_load(args: argparse.Namespace) -> int:
 def cmd_policy_reset(args: argparse.Namespace) -> int:
     slot = getattr(args, "slot", None)
     if slot:
-        return _do_gated_load_policy(
+        return _do_gated_policy_call(
             args,
             verb="reset",
-            call_params={"slot": slot, "source": None},
+            method="robot.loadPolicy",
+            call_params={"slot": slot, "path": None},
             detail=f"slot {slot!r}",
             trusted_source=True,
         )
@@ -472,14 +526,22 @@ def cmd_policy_reset(args: argparse.Namespace) -> int:
 
 
 def cmd_policy_add(args: argparse.Namespace) -> int:
-    params: dict[str, object] = {"slot": args.name, "source": args.repo}
+    json_mode = bool(getattr(args, "json", False))
+    if not _is_local_path(args.repo):
+        line = _ROBOTCTL_POLICY_ADD.format(name=args.name, repo=args.repo)
+        return _emit_robotctl_line(line, _FETCH_NOTE, json_mode=json_mode)
+    # SkillParams (main's duck-ipc-proto, robot.setSkill) — name is required; every
+    # other field is optional and means "keep the default / whatever an existing
+    # entry with this name already has".
+    params: dict[str, object] = {"name": args.name, "path": args.repo}
     if getattr(args, "hold", None) is not None:
-        params["hold"] = args.hold
+        params["duration"] = float(args.hold)
     if getattr(args, "command_vector", None):
         params["command"] = [float(x) for x in args.command_vector.split(",")]
-    return _do_gated_load_policy(
+    return _do_gated_policy_call(
         args,
         verb="add",
+        method="robot.setSkill",
         call_params=params,
         detail=f"skill {args.name!r} <- {args.repo!r}",
         trusted_source=_is_pollen_source(args.repo),
@@ -487,10 +549,11 @@ def cmd_policy_add(args: argparse.Namespace) -> int:
 
 
 def cmd_policy_remove(args: argparse.Namespace) -> int:
-    return _do_gated_load_policy(
+    return _do_gated_policy_call(
         args,
         verb="remove",
-        call_params={"slot": args.name, "source": None},
+        method="robot.removeSkill",
+        call_params={"name": args.name},
         detail=f"skill {args.name!r}",
         trusted_source=True,
     )

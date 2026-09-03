@@ -54,9 +54,14 @@ from microduck_cli.duck.addressing import DuckAddress, resolve
 
 # gate.py owns the verb -> SAFETY_* mapping; importing it keeps the sentence in the
 # prompt and the JSON dry-run identical to the one render_dry_run() prints.
-from microduck_cli.duck.gate import HINT_APPLY, Consent
-from microduck_cli.duck.gate import _safety_sentence as safety_sentence
-from microduck_cli.duck.gate import confirm_on_tty, consent, render_dry_run
+from microduck_cli.duck.gate import (
+    HINT_APPLY,
+    Consent,
+    confirm_on_tty,
+    consent,
+    render_dry_run,
+    safety_sentence,
+)
 from microduck_cli.duck.record import Recorder
 from microduck_cli.explain.duck import VERBS
 from microduck_cli.ipc import proto

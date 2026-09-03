@@ -58,7 +58,17 @@ def _non_hello(fake: FakeRobotd) -> list[str]:
 # ---------------------------------------------------------------------------
 # obligation o19 / acceptance 1: policy load issues robot.loadPolicy only,
 # never opens a config file, and its text output contains the two sentences.
+#
+# robot.loadPolicy's only file field is `path` — an absolute path the daemon
+# opens directly, never a fetch (LoadPolicyParams's doc comment: "the daemon
+# resolves nothing relative"; there is no `source` field on main or on the
+# pinned build). So a real call only happens for an absolute-path SOURCE; a
+# Hub id like "pollen-robotics/microduck-walk" instead prints the robotctl
+# line — see the "prints the robotctl line" block below.
 # ---------------------------------------------------------------------------
+
+LOCAL_WALK_POLICY = "/var/lib/robot/policies/walk.onnx"
+LOCAL_UNTRUSTED_POLICY = "/home/pilot/untrusted-walk.onnx"
 
 
 def test_policy_load_issues_robot_loadpolicy_only_on_api18(
@@ -70,7 +80,7 @@ def test_policy_load_issues_robot_loadpolicy_only_on_api18(
             "policy",
             "load",
             "walk",
-            "pollen-robotics/microduck-walk",
+            LOCAL_WALK_POLICY,
             "--socket",
             fake.socket_path,
             "--apply",
@@ -79,7 +89,7 @@ def test_policy_load_issues_robot_loadpolicy_only_on_api18(
     assert rc == 0
     assert _non_hello(fake) == ["robot.loadPolicy"]
     record = fake.call_log[-1]
-    assert record.params == {"slot": "walk", "source": "pollen-robotics/microduck-walk"}
+    assert record.params == {"slot": "walk", "path": LOCAL_WALK_POLICY}
 
     captured = capsys.readouterr()
     assert "survives a reboot" in captured.out
@@ -95,7 +105,7 @@ def test_policy_load_json_mode_carries_the_same_sentences(
             "policy",
             "load",
             "walk",
-            "pollen-robotics/microduck-walk",
+            LOCAL_WALK_POLICY,
             "--socket",
             fake.socket_path,
             "--apply",
@@ -118,7 +128,7 @@ def test_policy_load_on_api16_exits_2_naming_api_ge_18(
             "policy",
             "load",
             "walk",
-            "pollen-robotics/microduck-walk",
+            LOCAL_WALK_POLICY,
             "--socket",
             fake.socket_path,
             "--apply",
@@ -132,6 +142,33 @@ def test_policy_load_on_api16_exits_2_naming_api_ge_18(
 
 
 # ---------------------------------------------------------------------------
+# A non-path source: this CLI cannot fetch a Hub repo, so it prints the
+# robotctl line and never opens a socket at all — same pattern as
+# policy search/check/update.
+# ---------------------------------------------------------------------------
+
+
+def test_policy_load_with_a_hub_id_prints_the_robotctl_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rc = main(["policy", "load", "walk", "pollen-robotics/microduck-walk"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "sudo robotctl policy load walk pollen-robotics/microduck-walk" in out
+    assert "cannot fetch" in out
+
+
+def test_policy_add_with_a_hub_id_prints_the_robotctl_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rc = main(["policy", "add", "polite-bow", "fffiloni/microduck-polite-bow"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "sudo robotctl policy add polite-bow fffiloni/microduck-polite-bow" in out
+    assert "cannot fetch" in out
+
+
+# ---------------------------------------------------------------------------
 # The three gate outcomes (dry-run / prompt-confirm / prompt-decline).
 # ---------------------------------------------------------------------------
 
@@ -141,7 +178,7 @@ def test_policy_load_dry_run_sends_nothing(
 ) -> None:
     fake.set_state(api_version=18)
     # No --apply, and pytest's captured stdin is not a tty -> Consent.DRY_RUN.
-    rc = main(["policy", "load", "walk", "someone/untrusted-policy", "--socket", fake.socket_path])
+    rc = main(["policy", "load", "walk", LOCAL_UNTRUSTED_POLICY, "--socket", fake.socket_path])
     assert rc == 0
     assert _non_hello(fake) == []
     out = capsys.readouterr().out
@@ -162,7 +199,7 @@ def test_policy_load_prompt_confirmed_sends_the_call(
             "policy",
             "load",
             "walk",
-            "pollen-robotics/microduck-walk",
+            LOCAL_WALK_POLICY,
             "--socket",
             fake.socket_path,
         ]
@@ -182,7 +219,7 @@ def test_policy_load_prompt_declined_sends_nothing(
             "policy",
             "load",
             "walk",
-            "pollen-robotics/microduck-walk",
+            LOCAL_WALK_POLICY,
             "--socket",
             fake.socket_path,
             "--json",
@@ -195,26 +232,57 @@ def test_policy_load_prompt_declined_sends_nothing(
 
 
 # ---------------------------------------------------------------------------
-# reset / add / remove: same gate + d1, robot.loadPolicy / robot.reloadPolicies only
+# reset: robot.loadPolicy {slot, path: null} / robot.reloadPolicies, same gate + d1
 # ---------------------------------------------------------------------------
 
 
-def test_policy_reset_slot_uses_load_policy_with_null_source(fake: FakeRobotd) -> None:
+def test_policy_reset_slot_uses_load_policy_with_null_path(fake: FakeRobotd) -> None:
     fake.set_state(api_version=18, walk_policy="something.onnx", unavailable=None)
     rc = main(["policy", "reset", "walk", "--socket", fake.socket_path, "--apply"])
     assert rc == 0
     assert _non_hello(fake) == ["robot.loadPolicy"]
-    assert fake.call_log[-1].params == {"slot": "walk", "source": None}
+    assert fake.call_log[-1].params == {"slot": "walk", "path": None}
 
 
 def test_policy_reset_all_uses_reload_policies(fake: FakeRobotd) -> None:
-    # tests/fake_robotd.py's POLICY_METHODS is {robot.policies, robot.skills,
-    # robot.loadPolicy} only — robot.reloadPolicies is not transcribed there (the
-    # probed daemon never advertised it), so the fake answers METHOD_NOT_FOUND for
-    # it even at API 18. What matters here is *which call was attempted*.
     fake.set_state(api_version=18)
-    main(["policy", "reset", "--socket", fake.socket_path, "--apply"])
+    rc = main(["policy", "reset", "--socket", fake.socket_path, "--apply"])
+    assert rc == 0
     assert _non_hello(fake) == ["robot.reloadPolicies"]
+
+
+# ---------------------------------------------------------------------------
+# add / remove: robot.setSkill / robot.removeSkill, same gate + d1.
+# add's `repo` gets the same absolute-path-or-robotctl-line treatment as
+# load's `source` (see above) — robot.setSkill's `path` is not a fetch either.
+# ---------------------------------------------------------------------------
+
+
+def test_policy_add_on_api18_issues_exactly_robot_setskill(fake: FakeRobotd) -> None:
+    fake.set_state(api_version=18)
+    rc = main(
+        [
+            "policy",
+            "add",
+            "polite-bow",
+            "/var/lib/robot/policies/polite-bow.onnx",
+            "--hold",
+            "5",
+            "--command",
+            "1,1,0",
+            "--socket",
+            fake.socket_path,
+            "--apply",
+        ]
+    )
+    assert rc == 0
+    assert _non_hello(fake) == ["robot.setSkill"]
+    assert fake.call_log[-1].params == {
+        "name": "polite-bow",
+        "path": "/var/lib/robot/policies/polite-bow.onnx",
+        "duration": 5.0,
+        "command": [1.0, 1.0, 0.0],
+    }
 
 
 def test_policy_add_on_api16_exits_2(fake: FakeRobotd) -> None:
@@ -223,20 +291,22 @@ def test_policy_add_on_api16_exits_2(fake: FakeRobotd) -> None:
             "policy",
             "add",
             "polite-bow",
-            "fffiloni/microduck-polite-bow",
+            "/var/lib/robot/policies/polite-bow.onnx",
             "--socket",
             fake.socket_path,
             "--apply",
         ]
     )
     assert rc == EXIT_ENV_ERROR
+    assert _non_hello(fake) == []
 
 
-def test_policy_remove_uses_load_policy_with_null_source(fake: FakeRobotd) -> None:
+def test_policy_remove_uses_remove_skill(fake: FakeRobotd) -> None:
     fake.set_state(api_version=18)
     rc = main(["policy", "remove", "polite-bow", "--socket", fake.socket_path, "--apply"])
     assert rc == 0
-    assert fake.call_log[-1].params == {"slot": "polite-bow", "source": None}
+    assert _non_hello(fake) == ["robot.removeSkill"]
+    assert fake.call_log[-1].params == {"name": "polite-bow"}
 
 
 # ---------------------------------------------------------------------------

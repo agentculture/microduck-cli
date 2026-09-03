@@ -11,8 +11,9 @@ Every entry here links to the upstream page it implements against
 ``README.md`` / ``AGENTS.md`` / ``scripts/hf/README.md``) — see the
 "Approved deviation d1" section of ``cli/_commands/policy.py`` for why the
 wire methods these verbs use (``robot.policies``, ``robot.loadPolicy``,
-``robot.reloadPolicies``) are transcribed from **main**, not the pinned
-``sim-remote-io`` commit, and why they need a daemon reporting API >= 18.
+``robot.reloadPolicies``, ``robot.setSkill``, ``robot.removeSkill``) are
+transcribed from **main**, not the pinned ``sim-remote-io`` commit, and why
+they need a daemon reporting API >= 18.
 """
 
 from __future__ import annotations
@@ -35,11 +36,13 @@ _D1_NOTE = (
 VERBS: list[str] = [
     "policy overview — describe the policy noun (train, export, publish, install policies)",
     "policy list — read policy slots + skills (robot.policies, or robot.subscribe on API 16)",
-    "policy load <slot> <source> — robot.loadPolicy one slot, gated",
+    "policy load <slot> <source> — robot.loadPolicy one slot from an absolute path,"
+    " gated; a non-path source prints the robotctl line instead",
     "policy reset <slot> — put one slot (or, with none named, all seven) back to its own"
     " policy, gated",
-    "policy add <name> <repo> — add a skill alongside walk/stand, gated",
-    "policy remove <name> — remove a previously-added skill override, gated",
+    "policy add <name> <repo> — robot.setSkill from an absolute path, gated; a"
+    " non-path repo prints the robotctl line instead",
+    "policy remove <name> — robot.removeSkill, gated",
     "policy search <query> — print the robotctl line to search the Hub (updaterd, unreachable)",
     "policy check — print the robotctl line to check for policy updates (updaterd, unreachable)",
     "policy update — print the robotctl line to update policies (updaterd, unreachable)",
@@ -66,9 +69,14 @@ publish it, and install it onto a duck.
 Two channels this noun reaches, and two it prints instead of reaching:
 
 * `robotd`'s documented **policy channel** (`robot.policies`,
-  `robot.loadPolicy`, `robot.reloadPolicies`) — needs a daemon reporting
-  API >= 18. The pinned sim-remote-io build answers API 16 and has none of
-  these; every verb that needs them exits 2 naming that.
+  `robot.loadPolicy`, `robot.reloadPolicies`, `robot.skills`,
+  `robot.setSkill`, `robot.removeSkill`) — needs a daemon reporting API >= 18.
+  The pinned sim-remote-io build answers API 16 and has none of these; every
+  verb that needs them exits 2 naming that. Neither `robot.loadPolicy` nor
+  `robot.setSkill` can fetch a Hub repo — their file field is an absolute
+  local path the daemon opens as-is — so `policy load`/`policy add` only send
+  the real call for an absolute-path source; anything else prints the
+  `robotctl` line instead.
 * `updaterd`'s `policy.*` fetch namespace (search/check/update) and pad's
   `[pad]` config (bindings/bind/reset) are **not sockets this CLI opens** —
   those verbs print the exact `robotctl` line to run on the robot instead.
@@ -127,10 +135,15 @@ The JSON payload's `source` field says which one actually answered.
 _POLICY_LOAD = f"""\
 # microduck-cli policy load <slot> <source>
 
-Loads `source` into `slot` via `robot.loadPolicy {{slot, source}}` — the only
-call this verb ever sends. Gated (`--apply`, TTY prompt, or a zero-side-effect
-dry-run plan on a non-TTY without `--apply`); a `source` not under
-`pollen-robotics/` shows the community-policy safety sentence first.
+`robot.loadPolicy {{slot, path}}` opens a file already on the robot's own
+disk — it does not fetch one. So `source` is inspected first: an **absolute
+path** is sent as `path` in a real, gated call (`--apply`, TTY prompt, or a
+zero-side-effect dry-run plan on a non-TTY without `--apply`); anything else
+(an `org/name` Hub id this CLI cannot resolve to bytes on the robot) instead
+prints `sudo robotctl policy load <slot> <source>` and exits 0 without opening
+a socket. A gated, absolute-path load shows the community-policy safety
+sentence first (there is no way to tell a verified path from an unverified
+one from the path alone).
 
 {_D1_NOTE}
 
@@ -143,7 +156,7 @@ undoes it.
 ## Usage
 
     microduck-cli policy load walk RemiFabre/microduck-flamingo-cycle
-    microduck-cli policy load walk RemiFabre/microduck-flamingo-cycle --apply
+    microduck-cli policy load walk /var/lib/robot/policies/flamingo.onnx --apply
 
 ## See also
 
@@ -153,7 +166,7 @@ undoes it.
 _POLICY_RESET = f"""\
 # microduck-cli policy reset [<slot>]
 
-Puts one slot (`robot.loadPolicy {{slot, source: null}}`) or, with no slot
+Puts one slot (`robot.loadPolicy {{slot, path: null}}`) or, with no slot
 named, all seven (`robot.reloadPolicies`) back to the robot's own policy.
 Gated the same way as `policy load`. {_D1_NOTE}
 
@@ -171,16 +184,21 @@ _POLICY_ADD = f"""\
 # microduck-cli policy add <name> <repo>
 
 Adds a skill — a policy that sits alongside `walk`/`stand` and runs on
-request — via `robot.loadPolicy {{slot: name, source: repo, ...}}`.
-`--hold <seconds>` gives a held-pose skill a length; `--command x,y,z` sets
-the command vector it is fed while it runs. Gated the same way as
-`policy load`, including the community-policy sentence for a non-
-`pollen-robotics/` repo. {_D1_NOTE}
+request — via `robot.setSkill {{name, path, duration, command, ...}}`, main's
+v22 skill table (`[[policy.skill]]`), served by `robotd`'s own socket.
+`robot.setSkill` opens `path` on the robot's own disk, it does not fetch one,
+so `repo` is inspected first the same way `policy load` inspects `source`: an
+**absolute path** is sent as `path` in a real, gated call; anything else
+prints `sudo robotctl policy add <name> <repo>` and exits 0 without opening a
+socket. `--hold <seconds>` sets `duration` (a held-pose skill's length);
+`--command x,y,z` sets the command vector it is fed while it runs. A gated,
+absolute-path add shows the community-policy safety sentence first.
+{_D1_NOTE}
 
 ## Usage
 
     microduck-cli policy add polite-bow fffiloni/microduck-polite-bow-b1d864
-    microduck-cli policy add flamingo RemiFabre/microduck-flamingo-cycle \\
+    microduck-cli policy add flamingo /var/lib/robot/policies/flamingo.onnx \\
         --hold 5 --command 1,1,0 --apply
 
 ## See also
@@ -191,9 +209,9 @@ the command vector it is fed while it runs. Gated the same way as
 _POLICY_REMOVE = f"""\
 # microduck-cli policy remove <name>
 
-Removes a previously-added skill override via `robot.loadPolicy`
-(`source: null`) — a skill the robot's own release ships comes back once the
-override is gone. Gated the same way as `policy load`. {_D1_NOTE}
+Removes a previously-added skill via `robot.removeSkill {{name}}` — a skill
+the robot's own release ships comes back once the override is gone. Gated the
+same way as `policy load`. {_D1_NOTE}
 
 ## Usage
 

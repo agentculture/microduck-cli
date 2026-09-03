@@ -65,8 +65,9 @@ from microduck_cli.ipc import proto
 #   structs, so there is nothing upstream to import; these are transcribed from
 #   the same ``lib.rs`` and from the probed daemon's serde error messages.
 # * :data:`POLICY_METHODS`. ``robot.policies`` / ``robot.skills`` /
-#   ``robot.loadPolicy`` do not exist on the pinned commit at all (the probed
-#   daemon answers METHOD_NOT_FOUND for all three), so proto.py deliberately
+#   ``robot.loadPolicy`` / ``robot.reloadPolicies`` / ``robot.setSkill`` /
+#   ``robot.removeSkill`` do not exist on the pinned commit at all (the probed
+#   daemon answers METHOD_NOT_FOUND for all six), so proto.py deliberately
 #   carries no constant for them — see its "Deviations" docstring. They stay
 #   string literals here until a build that has them is pinned.
 
@@ -120,7 +121,23 @@ DISCRETE_METHODS: frozenset[str] = frozenset(
 
 #: Requests that exist only from :data:`POLICY_API_VERSION` onward. Literals: the
 #: pinned proto has no constant for any of them (see the block comment above).
-POLICY_METHODS: frozenset[str] = frozenset({"robot.policies", "robot.skills", "robot.loadPolicy"})
+#: ``robot.reloadPolicies`` (main v19), ``robot.setSkill`` / ``robot.removeSkill``
+#: (main v22) are gated at the same ``POLICY_API_VERSION`` as the rest of the
+#: family for simplicity — ``microduck_cli/cli/_commands/policy.py``'s own
+#: ``POLICY_API_VERSION`` constant does the same. All three are served by
+#: ``robotd``'s own socket per main's ``destination()`` table
+#: (``Call::RobotSkills | Call::RobotSetSkill(_) | Call::RobotRemoveSkill(_) =>
+#: (Robot, Slow)``), the same one every other method in this fake answers on.
+POLICY_METHODS: frozenset[str] = frozenset(
+    {
+        "robot.policies",
+        "robot.skills",
+        "robot.loadPolicy",
+        "robot.reloadPolicies",
+        "robot.setSkill",
+        "robot.removeSkill",
+    }
+)
 
 #: Server -> client push method names. Never carry an id.
 STATE_NOTIFICATION = proto.ROBOT_STATE
@@ -145,12 +162,33 @@ PARAM_FIELDS: dict[str, tuple[str, ...]] = {
     proto.ROBOT_POSE: ("z", "roll", "pitch", "active"),
     proto.ROBOT_MOUTH: ("open",),
     proto.ROBOT_SOUND: ("tag", "hold"),
+    # Policy-channel methods (main v18/v22, not in the pinned proto — see the
+    # POLICY_METHODS comment above). Transcribed from duck-ipc-proto/src/lib.rs's
+    # LoadPolicyParams / SkillParams / SkillNameParams, all `deny_unknown_fields`.
+    "robot.loadPolicy": ("slot", "path"),
+    "robot.setSkill": (
+        "name",
+        "path",
+        "duration",
+        "command",
+        "unwind",
+        "unwind_s",
+        "chain",
+        "action_scale",
+        "gain_ratio",
+        "overridden",
+    ),
+    "robot.removeSkill": ("name",),
 }
 
 #: Params with no serde ``default``: absent means ``missing field``.
 REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     proto.HELLO: ("api_version",),
     proto.ROBOT_DO: ("skill",),
+    # SkillNameParams has no container-level `#[serde(default)]`, unlike
+    # LoadPolicyParams and SkillParams (both `#[serde(default, ...)]`, so every
+    # field of theirs is optional on the wire) — `name` is genuinely required.
+    "robot.removeSkill": ("name",),
 }
 
 #: Params typed as a Rust integer (``u32``). A JSON float is a *type* error there, not a
@@ -251,12 +289,21 @@ class _RobotState:
     stand_policy: str | None = None
     unavailable: str | None = "no policy configured; holding the startup pose"
     remote_session: bool = False
-    #: Which skills have a policy behind them. Empty on ``--fake``.
+    #: Which skills have a policy behind them. Empty on ``--fake``. Used by
+    #: ``robot.do``, ``robot.subscribe``'s file fields and ``robot.policies``'
+    #: skills list — set directly via :meth:`set_state`, not by ``robot.setSkill``.
     skills: tuple[str, ...] = ()
     joint_names: tuple[str, ...] = JOINT_NAMES
     imu_ready: bool = False
     tof_sensor: str | None = "VL53L8CX"
     pad_attached: bool = False
+    #: The live ``[[policy.skill]]`` table ``robot.setSkill``/``robot.removeSkill``
+    #: write to and ``robot.skills`` reads from — main's v22 skill channel. Keyed
+    #: by name; each value is a ``SkillParams``-shaped dict. Distinct from
+    #: :attr:`skills` above (that tuple is the API-16-era "which skills have a
+    #: policy" list a test seeds directly; this table is what the newer wire
+    #: methods actually mutate).
+    skill_entries: dict[str, dict[str, Any]] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -583,18 +630,23 @@ class FakeRobotd:
             proto.PAD_INPUT: self._h_pad_input,
             proto.TOF_STREAM: self._h_tof_stream,
         }
-        # robot.policies / robot.skills / robot.loadPolicy do not exist on the
-        # pinned build — the probed daemon answers METHOD_NOT_FOUND for all three,
-        # and ipc/proto.py carries no constant for them for that reason. They
-        # arrive on a newer main; the fake gates them on the reported API version
-        # so a test can cover both daemons, keying them by literal until a build
-        # that defines them is pinned (docs/upstream-pins.md).
+        # robot.policies / robot.loadPolicy / robot.reloadPolicies / robot.skills /
+        # robot.setSkill / robot.removeSkill do not exist on the pinned build —
+        # the probed daemon answers METHOD_NOT_FOUND for all six, and ipc/proto.py
+        # carries no constant for them for that reason. They arrive on a newer
+        # main (v18 for the first three, v22 for the skill trio), the fake gates
+        # them all on the one reported API version so a test can cover both
+        # daemons, keying them by literal until a build that defines them is
+        # pinned (docs/upstream-pins.md).
         with self._lock:
             api_version = self.state.api_version
         if api_version >= POLICY_API_VERSION:
             handlers["robot.policies"] = self._h_policies
             handlers["robot.skills"] = self._h_skills
             handlers["robot.loadPolicy"] = self._h_load_policy
+            handlers["robot.reloadPolicies"] = self._h_reload_policies
+            handlers["robot.setSkill"] = self._h_set_skill
+            handlers["robot.removeSkill"] = self._h_remove_skill
         return handlers
 
     def _h_hello(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
@@ -764,26 +816,76 @@ class FakeRobotd:
             }
 
     def _h_skills(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
+        # main's SkillsResult{skills, built_in} — skills is the live
+        # [[policy.skill]] table robot.setSkill/robot.removeSkill write to, not
+        # the fixed Skill enum. `built_in` is what robot.do drives itself.
         with self._lock:
-            loaded = set(self.state.skills)
-        return {
-            "skills": [
-                {"name": s, "available": s in loaded, "file": f"{s}.onnx" if s in loaded else None}
-                for s in SKILLS
-            ]
-        }
+            entries = [dict(entry) for entry in self.state.skill_entries.values()]
+        return {"skills": entries, "built_in": list(SKILLS)}
 
     def _h_load_policy(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
-        slot = params.get("slot", "walk")
-        source = params.get("source") or params.get("policy")
+        # LoadPolicyParams {slot: Option<String>, path: Option<String>} — see the
+        # module docstring's table: (Some, Some) writes a slot, (Some, None) drops
+        # one slot's override, (None, None) drops every override, (None, Some) is
+        # refused.
+        slot = params.get("slot")
+        path = params.get("path")
+        if slot is None:
+            if path is not None:
+                return {
+                    "accepted": False,
+                    "reason": "no such thing as loading one file into every slot",
+                }
+            with self._lock:
+                self.state.walk_policy = None
+                self.state.stand_policy = None
+            return {"accepted": True}
         if slot not in ("walk", "stand"):
             return {"accepted": False, "reason": "known slots: walk, stand"}
-        if not source:
-            return {"accepted": False, "reason": "no policy named"}
         with self._lock:
-            setattr(self.state, f"{slot}_policy", source)
-            self.state.unavailable = None
+            setattr(self.state, f"{slot}_policy", path)
+            if path is not None:
+                self.state.unavailable = None
         return {"accepted": True}
+
+    def _h_reload_policies(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
+        # Call::RobotReloadPolicies takes no params — re-reads every slot from
+        # disk. Nothing in the fake's state models a config file to re-read, so
+        # this is a no-op that just accepts.
+        return {"accepted": True}
+
+    def _h_set_skill(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
+        # SkillParams — container-level `#[serde(default)]`, so every field but
+        # `name` is optional; an existing entry supplies whatever is left out
+        # (the doc comment: "the same shape read and written").
+        name = params.get("name") or ""
+        if not name:
+            return {"accepted": False, "reason": "no skill name given"}
+        with self._lock:
+            existing = self.state.skill_entries.get(name, {})
+            entry = dict(existing)
+            entry["name"] = name
+            for field_name in (
+                "path",
+                "duration",
+                "command",
+                "unwind",
+                "unwind_s",
+                "chain",
+                "action_scale",
+                "gain_ratio",
+            ):
+                if field_name in params:
+                    entry[field_name] = params[field_name]
+            entry["overridden"] = True
+            self.state.skill_entries[name] = entry
+        return {"accepted": True}
+
+    def _h_remove_skill(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
+        name = params.get("name") or ""
+        with self._lock:
+            removed = self.state.skill_entries.pop(name, None) is not None
+        return {"accepted": True, "removed": removed}
 
     # -- state stream -------------------------------------------------------
 

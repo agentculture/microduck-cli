@@ -161,6 +161,11 @@ def _safety_sentence(verb: str) -> str:
     return _SAFETY_BY_VERB.get(verb, SAFETY_COMMUNITY_POLICY)
 
 
+#: Public alias of :func:`_safety_sentence` — ``cli/_commands/duck.py`` imports
+#: this name rather than the private one.
+safety_sentence = _safety_sentence
+
+
 def render_dry_run(plan: dict) -> str:
     """Render a zero-side-effect dry-run plan for *plan* (never sends anything).
 
