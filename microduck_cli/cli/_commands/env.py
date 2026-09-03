@@ -51,7 +51,7 @@ from collections.abc import Callable
 
 from microduck_cli.cli._commands.overview import emit_overview
 from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_SUCCESS, CliError
-from microduck_cli.cli._output import PROG, emit_diagnostic, emit_result
+from microduck_cli.cli._output import PROG, STATE_DIR_HELP, emit_diagnostic, emit_result
 from microduck_cli.duck.addressing import DEFAULT_STATE_DIR
 from microduck_cli.env import doctor as _doctor
 from microduck_cli.env import hosts as _hosts
@@ -59,6 +59,7 @@ from microduck_cli.env.stack import (
     ProcCmdline,
     Runner,
     SimStack,
+    UpReport,
     default_proc_cmdline,
     default_runner,
 )
@@ -299,12 +300,9 @@ def _stop_started(stack: SimStack, reason: str) -> None:
         emit_diagnostic(f"cleanup: {result.name}: {result.outcome}{detail}")
 
 
-def cmd_env_up(args: argparse.Namespace) -> int:
-    json_mode = bool(getattr(args, "json", False))
-    mode = args.mode
-    state_dir = _resolve_state_dir(args.state)
+def _resolve_clones() -> tuple[str, str]:
+    """The microduck / microduck_rl clone pair, or the one CliError that says so."""
     microduck_clone, rl_clone = _doctor.resolve_clone_paths(os.environ)
-
     if not microduck_clone or not rl_clone:
         raise CliError(
             code=EXIT_ENV_ERROR,
@@ -315,42 +313,60 @@ def cmd_env_up(args: argparse.Namespace) -> int:
                 f"beside this repo — see {_UPSTREAM_SIM_DOC}"
             ),
         )
+    return microduck_clone, rl_clone
 
-    launcher = _upstream_launcher_path(microduck_clone)
-    if getattr(args, "upstream_launcher", False) and os.path.isfile(launcher):
-        result = _run_upstream_launcher(
-            launcher=launcher,
-            microduck_clone=microduck_clone,
-            rl_clone=rl_clone,
-            mode=mode,
-            ducks=args.ducks,
-            port=args.port,
-            scene=args.scene,
-            state_dir=state_dir,
-        )
-        if result.returncode != 0:
-            raise CliError(
-                code=EXIT_ENV_ERROR,
-                message=f"{launcher} up exited {result.returncode}",
-                remediation=(
-                    f"run `{launcher} up` by hand in {microduck_clone} and read its output "
-                    f"— see {_UPSTREAM_SIM_DOC}"
-                ),
-            )
-        emit_result(
-            (
-                {"launcher": launcher, "mode": mode, "state_dir": state_dir}
-                if json_mode
-                else f"{launcher} up: ok (state dir {state_dir})"
+
+def _up_via_upstream_launcher(
+    args: argparse.Namespace,
+    *,
+    launcher: str,
+    microduck_clone: str,
+    rl_clone: str,
+    state_dir: str,
+    json_mode: bool,
+) -> int:
+    """Shell out to ``<clone>/scripts/duck-sim up`` and report its verdict."""
+    result = _run_upstream_launcher(
+        launcher=launcher,
+        microduck_clone=microduck_clone,
+        rl_clone=rl_clone,
+        mode=args.mode,
+        ducks=args.ducks,
+        port=args.port,
+        scene=args.scene,
+        state_dir=state_dir,
+    )
+    if result.returncode != 0:
+        raise CliError(
+            code=EXIT_ENV_ERROR,
+            message=f"{launcher} up exited {result.returncode}",
+            remediation=(
+                f"run `{launcher} up` by hand in {microduck_clone} and read its output "
+                f"— see {_UPSTREAM_SIM_DOC}"
             ),
-            json_mode=json_mode,
         )
-        return EXIT_SUCCESS
+    emit_result(
+        (
+            {"launcher": launcher, "mode": args.mode, "state_dir": state_dir}
+            if json_mode
+            else f"{launcher} up: ok (state dir {state_dir})"
+        ),
+        json_mode=json_mode,
+    )
+    return EXIT_SUCCESS
 
-    stack = _make_stack(microduck_clone, rl_clone, state_dir)
+
+def _start_stack(stack: SimStack, args: argparse.Namespace) -> UpReport:
+    """``stack.up`` with the cleanup contract: a failed bring-up leaves nothing running.
+
+    ``up`` can get far enough to start something before it gives up (a socket that
+    never appeared, a daemon that died); those processes, their pidfiles and their
+    sockets are still there. Stop them, then re-raise the ORIGINAL failure — the
+    cleanup is not the news, and it already names the log.
+    """
     try:
-        report = stack.up(
-            mode=mode,
+        return stack.up(
+            mode=args.mode,
             ducks=args.ducks,
             port=args.port,
             scene=args.scene,
@@ -358,21 +374,19 @@ def cmd_env_up(args: argparse.Namespace) -> int:
             skip_build=args.skip_build,
         )
     except CliError:
-        # `up` got far enough to start something before it gave up (a socket that
-        # never appeared, a daemon that died); those processes, their pidfiles and
-        # their sockets are still there. Stop them, then re-raise the ORIGINAL
-        # failure — the cleanup is not the news, and it already names the log.
         _stop_started(stack, "bring-up failed")
         raise
 
+
+def _await_all_healthy(stack: SimStack, report: UpReport, mode: str) -> list[dict[str, object]]:
+    """Block until every socketed process reports healthy; tear the stack down if one never does."""
     timeout = _SIM_HEALTH_TIMEOUT_S if mode == "sim" else _FAKE_HEALTH_TIMEOUT_S
     ducks_report: list[dict[str, object]] = []
     for process in report.processes:
         if not process.socket:
             continue
         emit_diagnostic(f"waiting for {process.name} to report healthy ({process.socket})...")
-        healthy = _wait_for_healthy(process.socket, timeout)
-        if not healthy:
+        if not _wait_for_healthy(process.socket, timeout):
             _stop_started(stack, f"{process.name} never reported healthy")
             raise CliError(
                 code=EXIT_ENV_ERROR,
@@ -380,6 +394,36 @@ def cmd_env_up(args: argparse.Namespace) -> int:
                 remediation=f"read {process.log} for why it never came up",
             )
         ducks_report.append({"name": process.name, "socket": process.socket, "healthy": True})
+    return ducks_report
+
+
+def _up_text(mode: str, state_dir: str, ducks_report: list[dict[str, object]]) -> str:
+    lines = [f"microduck-cli env up: healthy ({mode})", f"state dir: {state_dir}"]
+    for duck in ducks_report:
+        lines.append(f"  {duck['name']}: {duck['socket']}")
+    return "\n".join(lines)
+
+
+def cmd_env_up(args: argparse.Namespace) -> int:
+    json_mode = bool(getattr(args, "json", False))
+    mode = args.mode
+    state_dir = _resolve_state_dir(args.state)
+    microduck_clone, rl_clone = _resolve_clones()
+
+    launcher = _upstream_launcher_path(microduck_clone)
+    if getattr(args, "upstream_launcher", False) and os.path.isfile(launcher):
+        return _up_via_upstream_launcher(
+            args,
+            launcher=launcher,
+            microduck_clone=microduck_clone,
+            rl_clone=rl_clone,
+            state_dir=state_dir,
+            json_mode=json_mode,
+        )
+
+    stack = _make_stack(microduck_clone, rl_clone, state_dir)
+    report = _start_stack(stack, args)
+    ducks_report = _await_all_healthy(stack, report, mode)
 
     payload = {
         "mode": mode,
@@ -388,13 +432,9 @@ def cmd_env_up(args: argparse.Namespace) -> int:
         "sockets": [d["socket"] for d in ducks_report],
         "healthy": True,
     }
-    if json_mode:
-        emit_result(payload, json_mode=True)
-    else:
-        lines = [f"microduck-cli env up: healthy ({mode})", f"state dir: {state_dir}"]
-        for duck in ducks_report:
-            lines.append(f"  {duck['name']}: {duck['socket']}")
-        emit_result("\n".join(lines), json_mode=False)
+    emit_result(
+        payload if json_mode else _up_text(mode, state_dir, ducks_report), json_mode=json_mode
+    )
     return EXIT_SUCCESS
 
 
@@ -440,6 +480,25 @@ def cmd_env_down(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _process_state(proc: dict) -> str:
+    """One tracked process's liveness word: alive, stale (pidfile with no process), untracked."""
+    if proc["alive"]:
+        return "alive"
+    if proc["stale"]:
+        return "stale"
+    return "not tracked"
+
+
+def _status_text(state_dir: str, status: dict, socket_health: list[dict[str, object]]) -> str:
+    lines = [f"microduck-cli env status: state dir {state_dir}"]
+    for proc in status["processes"]:
+        lines.append(f"  {proc['name']}: pid={proc['pid']} {_process_state(proc)}")
+    for entry in socket_health:
+        reply = "responds to hello" if entry["responding"] else "no response"
+        lines.append(f"  socket {entry['socket']}: {reply}")
+    return "\n".join(lines)
+
+
 def cmd_env_status(args: argparse.Namespace) -> int:
     json_mode = bool(getattr(args, "json", False))
     state_dir = _resolve_state_dir(args.state)
@@ -450,18 +509,10 @@ def cmd_env_status(args: argparse.Namespace) -> int:
         {"socket": sock, "responding": _hello_probe(sock)} for sock in status["sockets"]
     ]
     payload = {**status, "socket_health": socket_health}
-
-    if json_mode:
-        emit_result(payload, json_mode=True)
-    else:
-        lines = [f"microduck-cli env status: state dir {state_dir}"]
-        for proc in status["processes"]:
-            state = "alive" if proc["alive"] else ("stale" if proc["stale"] else "not tracked")
-            lines.append(f"  {proc['name']}: pid={proc['pid']} {state}")
-        for entry in socket_health:
-            reply = "responds to hello" if entry["responding"] else "no response"
-            lines.append(f"  socket {entry['socket']}: {reply}")
-        emit_result("\n".join(lines), json_mode=False)
+    emit_result(
+        payload if json_mode else _status_text(state_dir, status, socket_health),
+        json_mode=json_mode,
+    )
     return EXIT_SUCCESS
 
 
@@ -560,7 +611,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     )
     up.add_argument("--scene", default=None, help="A built-in scene name, or a path.")
     up.add_argument("--headless", action="store_true", help="Run duck-body without a viewer.")
-    up.add_argument("--state", default=None, help="Override the state directory.")
+    up.add_argument("--state", default=None, help=STATE_DIR_HELP)
     up.add_argument("--skip-build", action="store_true", help="Skip the cargo build step.")
     up.add_argument(
         "--upstream-launcher",
@@ -572,12 +623,12 @@ def register(sub: argparse._SubParsersAction) -> None:
     up.set_defaults(mode="fake", func=cmd_env_up)
 
     down = noun_sub.add_parser("down", help="Stop the tracked simulator stack.")
-    down.add_argument("--state", default=None, help="Override the state directory.")
+    down.add_argument("--state", default=None, help=STATE_DIR_HELP)
     _json_flag(down)
     down.set_defaults(func=cmd_env_down)
 
     status = noun_sub.add_parser("status", help="Report the tracked simulator stack's status.")
-    status.add_argument("--state", default=None, help="Override the state directory.")
+    status.add_argument("--state", default=None, help=STATE_DIR_HELP)
     _json_flag(status)
     status.set_defaults(func=cmd_env_status)
 

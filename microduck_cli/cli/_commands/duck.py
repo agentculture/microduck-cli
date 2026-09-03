@@ -391,6 +391,21 @@ def cmd_health(args: argparse.Namespace) -> int:
     return 0
 
 
+def _version_text(address: DuckAddress, daemon: Any, skew: tuple[int, int] | None) -> str:
+    """The human rendering of ``duck version`` (the JSON payload is built inline)."""
+    lines = [
+        f"# {address.name or address.socket_path}",
+        "",
+        f"- api_version    : {daemon.api_version} (this CLI speaks {proto.API_VERSION})",
+        f"- daemon_version : {daemon.daemon_version}",
+        f"- revision       : {daemon.revision or 'unreported'}",
+    ]
+    if skew:
+        lines.append(f"- api skew       : daemon {skew[0]} vs client {skew[1]} — reported, not")
+        lines.append("                   refused; a newer method may simply be missing")
+    return "\n".join(lines)
+
+
 def cmd_version(args: argparse.Namespace) -> int:
     """The daemon's ``hello``: API version, daemon version, build revision."""
     address = _address(args)
@@ -409,20 +424,11 @@ def cmd_version(args: argparse.Namespace) -> int:
         "client_api_version": proto.API_VERSION,
         "api_skew": list(skew) if skew else None,
     }
-    if bool(getattr(args, "json", False)):
-        emit_result(payload, json_mode=True)
-        return 0
-    lines = [
-        f"# {address.name or address.socket_path}",
-        "",
-        f"- api_version    : {daemon.api_version} (this CLI speaks {proto.API_VERSION})",
-        f"- daemon_version : {daemon.daemon_version}",
-        f"- revision       : {daemon.revision or 'unreported'}",
-    ]
-    if skew:
-        lines.append(f"- api skew       : daemon {skew[0]} vs client {skew[1]} — reported, not")
-        lines.append("                   refused; a newer method may simply be missing")
-    emit_result("\n".join(lines), json_mode=False)
+    json_mode = bool(getattr(args, "json", False))
+    emit_result(
+        payload if json_mode else _version_text(address, daemon, skew),
+        json_mode=json_mode,
+    )
     return 0
 
 
@@ -554,7 +560,9 @@ def cmd_quack(args: argparse.Namespace) -> int:
             json_mode=True,
         )
     else:
-        emit_result(f"quack: {address.name or address.socket_path} (tag {QUACK_TAG})", False)
+        emit_result(
+            f"quack: {address.name or address.socket_path} (tag {QUACK_TAG})", json_mode=False
+        )
     return 0
 
 

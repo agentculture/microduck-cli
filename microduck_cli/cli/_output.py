@@ -21,6 +21,11 @@ from microduck_cli.cli._errors import CliError
 #: names for the same CLI in one session.
 PROG = "microduck-cli"
 
+#: The ONE help string for every noun's ``--state`` flag. ``env`` and ``rules``
+#: both resolve the same state directory, and an operator reading ``--help`` on
+#: two of them must not be told two slightly different things about one directory.
+STATE_DIR_HELP = "Override the state directory."
+
 
 def emit_result(data: Any, *, json_mode: bool, stream: TextIO | None = None) -> None:
     """Write a command result to stdout (or ``stream``)."""

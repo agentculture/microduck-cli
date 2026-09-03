@@ -79,7 +79,7 @@ from microduck_cli.behavior.replay import replay as replay_records
 from microduck_cli.behavior.rules import RulesConfig, load_rules, merge_rules
 from microduck_cli.cli._commands.overview import emit_overview
 from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_SUCCESS, EXIT_USER_ERROR, CliError
-from microduck_cli.cli._output import PROG, emit_diagnostic, emit_result
+from microduck_cli.cli._output import PROG, STATE_DIR_HELP, emit_diagnostic, emit_result
 from microduck_cli.duck import addressing
 from microduck_cli.duck.gate import Consent, confirm_on_tty, consent, render_dry_run
 from microduck_cli.explain.rules import _DUCKCTL_URL, VERBS
@@ -987,7 +987,12 @@ def cmd_rules_engine_status(args: argparse.Namespace) -> int:
 
 
 def _render_status(payload: dict[str, object], *, present: bool) -> str:
-    verdict = "live" if payload["live"] else ("stale/absent" if present else "no heartbeat")
+    if payload["live"]:
+        verdict = "live"
+    elif present:
+        verdict = "stale/absent"
+    else:
+        verdict = "no heartbeat"
     lines = [
         "# rules engine status",
         f"state dir: {payload['state_dir']}",
@@ -1208,7 +1213,7 @@ def _emit_admission(payload: dict[str, object], *, json_mode: bool) -> int:
 def _add_duck_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--duck", default=None, help="Duck name (default: DUCK_SIM_DUCK).")
     parser.add_argument("--socket", default=None, help="Explicit robot control socket path.")
-    parser.add_argument("--state", default=None, help="Override the state directory.")
+    parser.add_argument("--state", default=None, help=STATE_DIR_HELP)
 
 
 def _add_json_flag(parser: argparse.ArgumentParser) -> None:
@@ -1312,7 +1317,7 @@ def register(sub: argparse._SubParsersAction) -> None:
 
     listing = noun_sub.add_parser("list", help="Render the merged rules config.")
     listing.add_argument("--rules", default=None, help="Overlay rules TOML.")
-    listing.add_argument("--state", default=None, help="Override the state directory.")
+    listing.add_argument("--state", default=None, help=STATE_DIR_HELP)
     _add_json_flag(listing)
     listing.set_defaults(func=cmd_rules_list)
 
@@ -1329,7 +1334,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     intent = noun_sub.add_parser("intent", help="Submit one intent through the one registry.")
     intent.add_argument("kind", help="The intent kind (do, look, move, sound, stop, mode, idle).")
     intent.add_argument("--payload", default=None, help="A JSON object of parameters.")
-    intent.add_argument("--state", default=None, help="Override the state directory.")
+    intent.add_argument("--state", default=None, help=STATE_DIR_HELP)
     intent.add_argument(
         "--apply",
         action="store_true",
