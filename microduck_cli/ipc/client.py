@@ -5,7 +5,7 @@ The transport half of :mod:`microduck_cli.ipc`: :mod:`~microduck_cli.ipc.proto` 
 ``threading``, ``queue``, ``json``, ``logging``, ``dataclasses``) plus two first-party
 leaves — the protocol table and :class:`~microduck_cli.behavior.sense.SenseProviders`.
 
-Four contracts are load-bearing here; everything else is plumbing.
+Five contracts are load-bearing here; everything else is plumbing.
 
 **The tick thread never blocks.** :meth:`RobotClient.notify` is a single
 ``put_nowait`` onto a bounded queue that a writer thread drains. A wedged daemon
@@ -33,6 +33,14 @@ recorded, so :meth:`RobotClient.supports` answers the "does this daemon have tha
 method?" question without anyone having to catch anything. That is how a client on API
 16 copes with methods (``robot.skills``, ``robot.policies``, ``robot.loadPolicy``) that
 only exist on a newer daemon.
+
+**Two ways to read what the daemon pushes, for two different consumers.** The peek
+slots (:meth:`RobotClient.peek`, :meth:`RobotClient.providers`) keep only the latest
+value per method — a tick wants the freshest sample, never a backlog. A recorder wants
+the opposite, so :meth:`RobotClient.notifications` hands out a bounded queue the reader
+thread fills with ``(stamp, method, params)`` in arrival order: nothing coalesced,
+nothing reordered across sources, and an overrun named ``notify-queue-full`` rather than
+silent.
 
 **Skew is reported, not refused.** ``hello`` sends our own
 :data:`~microduck_cli.ipc.proto.API_VERSION` and accepts whatever version the daemon
@@ -82,6 +90,9 @@ DROP_MALFORMED = "ipc-malformed"
 #: A ``robot.state`` frame whose joint vector disagrees with our table. Fatal at
 #: connect time; counted (once per link) if it appears later.
 DROP_JOINT_MISMATCH = "joint-table-mismatch"
+#: A notification arrived while the subscription queue (see
+#: :meth:`RobotClient.notifications`) was full — the consumer is slower than the daemon.
+DROP_NOTIFY_QUEUE_FULL = "notify-queue-full"
 #: A background poll (``robot.health``, ``robot.remoteSessionActive``) that failed.
 #: Swallowed rather than raised — these are called from the tick path.
 DROP_POLL_FAILED = "ipc-poll-failed"
@@ -106,6 +117,11 @@ _RECONNECT_POLL_S = 0.2
 #: How long the writer waits for work before re-checking the closing flag.
 _DRAIN_POLL_S = 0.05
 _RECV_SIZE = 65536
+
+#: Default depth of the notification subscription queue (:meth:`RobotClient.notifications`).
+#: Ten seconds of 50 Hz state frames: deep enough that a consumer doing per-frame I/O
+#: never loses one to a hiccup, bounded so a stalled consumer cannot grow it forever.
+NOTIFY_QUEUE_DEPTH = 512
 
 
 class RpcError(Exception):
@@ -271,6 +287,7 @@ class RobotClient:
         self._queue: queue.Queue[bytes] = queue.Queue(maxsize=queue_depth)
         self._pending: dict[int, _Pending] = {}
         self._slots: dict[str, _Slot] = {}
+        self._notify_queue: queue.Queue[tuple[float, str, Any]] | None = None
         self._drops: Counter[str] = Counter()
         self._unsupported: set[str] = set()
 
@@ -733,8 +750,18 @@ class RobotClient:
         pending.event.set()
 
     def _on_notification(self, method: str, params: Any) -> None:
+        stamp = self._clock()
         with self._lock:
-            self._slots[method] = _Slot(params=params, stamp=self._clock())
+            self._slots[method] = _Slot(params=params, stamp=stamp)
+            notifications = self._notify_queue
+        if notifications is not None:
+            try:
+                notifications.put_nowait((stamp, method, params))
+            except queue.Full:
+                self._drop(
+                    DROP_NOTIFY_QUEUE_FULL,
+                    f"{method} dropped: notification queue full ({notifications.maxsize})",
+                )
         if method == proto.ROBOT_STATE:
             self._note_state_frame(params)
 
@@ -837,6 +864,30 @@ class RobotClient:
         """Ask for ``tof.frame`` frames (``tof.stream``). Served by tofd on the real box."""
         return self.request(proto.TOF_STREAM)
 
+    def notifications(
+        self, *, maxsize: int = NOTIFY_QUEUE_DEPTH
+    ) -> "queue.Queue[tuple[float, str, Any]]":
+        """Subscribe to *every* notification, in arrival order, on a bounded queue.
+
+        The peek slots (:meth:`peek`) keep only the latest value per method, which is
+        exactly what a 50 Hz tick wants and exactly what a *recorder* must not have: a
+        consumer that samples slots coalesces frames and reorders sources. This queue is
+        the other half of that contract — the reader thread pushes
+        ``(stamp, method, params)`` for every notification it routes, in the order it
+        read them, stamped with the same clock the slots use, so a consumer writes the
+        reader's timestamp rather than its own drain time.
+
+        Bounded on purpose: a consumer slower than the daemon must lose frames *by name*
+        (``notify-queue-full``) rather than grow a queue until the process dies. One
+        queue per client, created on the first call and shared by every later caller;
+        notifications that arrived before that first call are not in it, so subscribe
+        before you subscribe on the wire.
+        """
+        with self._lock:
+            if self._notify_queue is None:
+                self._notify_queue = queue.Queue(maxsize=maxsize)
+            return self._notify_queue
+
     def peek(self, method: str) -> tuple[Any, float | None] | None:
         """The last params and stamp for ``method``, or ``None``. Peeks; never consumes."""
         with self._lock:
@@ -938,11 +989,13 @@ __all__ = [
     "DROP_LATE_REPLY",
     "DROP_MALFORMED",
     "DROP_METHOD_NOT_FOUND",
+    "DROP_NOTIFY_QUEUE_FULL",
     "DROP_POLL_FAILED",
     "DROP_QUEUE_FULL",
     "DROP_SUBSCRIBE_FAILED",
     "DROP_TIMEOUT",
     "LOGGER",
+    "NOTIFY_QUEUE_DEPTH",
     "DaemonInfo",
     "RobotClient",
     "RpcError",

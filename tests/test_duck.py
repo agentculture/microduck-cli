@@ -28,6 +28,7 @@ import pytest
 
 from microduck_cli.cli import _build_parser, main
 from microduck_cli.cli._commands import duck as duck_cmd
+from microduck_cli.cli._output import PROG
 from microduck_cli.duck.gate import SAFETY_INIT, SAFETY_RELAX, SAFETY_STOP
 from microduck_cli.explain.duck import CHEATSHEET, ENTRIES, VERBS
 from microduck_cli.ipc import proto
@@ -582,3 +583,42 @@ def test_an_unreachable_socket_is_an_environment_error(
     assert err.splitlines()[0].startswith("error: ")
     assert err.splitlines()[1].startswith("hint: ")
     assert "Traceback" not in err
+
+
+# ---------------------------------------------------------------------------
+# the noun-level --json flag, and one spelling for every generated command
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [["duck", "--json", "health"], ["duck", "health", "--json"]],
+)
+def test_duck_json_before_or_after_the_verb_both_emit_json(
+    argv: list[str], fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``duck --json health`` must not be silently downgraded to text.
+
+    The verb's own ``--json`` used to default to False and overwrite the
+    noun-level flag argparse had already recorded, so an agent that asked for
+    JSON got prose. Both positions mean the same thing now.
+    """
+    rc = main([*argv, "--socket", fake.socket_path])
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["healthy"] is True
+
+
+def test_generated_commands_all_use_the_one_prog_name(
+    fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Dry-run apply lines and remediations spell the CLI exactly one way."""
+    rc = main(_sock(fake, "init", "--json"))
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["apply_command"].startswith(f"{PROG} duck init")
+
+    rc = main(["duck", "configure", "--socket", fake.socket_path])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert f"{PROG} duck configure --list" in err

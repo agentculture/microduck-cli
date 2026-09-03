@@ -364,6 +364,16 @@ per line:
 `remote` (`robot.remoteSessionActive`) at 1 Hz, and `pad`/`tof` arrive when
 those streams are subscribed. `hello` is the first record of every recording.
 
+Three daemons, three sockets: robotd serves state/health/remote, `padd` serves
+`pad.report` on `$DUCK_PAD_SOCKET` (default `/run/padd/pad.sock`) and `tofd`
+serves `tof.frame` on `<state dir>/<duck>-tof.sock`. A source with no socket on
+this box — the simulator ships no padd — is reported on stderr as a named
+`record-source-absent` drop and simply does not appear in the file; it is never
+asked for on the robot socket, which does not serve it.
+
+Nothing is coalesced: every frame the daemons push is recorded, carrying the
+timestamp of the moment it arrived rather than the moment it was written.
+
 **Stdout carries records and nothing else** — the summary and every named drop
 go to stderr — so `microduck-cli duck record > run.jsonl` is a clean file.
 `--out FILE` writes the records to a file instead and puts the summary on

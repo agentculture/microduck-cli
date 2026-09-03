@@ -49,8 +49,8 @@ from typing import Any, Callable, Iterable, Sequence
 from microduck_cli.behavior import senselog
 from microduck_cli.cli._commands.overview import emit_overview
 from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_USER_ERROR, CliError
-from microduck_cli.cli._output import emit_diagnostic, emit_result
-from microduck_cli.duck.addressing import DuckAddress, resolve
+from microduck_cli.cli._output import PROG, emit_diagnostic, emit_result
+from microduck_cli.duck.addressing import DuckAddress, pad_socket_path, resolve
 
 # gate.py owns the verb -> SAFETY_* mapping; importing it keeps the sentence in the
 # prompt and the JSON dry-run identical to the one render_dry_run() prints.
@@ -62,7 +62,7 @@ from microduck_cli.duck.gate import (
     render_dry_run,
     safety_sentence,
 )
-from microduck_cli.duck.record import Recorder
+from microduck_cli.duck.record import DROP_SOURCE_ABSENT, Recorder
 from microduck_cli.explain.duck import CHEATSHEET, VERBS
 from microduck_cli.ipc import proto
 from microduck_cli.ipc.client import RobotClient, RpcError
@@ -161,7 +161,7 @@ def _request(client: RobotClient, method: str, params: Any = None) -> Any:
             f"{method} failed on {client.socket_path}: {exc.message}",
             remediation=(
                 "Check the daemon is running this API and the robot is in a state that "
-                "accepts the call ('microduck-cli duck health')."
+                f"accepts the call ('{PROG} duck health')."
             ),
         ) from exc
 
@@ -180,7 +180,7 @@ def _refused(verb: str, reason: str | None) -> CliError:
         EXIT_ENV_ERROR,
         f"the robot refused {verb}: {reason or 'no reason given'}",
         remediation=(
-            "Ask 'microduck-cli duck health' and 'microduck-cli duck mode' for the robot's "
+            f"Ask '{PROG} duck health' and '{PROG} duck mode' for the robot's "
             "own account of why, then retry once the condition is cleared."
         ),
     )
@@ -470,7 +470,7 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         raise CliError(
             EXIT_ENV_ERROR,
             f"{proto.ROBOT_SUBSCRIBE} failed on {address.socket_path}: {exc.message}",
-            remediation="Check the daemon is up ('microduck-cli duck health').",
+            remediation=f"Check the daemon is up ('{PROG} duck health').",
         ) from exc
     finally:
         client.close()
@@ -538,7 +538,7 @@ def cmd_quack(args: argparse.Namespace) -> int:
             EXIT_ENV_ERROR,
             f"{proto.ROBOT_SOUND} was not sent to {address.socket_path}: the link is down or "
             "the write queue is full",
-            remediation="Check the daemon is up ('microduck-cli duck health') and retry.",
+            remediation=f"Check the daemon is up ('{PROG} duck health') and retry.",
         )
     if bool(getattr(args, "json", False)):
         emit_result(
@@ -572,7 +572,7 @@ def cmd_configure(args: argparse.Namespace) -> int:
             EXIT_USER_ERROR,
             "duck configure supports only --list on this CLI",
             remediation=(
-                "run 'microduck-cli duck configure --list'; editing the robot's own "
+                f"run '{PROG} duck configure --list'; editing the robot's own "
                 "/etc/robot/robotd.toml is robotctl configure's job, not this CLI's — see "
                 f"{CHEATSHEET}"
             ),
@@ -607,8 +607,37 @@ def cmd_configure(args: argparse.Namespace) -> int:
     return 0
 
 
+def _record_source_link(
+    args: argparse.Namespace, label: str, socket_path: str | None
+) -> RobotClient | None:
+    """Open the link for one recording source, or answer ``None`` with a named drop.
+
+    ``pad.input`` is padd's and ``tof.stream`` is tofd's — each on its own socket,
+    never robotd's. A box that serves neither (the simulator has no padd) is a fact
+    about the robot: it is dropped by name, and the recording goes on without it.
+    """
+    if not socket_path or not os.path.exists(socket_path):
+        # No drop here: the recorder names an absent source itself, and one fact
+        # deserves one line. This branch only decides there is nothing to open.
+        return None
+    factory = getattr(args, "client_factory", None) or CLIENT_FACTORY
+    link = factory(socket_path)
+    try:
+        link.connect(verify_joints=False)
+    except CliError as exc:
+        # A socket that IS there and would not talk is a different fact from one
+        # that is absent, and the only one that can name a path worth checking.
+        senselog.drop("record", label, DROP_SOURCE_ABSENT, f"{socket_path}: {exc.message}")
+        return None
+    return link
+
+
 def cmd_record(args: argparse.Namespace) -> int:
     """Record every sense this duck reports as JSONL — stdout by default.
+
+    Three links, not one: robotd for state/health/remote, padd for ``pad.report``
+    and tofd for ``tof.frame``, each on its own socket. A source with no socket on
+    this box is a named drop, never a silently empty column.
 
     Stdout carries records and nothing else; the summary and every drop go to
     stderr. ``--out FILE`` writes the records to a file instead and puts the
@@ -617,6 +646,8 @@ def cmd_record(args: argparse.Namespace) -> int:
     senselog.install_logging()
     address = _address(args)
     client = _connect(args, address)
+    pad_link = _record_source_link(args, "pad", pad_socket_path(dict(os.environ)))
+    tof_link = _record_source_link(args, "tof", address.tof_socket_path)
     out = getattr(args, "out", None) or "-"
     seconds = float(getattr(args, "seconds", DEFAULT_RECORD_SECONDS))
     handle = None
@@ -626,7 +657,9 @@ def cmd_record(args: argparse.Namespace) -> int:
         else:
             handle = open(out, "w", encoding="utf-8")
             stream = handle
-        summary = Recorder(client, stream, destination=out).run(seconds)
+        summary = Recorder(
+            client, stream, pad_client=pad_link, tof_client=tof_link, destination=out
+        ).run(seconds)
     except OSError as exc:
         raise CliError(
             EXIT_ENV_ERROR,
@@ -636,6 +669,9 @@ def cmd_record(args: argparse.Namespace) -> int:
     finally:
         if handle is not None:
             handle.close()
+        for link in (pad_link, tof_link):
+            if link is not None:
+                link.close()
         client.close()
     if out == "-":
         # stdout is the record stream: the summary is a diagnostic, not a result.
@@ -653,7 +689,7 @@ def cmd_record(args: argparse.Namespace) -> int:
 
 
 def _apply_command(verb: str, args: argparse.Namespace, extra: Iterable[str] = ()) -> str:
-    parts = ["microduck-cli", "duck", verb, *extra]
+    parts = [PROG, "duck", verb, *extra]
     if getattr(args, "duck", None):
         parts += ["--duck", str(args.duck)]
     if getattr(args, "socket", None):
@@ -709,7 +745,7 @@ def cmd_relax(args: argparse.Namespace) -> int:
             EXIT_USER_ERROR,
             "relax --apply also needs --yes: " + safety_sentence("relax"),
             remediation=(
-                "re-run as 'microduck-cli duck relax --yes --apply' once the robot is held "
+                f"re-run as '{PROG} duck relax --yes --apply' once the robot is held "
                 "or on its stand"
             ),
         )
@@ -881,6 +917,21 @@ def _no_verb(args: argparse.Namespace) -> int:
     return cmd_duck_overview(args)
 
 
+def _json_flag(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add ``--json`` to a verb without clobbering the noun-level flag.
+
+    ``default=argparse.SUPPRESS`` is load-bearing: argparse copies a sub-parser's
+    defaults over the namespace the noun already filled, so a plain
+    ``store_true`` here would reset ``json`` to False and make
+    ``%(prog)s --json <verb>`` silently print text. With SUPPRESS the attribute
+    exists only when the flag is actually given, and either position works.
+    """
+    p.add_argument(
+        "--json", action="store_true", default=argparse.SUPPRESS, help="Emit structured JSON."
+    )
+    return p
+
+
 def _common(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """The addressing + output flags every duck verb carries."""
     p.add_argument(
@@ -895,7 +946,7 @@ def _common(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
         help="State directory holding the sockets (default: DUCK_SIM_STATE, "
         "else ~/.cache/duck-sim).",
     )
-    p.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _json_flag(p)
     return p
 
 
@@ -912,7 +963,7 @@ def _gate_flag(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "duck",
-        help="Operate the duck (see 'microduck-cli duck overview').",
+        help=f"Operate the duck (see '{PROG} duck overview').",
     )
     p.add_argument("--json", action="store_true", help="Emit structured JSON.")
     p.set_defaults(func=_no_verb, json=False)
@@ -928,7 +979,7 @@ def register(sub: argparse._SubParsersAction) -> None:
         help="Ignored — overview always describes this noun. Accepted so a stray "
         "path argument never hard-fails.",
     )
-    ov.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _json_flag(ov)
     ov.set_defaults(func=cmd_duck_overview)
 
     health = _common(

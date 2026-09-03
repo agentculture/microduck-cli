@@ -12,10 +12,15 @@ One JSON object per line, no blank lines, no wrapper array::
     {"ts": <float>, "source": "<source>", "params": {...}}
 
 ``ts``
-    Monotonic seconds (``time.monotonic``) read at the moment the record was
-    written. Monotonic, not wall clock: a recording is a *relative* timeline,
-    and a clock step mid-run must not make a frame appear to arrive before its
-    predecessor. Only differences between ``ts`` values are meaningful.
+    Monotonic seconds (``time.monotonic``). For a streamed frame it is the
+    reading the *client's reader thread* took when the notification arrived, not
+    the moment this loop got round to writing it — a recording is evidence about
+    when the duck said something, and a drain-time stamp would smear a 50 Hz
+    stream across the recorder's own poll interval. For a polled record
+    (``health``, ``remote``, ``hello``) there is no earlier reading, so it is the
+    write time. Monotonic, not wall clock: a clock step mid-run must not make a
+    frame appear to arrive before its predecessor. Only differences between
+    ``ts`` values are meaningful.
 ``source``
     One of :data:`RECORD_SOURCES` — ``"state"`` (a ``robot.state`` frame from
     the subscription), ``"health"`` (``robot.health``, polled at 2 Hz),
@@ -28,7 +33,21 @@ One JSON object per line, no blank lines, no wrapper array::
     edits its input is a recorder nobody can trust.
 
 Records appear in **arrival order** — the order this process observed them,
-which is what a replay must reproduce.
+which is what a replay must reproduce. That is why every streamed source is
+drained from :meth:`~microduck_cli.ipc.client.RobotClient.notifications`, the
+client's arrival-ordered queue, rather than from its peek slots: a slot keeps
+only the latest frame per method, so sampling slots at any rate below the
+stream's would coalesce frames and reorder sources against each other.
+
+One recording, three links
+--------------------------
+``robotd`` does not serve every stream. ``pad.input`` belongs to ``padd`` and
+``tof.stream`` to ``tofd``, each on its own socket, so the recorder opens a
+separate client per source it can reach (see
+:mod:`microduck_cli.duck.addressing`) and **never** asks the robot socket for
+either. A source with no socket on this box — the pad on a sim host, the ToF on
+a duck without one — is a fact about the robot, recorded as a named
+``record-source-absent`` drop on stderr, not a reason to abandon the recording.
 
 **Stdout carries JSONL and nothing else.** Every diagnostic (a refused
 subscription, a failed poll, the closing summary) goes to stderr through
@@ -46,6 +65,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import queue
 import time
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -74,6 +94,17 @@ SOURCE_METHODS: Mapping[str, str] = MappingProxyType(
     }
 )
 
+#: Notification method -> the ``source`` tag its records carry. The inverse of the
+#: streamed half of :data:`SOURCE_METHODS`; anything else off the wire is not a
+#: recordable source.
+NOTIFICATION_SOURCES: Mapping[str, str] = MappingProxyType(
+    {
+        proto.ROBOT_STATE: "state",
+        proto.PAD_REPORT: "pad",
+        proto.TOF_FRAME: "tof",
+    }
+)
+
 #: How often ``robot.health`` is polled. Health is a request, not a stream.
 HEALTH_POLL_HZ = 2.0
 
@@ -83,13 +114,21 @@ REMOTE_POLL_HZ = 1.0
 #: The subscription rate asked of the daemon for ``robot.state``.
 DEFAULT_STATE_HZ = 50
 
-#: How long the loop sleeps between peek sweeps. Short enough that a 50 Hz state
-#: stream is never coalesced, long enough that the loop is not a spin.
+#: How long the loop sleeps between drains. Nothing is lost by looking less often
+#: — the client's notification queue holds arrivals in order — so this only bounds
+#: how promptly a frame reaches the file, and keeps the loop from spinning.
 POLL_SLEEP_S = 0.005
 
 # Named drop reasons, on the ``microduck.sense`` logger (stderr only).
 DROP_SUBSCRIBE = "record-subscribe-failed"
 DROP_POLL = "record-poll-failed"
+#: A stream this recorder wanted has no socket on this box (no padd in the sim, no
+#: tofd on a duck without a depth sensor). Named, so an empty column in a recording
+#: is never mistaken for a quiet sensor.
+DROP_SOURCE_ABSENT = "record-source-absent"
+#: A notification arrived that no ``source`` tag covers — a daemon pushing something
+#: this recorder's schema has no column for.
+DROP_UNKNOWN_METHOD = "record-unknown-method"
 _STAGE = "record"
 
 
@@ -164,7 +203,14 @@ def encode(ts: float, source: str, params: Any) -> str:
 
 
 class Recorder:
-    """Drains one :class:`~microduck_cli.ipc.client.RobotClient` into JSONL.
+    """Drains one duck's links into JSONL.
+
+    ``client`` is the ``robotd`` link — ``robot.state``, ``robot.health``,
+    ``robot.remoteSessionActive`` and the handshake. ``pad_client`` and
+    ``tof_client`` are the links to ``padd`` and ``tofd``, each on its **own**
+    socket; pass ``None`` for a source this box does not serve and its absence is
+    recorded as a named drop. The robot link is never asked for ``pad.input`` or
+    ``tof.stream``: those methods do not live there.
 
     ``clock`` and ``sleep`` are injected so a test can drive the loop without
     real time; the default is ``time.monotonic`` / ``time.sleep``. The stream is
@@ -176,6 +222,8 @@ class Recorder:
         client: RobotClient,
         stream: TextIO,
         *,
+        pad_client: RobotClient | None = None,
+        tof_client: RobotClient | None = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         state_hz: int = DEFAULT_STATE_HZ,
@@ -185,6 +233,8 @@ class Recorder:
         destination: str = "-",
     ) -> None:
         self._client = client
+        self._pad_client = pad_client
+        self._tof_client = tof_client
         self._stream = stream
         self._clock = clock
         self._sleep = sleep
@@ -195,13 +245,20 @@ class Recorder:
         self._destination = destination
         self._counts: dict[str, int] = {}
         self._total = 0
-        self._seen: dict[str, float] = {}
+        # Subscribe to every link's arrival-ordered notification queue *before*
+        # anything is asked for on the wire, so no frame can land in the gap
+        # between subscribing and starting to listen.
+        self._queues: list[queue.Queue[tuple[float, str, Any]]] = [
+            link.notifications()
+            for link in (self._client, self._pad_client, self._tof_client)
+            if link is not None
+        ]
 
     # -- writing ------------------------------------------------------------
 
-    def write(self, source: str, params: Any) -> None:
-        """Write one record at the current clock reading. JSONL only."""
-        self._stream.write(encode(self._clock(), source, params) + "\n")
+    def write(self, source: str, params: Any, ts: float | None = None) -> None:
+        """Write one record, at ``ts`` or the current clock reading. JSONL only."""
+        self._stream.write(encode(self._clock() if ts is None else ts, source, params) + "\n")
         self._stream.flush()
         self._counts[source] = self._counts.get(source, 0) + 1
         self._total += 1
@@ -209,20 +266,30 @@ class Recorder:
     # -- setup --------------------------------------------------------------
 
     def _subscribe(self) -> None:
-        """Open every stream this recorder wants; a refusal is a named drop.
+        """Open every stream this recorder wants, each on its own daemon's socket.
 
-        A daemon with no ToF sensor or no gamepad refuses those subscriptions,
-        which is a *recordable fact about the robot*, not a reason to abandon
-        the recording — so it is logged by name and the run continues.
+        Three failures, three named drops, none of them fatal: a daemon that
+        refuses a subscription, a source with no socket on this box, and (later,
+        in the loop) a queue that overran are all *recordable facts about the
+        robot*, not reasons to abandon the recording.
         """
         try:
             self._client.subscribe(self._state_hz)
         except RpcError as exc:
             senselog.drop(_STAGE, "robotd", DROP_SUBSCRIBE, f"{proto.ROBOT_SUBSCRIBE}: {exc}")
-        for label, call in (
-            ("pad", self._client.subscribe_pad),
-            ("tof", self._client.subscribe_tof),
+        for label, link, method, served_by in (
+            ("pad", self._pad_client, proto.PAD_INPUT, "padd (DUCK_PAD_SOCKET, /run/padd)"),
+            ("tof", self._tof_client, proto.TOF_STREAM, "tofd (<state>/<duck>-tof.sock)"),
         ):
+            if link is None:
+                senselog.drop(
+                    _STAGE,
+                    label,
+                    DROP_SOURCE_ABSENT,
+                    f"no link to {served_by}: {method} is not recorded",
+                )
+                continue
+            call = link.subscribe_pad if label == "pad" else link.subscribe_tof
             try:
                 call()
             except RpcError as exc:
@@ -233,16 +300,25 @@ class Recorder:
 
     # -- the loop -----------------------------------------------------------
 
-    def _drain_slot(self, source: str) -> None:
-        """Write the slot behind *source* if a new frame landed since last look."""
-        peeked = self._client.peek(SOURCE_METHODS[source])
-        if peeked is None:
-            return
-        params, stamp = peeked
-        if stamp is None or self._seen.get(source) == stamp:
-            return
-        self._seen[source] = stamp
-        self.write(source, params)
+    def _drain_notifications(self) -> None:
+        """Write every notification each link has queued, in the order it arrived.
+
+        Frames carry the reader thread's own stamp, so nothing is coalesced by how
+        often this loop looks and nothing is reordered within a source. The peek
+        slots are left alone — they belong to the engine's tick, not to a
+        recording.
+        """
+        for pending in self._queues:
+            while True:
+                try:
+                    stamp, method, params = pending.get_nowait()
+                except queue.Empty:
+                    break
+                source = NOTIFICATION_SOURCES.get(method)
+                if source is None:
+                    senselog.drop(_STAGE, "robotd", DROP_UNKNOWN_METHOD, f"{method} not recorded")
+                    continue
+                self.write(source, params, ts=stamp)
 
     def _poll(self, source: str, call: Callable[[], Any]) -> None:
         result = call()
@@ -268,8 +344,7 @@ class Recorder:
                 now = self._clock()
                 if now - started >= seconds:
                     break
-                for source in ("state", "pad", "tof"):
-                    self._drain_slot(source)
+                self._drain_notifications()
                 if self._health_period is not None and now >= next_health:
                     next_health = now + self._health_period
                     self._poll("health", self._client.poll_health)
@@ -290,8 +365,11 @@ class Recorder:
 __all__ = [
     "DEFAULT_STATE_HZ",
     "DROP_POLL",
+    "DROP_SOURCE_ABSENT",
     "DROP_SUBSCRIBE",
+    "DROP_UNKNOWN_METHOD",
     "HEALTH_POLL_HZ",
+    "NOTIFICATION_SOURCES",
     "POLL_SLEEP_S",
     "RECORD_KEYS",
     "RECORD_SCHEMA",

@@ -102,9 +102,8 @@ Brings up the MicroDuck stack: builds the daemons (unless `--skip-build`),
 locates `libonnxruntime` in the `microduck_rl` venv, starts `robotd --fake`
 (one duck) or `duck-body` + one `robotd --sim` per duck, waits for each
 control socket to appear, then polls `hello` + `robot.health` over each duck's
-socket (stdlib `socket` + `json`, a private stand-in for the not-yet-merged
-`t10` IPC client) until it reports healthy or a timeout expires — 60s for
-`--fake`, 120s for `--sim`.
+socket (through the one JSON-RPC client, `microduck_cli.ipc.client`) until it
+reports healthy or a timeout expires — 60s for `--fake`, 120s for `--sim`.
 
 Everything is derived from the resolved clone paths and the state directory:
 no params file, ORT path or socket path is ever typed by the operator. When
@@ -131,7 +130,11 @@ directly.
     microduck-cli env up --sim --ducks 2 --scene apartment --headless
     microduck-cli env up --fake --json
 
-On timeout, exits `2` naming the daemon's log file in the remediation.
+On timeout, exits `2` naming the daemon's log file in the remediation — and
+first stops whatever it had already started (by pid, through the same
+identity-checked path as `env down`), so a failed bring-up never leaves stray
+daemons, pidfiles or sockets behind. Cleanup is best effort and reported on
+stderr; it never replaces the failure that caused it.
 
 See also: https://github.com/pollen-robotics/microduck/blob/sim-remote-io/docs/design/simulation.md
 """  # noqa: E501

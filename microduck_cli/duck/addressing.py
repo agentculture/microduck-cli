@@ -7,6 +7,11 @@ documented layout): each duck named ``<name>`` under a state directory has a
 robot-control socket at ``<state>/<name>.sock`` and a depth-sensor socket at
 ``<state>/<name>-tof.sock``.
 
+The gamepad is the odd one out: ``pad.input`` is served by ``padd`` on its own
+socket (``/run/padd/pad.sock``, or ``DUCK_PAD_SOCKET``) on a real duck, and the
+simulation harness has no padd at all — see :func:`pad_socket_path`, which
+answers ``None`` in that case rather than inventing a path.
+
 Everything here is pure: the environment mapping and the directory listing
 are both injected, and nothing here ever opens a socket, spawns a
 subprocess, or otherwise touches the network.
@@ -32,11 +37,41 @@ _UNIX_SUN_PATH_BYTES = 108
 _SOCK_SUFFIX = ".sock"
 _TOF_SUFFIX = "-tof.sock"
 
+#: Where ``padd`` serves ``pad.input`` on a real duck. Upstream routes the pad
+#: channel to padd's own socket, NOT to robotd's — anything that subscribed
+#: ``pad.input`` on the robot socket would be asking the wrong daemon. The
+#: simulation harness ships no padd at all, which is why :func:`pad_socket_path`
+#: answers ``None`` rather than inventing a sim path for it.
+DEFAULT_PAD_SOCKET = "/run/padd/pad.sock"
+
+#: Overrides :data:`DEFAULT_PAD_SOCKET`: the only way to point the pad link at a
+#: box that serves it somewhere other than ``/run/padd``.
+PAD_SOCKET_ENV = "DUCK_PAD_SOCKET"
+
 #: The letters ``scripts/duck-sim`` hands out, in order: ``duck-a`` … ``duck-p``.
 #: Sixteen is upstream's own ceiling (its ``down`` sweeps indices 0..15).
 DUCK_LETTERS = "abcdefghijklmnop"
 
 ListDir = Callable[[str], list[str]]
+Exists = Callable[[str], bool]
+
+
+def pad_socket_path(
+    env: Mapping[str, str] | None = None,
+    *,
+    exists: Exists = os.path.exists,
+) -> str | None:
+    """The socket ``padd`` serves ``pad.input`` on, or ``None`` when there is none.
+
+    ``DUCK_PAD_SOCKET`` wins; otherwise :data:`DEFAULT_PAD_SOCKET`. Either way the
+    path is answered only when it is actually there — a sim box has no padd, and a
+    caller must be able to tell "no gamepad daemon here" from "the gamepad is
+    quiet". ``exists`` is injected, so this stays as pure as the rest of the
+    module.
+    """
+    env = env or {}
+    candidate = env.get(PAD_SOCKET_ENV) or DEFAULT_PAD_SOCKET
+    return candidate if exists(candidate) else None
 
 
 def duck_name(index: int) -> str:
