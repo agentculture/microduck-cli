@@ -156,6 +156,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+# microduck_cli/env/ is a first-party package (host detection, t8), not a
+# virtualenv -- carve it out of the generic env/ ignore above.
+!microduck_cli/env/
 
 # Spyder project settings
 .spyderproject
