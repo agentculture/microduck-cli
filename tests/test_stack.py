@@ -197,9 +197,9 @@ def test_up_sim_issues_body_then_one_robotd_per_duck(tmp_path: Path) -> None:
     argvs = stack.runner.argvs
     assert argvs[0][0] == "cargo"
     assert argvs[1] == [
-        "uv",
-        "run",
-        "duck-body",
+        f"{stack.rl}/.venv/bin/python",
+        "-m",
+        "mjlab_microduck.sim.body_server",
         "--port",
         "7801",
         "--ducks",
@@ -329,7 +329,8 @@ def test_down_signals_only_pids_whose_cmdline_matches(tmp_path: Path) -> None:
     table = ProcTable(
         {
             11: "/opt/microduck/target/debug/robotd --sim 127.0.0.1:7801 --socket /st/duck-a.sock",
-            12: "uv run duck-body --port 7801",
+            12: "/opt/microduck_rl/.venv/bin/python -m mjlab_microduck.sim.body_server "
+            "--port 7801",
         }
     )
     stack = _stack(tmp_path, kill=table.kill, proc_cmdline=table.cmdline)
@@ -463,7 +464,7 @@ def test_status_reports_alive_stale_and_sockets(tmp_path: Path) -> None:
     [
         ("duck-a", "robotd"),
         ("duck-p", "robotd"),
-        ("body", "duck-body"),
+        ("body", "mjlab_microduck.sim.body_server"),
         ("ether", "duck-ether"),
         ("duck-a-tof", "tofd"),
         ("duck-a-media", "mediad"),
