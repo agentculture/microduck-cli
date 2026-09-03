@@ -97,7 +97,8 @@ def test_a_matching_rule_fires_through_the_registry_with_rule_origin():
 def test_a_non_matching_rule_is_silent():
     engine = _engine(_config(react=[LOW_BATTERY]), FakeClock())
     result = engine.evaluate(Sense(battery_frac=0.9))
-    assert result.fires == () and result.drops == ()
+    assert result.fires == ()
+    assert result.drops == ()
 
 
 def test_a_none_sense_field_never_matches():
@@ -222,7 +223,8 @@ def test_hysteresis_holds_a_rule_disarmed_until_the_value_crosses_back():
     clock.advance()
     # Back above the threshold, but inside the margin (0.2 .. 0.25): still disarmed.
     result = engine.evaluate(Sense(battery_frac=0.22))
-    assert result.fires == () and result.drops == ()  # predicate no longer holds
+    assert result.fires == ()  # predicate no longer holds
+    assert result.drops == ()
 
     clock.advance()
     result = engine.evaluate(Sense(battery_frac=0.19))
@@ -390,7 +392,8 @@ def test_a_looping_action_admitted_by_a_rule_is_bounded_by_its_duration():
     }
     result = _engine(_config(react=[rule]), FakeClock()).evaluate(Sense(battery_frac=0.1))
     lifetime = result.fires[0].behavior.lifetime
-    assert lifetime.looping and lifetime.duration == 3.0
+    assert lifetime.looping
+    assert lifetime.duration == 3.0
 
 
 def test_a_payload_duration_wins_over_the_rules_own_bound():
