@@ -160,6 +160,12 @@ def _sense_lines(err: str, stage: str = compose.STAGE) -> list[str]:
     return [line for line in err.splitlines() if marker in line]
 
 
+def _json_error(err: str) -> dict:
+    """The structured error from stderr, past any ``[SENSE ...]`` diagnostic lines."""
+    lines = [line for line in err.splitlines() if line.strip()]
+    return json.loads(lines[-1])
+
+
 def _order(methods: list[str], wanted: list[str]) -> bool:
     """Do *wanted* appear in *methods* in that relative order?"""
     index = 0
@@ -303,12 +309,89 @@ def test_check_replay_json_carries_every_tick(
     assert replay["ticks"][1]["inhibited"]["move"] == "fallen-inhibit"
 
 
-def test_check_refuses_an_unreadable_replay_file(capsys: pytest.CaptureFixture[str]) -> None:
-    """A broken INVOCATION is still an error — only content is reported softly."""
-    assert main(["rules", "check", "--replay", "/no/such/file.jsonl"]) == EXIT_USER_ERROR
+def test_check_reports_an_unreadable_replay_file_and_still_exits_zero(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A descriptive verb never hard-fails on a PATH either — it reports it."""
+    rc = main(["rules", "check", "--replay", "/no/such/file.jsonl", "--json"])
+    assert rc == EXIT_SUCCESS
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["replay"] is None
+    assert any(issue.startswith("replay file unreadable:") for issue in payload["issues"])
+    assert "/no/such/file.jsonl" in payload["issues"][0]
+
+
+def test_check_reports_a_non_jsonl_replay_file_and_still_exits_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    record = _write(tmp_path / "session.jsonl", "not json at all\n")
+    assert main(["rules", "check", "--replay", record]) == EXIT_SUCCESS
+    assert "replay file unreadable:" in capsys.readouterr().out
+
+
+def test_check_with_no_replay_path_is_still_a_malformed_invocation(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Only a broken INVOCATION errors: --replay with nothing after it."""
+    with pytest.raises(SystemExit) as exit_info:
+        main(["rules", "check", "--replay"])
+    assert exit_info.value.code == EXIT_USER_ERROR
     err = capsys.readouterr().err
     assert err.startswith("error:")
     assert "hint:" in err
+
+
+# --------------------------------------------------------------------------- #
+# 6. the noun-level --json flag survives the verb                             #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_noun_level_json_flag_is_not_discarded_by_the_verb(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`rules --json list` must emit JSON, not text (verb-level SUPPRESS)."""
+    assert main(["rules", "--json", "list", "--state", _state(tmp_path)]) == EXIT_SUCCESS
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema_version"] == 1
+
+
+def test_the_noun_level_json_flag_reaches_a_sub_noun_verb(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state_dir = _state(tmp_path)
+    rc = main(["rules", "--json", "engine", "status", "--state", state_dir])
+    assert rc == EXIT_SUCCESS
+    assert json.loads(capsys.readouterr().out)["live"] is False
+
+
+def test_the_verb_level_json_flag_still_works_on_its_own(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["rules", "list", "--state", _state(tmp_path), "--json"]) == EXIT_SUCCESS
+    assert json.loads(capsys.readouterr().out)["rules"]
+
+
+def test_no_json_flag_anywhere_still_renders_text(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["rules", "list", "--state", _state(tmp_path)]) == EXIT_SUCCESS
+    assert capsys.readouterr().out.startswith("# rules list")
+
+
+# --------------------------------------------------------------------------- #
+# 7. generated command lines name the prog the CLI answers to                 #
+# --------------------------------------------------------------------------- #
+
+
+def test_generated_command_lines_use_the_prog_name(
+    fake: FakeRobotd, client_factory, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Never a bare `microduck` — duck.py's generated lines say `microduck-cli`."""
+    rc = main(_run_argv(fake, _state(tmp_path)))
+    assert rc == EXIT_SUCCESS
+    command = json.loads(capsys.readouterr().out)["plan"]["apply_command"]
+    assert command.startswith("microduck-cli rules engine run ")
 
 
 # --------------------------------------------------------------------------- #
@@ -557,31 +640,298 @@ def test_an_intent_reaches_a_live_engine_and_is_acknowledged(
 # --------------------------------------------------------------------------- #
 
 
+class _Child:
+    """A stand-in for the detached child: it never exits unless told to."""
+
+    def __init__(self, pid: int, exit_code: int | None = None) -> None:
+        self.pid = pid
+        self._exit_code = exit_code
+
+    def poll(self) -> int | None:
+        return self._exit_code
+
+
+def _spawner(
+    monkeypatch: pytest.MonkeyPatch,
+    clock: FakeClock,
+    *,
+    beats: bool = True,
+    pid: int | None = None,
+    exit_code: int | None = None,
+) -> tuple[list[list[str]], list[str]]:
+    """Install a fake ``_spawn``; optionally publish the child's first heartbeat.
+
+    Returns ``(argvs, log_paths)`` — what the CLI asked to spawn, and where it
+    told the child to write.
+    """
+    child_pid = os.getpid() if pid is None else pid
+    argvs: list[list[str]] = []
+    logs: list[str] = []
+
+    def spawn(argv: list[str], log_path: str):
+        argvs.append(argv)
+        logs.append(log_path)
+        if beats:
+            state_dir = str(Path(log_path).parent)
+            # What the real child does after `arm`: publish, then drop the claim.
+            liveness.Heartbeat(liveness.state_path(state_dir), pid=child_pid, clock=clock).beat(
+                tick=0
+            )
+            rules_cmd._release_lock(state_dir)
+        return _Child(child_pid, exit_code)
+
+    monkeypatch.setattr(rules_cmd, "_spawn", spawn)
+    return argvs, logs
+
+
 def test_engine_start_spawns_a_detached_run_with_apply(
     fake: FakeRobotd,
+    seams: FakeClock,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    spawned: list[list[str]] = []
+    spawned, logs = _spawner(monkeypatch, seams)
+    state_dir = _state(tmp_path)
+    rc = main(
+        [
+            "rules",
+            "engine",
+            "start",
+            "--socket",
+            fake.socket_path,
+            "--state",
+            state_dir,
+            "--apply",
+            "--json",
+        ]
+    )
+    assert rc == EXIT_SUCCESS
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["pid"] == os.getpid()
+    assert payload["waited_for_heartbeat"] is True
+    argv = spawned[0]
+    assert rules_cmd.ENGINE_MARKER in " ".join(argv)
+    assert argv[-1] == "--apply"
+    assert "--socket" in argv and fake.socket_path in argv
+    # The child's output goes to <state>/engine.log, never /dev/null, and both
+    # the payload and the status verb name that path.
+    assert logs == [os.path.join(state_dir, rules_cmd.ENGINE_LOG_NAME)]
+    assert payload["log"] == logs[0]
+    # The claim is gone: only the heartbeat the child published is left.
+    assert sorted(os.listdir(state_dir)) == [liveness.STATE_FILENAME]
 
-    class _Child:
-        pid = 4242
 
-    monkeypatch.setattr(rules_cmd, "_spawn", lambda argv: spawned.append(argv) or _Child())
+def test_engine_start_without_apply_prints_the_plan_and_spawns_nothing(
+    fake: FakeRobotd,
+    seams: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The finding: a detached engine must not bypass the motion gate."""
+    spawned, _logs = _spawner(monkeypatch, seams)
     state_dir = _state(tmp_path)
     rc = main(
         ["rules", "engine", "start", "--socket", fake.socket_path, "--state", state_dir, "--json"]
     )
     assert rc == EXIT_SUCCESS
     payload = json.loads(capsys.readouterr().out)
-    assert payload["pid"] == 4242
-    argv = spawned[0]
-    assert rules_cmd.ENGINE_MARKER in " ".join(argv)
-    assert argv[-1] == "--apply"
-    assert "--socket" in argv and fake.socket_path in argv
-    # It writes nothing else: the heartbeat is the liveness record.
+    assert payload["mode"] == "dry_run"
+    assert len(payload["plan"]["calls"]) == len(compose.START_STEPS) + 1
+    assert payload["plan"]["apply_command"].startswith("microduck-cli rules engine start ")
+    assert "No sockets opened" in payload["text"]
+    # Nothing at all happened: no child, no claim, no socket.
+    assert spawned == []
     assert sorted(os.listdir(state_dir)) == []
+    assert fake.methods_called() == []
+
+
+def test_engine_start_on_a_tty_confirms_and_a_refusal_spawns_nothing(
+    fake: FakeRobotd,
+    seams: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    spawned, _logs = _spawner(monkeypatch, seams)
+    asked: list[str] = []
+    monkeypatch.setattr(rules_cmd, "consent", lambda apply: rules_cmd.Consent.PROMPT)
+    monkeypatch.setattr(
+        rules_cmd, "confirm_on_tty", lambda question: asked.append(question) or False
+    )
+    state_dir = _state(tmp_path)
+    rc = main(["rules", "engine", "start", "--socket", fake.socket_path, "--state", state_dir])
+    assert rc == EXIT_USER_ERROR
+    assert "rules engine start cancelled" in capsys.readouterr().err
+    assert asked and "Start the engine and drive this duck?" in asked[0]
+    assert spawned == []
+
+
+def test_engine_start_on_a_tty_spawns_once_confirmed(
+    fake: FakeRobotd,
+    seams: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    spawned, _logs = _spawner(monkeypatch, seams)
+    monkeypatch.setattr(rules_cmd, "consent", lambda apply: rules_cmd.Consent.PROMPT)
+    monkeypatch.setattr(rules_cmd, "confirm_on_tty", lambda question: True)
+    state_dir = _state(tmp_path)
+    rc = main(["rules", "engine", "start", "--socket", fake.socket_path, "--state", state_dir])
+    assert rc == EXIT_SUCCESS, capsys.readouterr().err
+    assert len(spawned) == 1
+
+
+def test_a_second_concurrent_start_is_refused_by_the_claim(
+    fake: FakeRobotd,
+    seams: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Two starts race in the window before either child has a heartbeat."""
+    state_dir = _state(tmp_path)
+    # A start that has claimed the window but whose child has not published yet.
+    spawned, _logs = _spawner(monkeypatch, seams, beats=False)
+    rules_cmd._claim_lock(state_dir)
+
+    rc = main(
+        [
+            "rules",
+            "engine",
+            "start",
+            "--socket",
+            fake.socket_path,
+            "--state",
+            state_dir,
+            "--apply",
+            "--json",
+        ]
+    )
+    assert rc == EXIT_USER_ERROR
+    error = _json_error(capsys.readouterr().err)
+    assert "engine starting" in error["message"]
+    assert error["remediation"]
+    assert spawned == [], "the second start must not spawn a second engine"
+
+
+def test_a_stale_claim_with_no_heartbeat_is_replaced(
+    fake: FakeRobotd,
+    seams: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A claim that cannot expire would lock the operator out — this one expires."""
+    state_dir = _state(tmp_path)
+    Path(rules_cmd.lock_path(state_dir)).write_text(
+        json.dumps({"pid": 1, "at": time.time() - (rules_cmd.LOCK_STALE_S + 5.0)}),
+        encoding="utf-8",
+    )
+    spawned, _logs = _spawner(monkeypatch, seams)
+    rc = main(
+        [
+            "rules",
+            "engine",
+            "start",
+            "--socket",
+            fake.socket_path,
+            "--state",
+            state_dir,
+            "--apply",
+            "--json",
+        ]
+    )
+    assert rc == EXIT_SUCCESS, capsys.readouterr().err
+    assert len(spawned) == 1
+
+
+def test_a_start_whose_child_dies_exits_two_naming_the_log(
+    fake: FakeRobotd,
+    seams: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The finding: start must not report success over a dead child."""
+    state_dir = _state(tmp_path)
+    _spawner(monkeypatch, seams, beats=False, exit_code=1)
+    rc = main(
+        [
+            "rules",
+            "engine",
+            "start",
+            "--socket",
+            fake.socket_path,
+            "--state",
+            state_dir,
+            "--apply",
+            "--json",
+        ]
+    )
+    assert rc == EXIT_ENV_ERROR
+    error = _json_error(capsys.readouterr().err)
+    assert "exited with status 1" in error["message"]
+    assert rules_cmd.ENGINE_LOG_NAME in error["remediation"]
+    # A failed start drops its own claim: the next start is not locked out.
+    assert not os.path.exists(rules_cmd.lock_path(state_dir))
+
+
+def test_a_start_whose_child_never_beats_times_out(
+    fake: FakeRobotd,
+    seams: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    state_dir = _state(tmp_path)
+    _spawner(monkeypatch, seams, beats=False)
+    rc = main(
+        [
+            "rules",
+            "engine",
+            "start",
+            "--socket",
+            fake.socket_path,
+            "--state",
+            state_dir,
+            "--apply",
+            "--wait-s",
+            "0.2",
+            "--json",
+        ]
+    )
+    assert rc == EXIT_ENV_ERROR
+    error = _json_error(capsys.readouterr().err)
+    assert "no heartbeat" in error["message"]
+    assert not os.path.exists(rules_cmd.lock_path(state_dir))
+
+
+def test_engine_stop_drops_a_leftover_start_claim(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state_dir = _state(tmp_path)
+    rules_cmd._claim_lock(state_dir)
+    assert main(["rules", "engine", "stop", "--state", state_dir, "--json"]) == EXIT_SUCCESS
+    assert json.loads(capsys.readouterr().out)["outcome"] == "nothing-to-stop"
+    assert not os.path.exists(rules_cmd.lock_path(state_dir))
+
+
+def test_engine_status_names_the_child_log_and_a_start_in_progress(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state_dir = _state(tmp_path)
+    rules_cmd._claim_lock(state_dir)
+    assert main(["rules", "engine", "status", "--state", state_dir, "--json"]) == EXIT_SUCCESS
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["log"] == os.path.join(state_dir, rules_cmd.ENGINE_LOG_NAME)
+    assert payload["starting"] is True
+    assert main(["rules", "engine", "status", "--state", state_dir]) == EXIT_SUCCESS
+    out = capsys.readouterr().out
+    assert rules_cmd.ENGINE_LOG_NAME in out
+    assert "a start is in progress" in out
 
 
 def test_engine_stop_signals_only_a_matching_cmdline(
@@ -651,3 +1001,145 @@ def test_engine_status_text_says_when_no_duck_could_be_resolved(
     out = capsys.readouterr().out
     assert "no heartbeat" in out
     assert "not probed" in out
+
+
+# --------------------------------------------------------------------------- #
+# 3b. rules intent goes through the motion gate when an engine is live        #
+# --------------------------------------------------------------------------- #
+
+
+def _live_heartbeat(state_dir: str, clock: FakeClock) -> None:
+    """Make ``engine_is_live`` answer yes, with a pid that really is alive."""
+    liveness.Heartbeat(liveness.state_path(state_dir), pid=os.getpid(), clock=clock).beat(tick=5)
+
+
+def test_a_live_intent_without_apply_prints_what_would_be_spooled(
+    seams: FakeClock, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The finding: a live engine must not turn `rules intent` into a free motion."""
+    state_dir = _state(tmp_path)
+    _live_heartbeat(state_dir, seams)
+    rc = main(
+        [
+            "rules",
+            "intent",
+            "move",
+            "--payload",
+            json.dumps({"vx": 0.1}),
+            "--state",
+            state_dir,
+            "--json",
+        ]
+    )
+    assert rc == EXIT_SUCCESS
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["mode"] == "dry_run"
+    assert payload["sent"] is False
+    assert payload["kind"] == "move"
+    assert payload["payload"] == {"vx": 0.1}
+    assert payload["admitted"] is True  # the ONE registry's own verdict
+    assert payload["plan"]["apply_command"].startswith("microduck-cli rules intent move ")
+    # Nothing was spooled: the file the engine drains does not even exist.
+    assert not (Path(state_dir) / compose.INTENT_SPOOL_NAME).exists()
+
+
+@pytest.mark.parametrize("kind", ["sound", "idle"])
+def test_a_non_motion_kind_goes_through_the_same_gate(
+    kind: str, seams: FakeClock, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Uniformity is the point: a per-kind gate is a gate an agent gets wrong."""
+    state_dir = _state(tmp_path)
+    _live_heartbeat(state_dir, seams)
+    rc = main(["rules", "intent", kind, "--state", state_dir, "--json"])
+    assert rc == EXIT_SUCCESS
+    assert json.loads(capsys.readouterr().out)["mode"] == "dry_run"
+    assert not (Path(state_dir) / compose.INTENT_SPOOL_NAME).exists()
+
+
+def test_a_live_intent_with_apply_reaches_the_spool(
+    seams: FakeClock, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state_dir = _state(tmp_path)
+    _live_heartbeat(state_dir, seams)
+    # No engine is really draining, so the acknowledgement times out (exit 2) —
+    # what this asserts is that --apply DID put the record on the spool.
+    rc = main(["rules", "intent", "stop", "--state", state_dir, "--apply", "--json"])
+    assert rc == EXIT_ENV_ERROR
+    assert "did not acknowledge" in json.loads(capsys.readouterr().err)["message"]
+    spooled = (Path(state_dir) / compose.INTENT_SPOOL_NAME).read_text(encoding="utf-8")
+    assert json.loads(spooled.splitlines()[0])["kind"] == "stop"
+
+
+def test_a_live_intent_on_a_tty_is_cancelled_by_a_no(
+    seams: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    state_dir = _state(tmp_path)
+    _live_heartbeat(state_dir, seams)
+    monkeypatch.setattr(rules_cmd, "consent", lambda apply: rules_cmd.Consent.PROMPT)
+    monkeypatch.setattr(rules_cmd, "confirm_on_tty", lambda question: False)
+    rc = main(["rules", "intent", "stop", "--state", state_dir])
+    assert rc == EXIT_USER_ERROR
+    assert "rules intent stop cancelled" in capsys.readouterr().err
+    assert not (Path(state_dir) / compose.INTENT_SPOOL_NAME).exists()
+
+
+# --------------------------------------------------------------------------- #
+# 4. the spool never swallows a half-written record                           #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_spool_keeps_a_partial_line_until_its_newline_lands(tmp_path: Path) -> None:
+    """A writer is mid-``write``: the tail must survive to the next drain."""
+    spool_path = tmp_path / compose.INTENT_SPOOL_NAME
+    spool = compose.IntentSpool(spool_path, tmp_path / compose.INTENT_LOG_NAME, default_registry())
+
+    complete = json.dumps({"id": "one", "kind": "stop", "payload": {}}, sort_keys=True)
+    half = json.dumps({"id": "two", "kind": "stop", "payload": {}}, sort_keys=True)
+    head, tail = half[:20], half[20:]
+    spool_path.write_text(complete + "\n" + head, encoding="utf-8")
+
+    first = spool._new_lines()
+    assert first == [complete], "the complete record is drained"
+    assert spool._new_lines() == [], "the partial record is not drained yet"
+
+    with spool_path.open("a", encoding="utf-8") as handle:
+        handle.write(tail + "\n")
+    assert spool._new_lines() == [half], "the completed record is drained whole, not truncated"
+    assert spool._new_lines() == []
+
+
+def test_the_spool_drains_a_record_written_in_two_halves_through_the_engine(
+    tmp_path: Path,
+) -> None:
+    """End to end through ``drain``: the half-written record is admitted ONCE."""
+
+    class _Ctx:
+        now = 0.0
+        tick = 1
+        active: tuple = ()
+
+        def __init__(self) -> None:
+            self.admitted: list = []
+
+        def admit(self, behavior) -> None:
+            self.admitted.append(behavior)
+
+        def evict(self, behavior_id) -> None:  # pragma: no cover - nothing to evict
+            pass
+
+    spool_path = tmp_path / compose.INTENT_SPOOL_NAME
+    spool = compose.IntentSpool(spool_path, tmp_path / compose.INTENT_LOG_NAME, default_registry())
+    line = json.dumps({"id": "half", "kind": "stop", "payload": {}}, sort_keys=True)
+    spool_path.write_text(line[:15], encoding="utf-8")
+
+    ctx = _Ctx()
+    assert spool.drain(ctx) == []
+    with spool_path.open("a", encoding="utf-8") as handle:
+        handle.write(line[15:] + "\n")
+    records = spool.drain(ctx)
+    assert [record["id"] for record in records] == ["half"]
+    assert records[0]["admitted"] is True
+    assert spool.drain(ctx) == []

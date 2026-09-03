@@ -19,17 +19,21 @@ The verbs
 * ``rules check`` — validate that config, then its actions against a skills
   snapshot (``--skills``, else a live duck, else skipped with a diagnostic), then
   optionally replay a recorded JSONL stream through the rule engine. It is a
-  DESCRIPTIVE verb: a content problem is reported by rule id and the command
-  still **exits 0** (the agent-first rubric — a descriptive verb never hard-fails
-  on content). Only a broken invocation (an unreadable ``--replay`` file) errors.
+  DESCRIPTIVE verb: every content problem — a bad rule, an unreadable or
+  non-JSONL ``--replay`` file — is reported in ``issues`` and the command still
+  **exits 0** (the agent-first rubric: a descriptive verb never hard-fails on a
+  path). Only a malformed *invocation* (argparse's own "expected one argument")
+  errors.
 * ``rules engine run|start|stop|status`` — the foreground run and its background
-  siblings. ``run`` is gated: :func:`microduck_cli.duck.gate.consent` decides
-  prompt / dry-run / ``--apply``, and the dry-run prints all six start steps and
-  sends nothing at all — no socket is even opened.
+  siblings. ``run`` AND ``start`` are gated identically:
+  :func:`microduck_cli.duck.gate.consent` decides prompt / dry-run / ``--apply``,
+  and the dry-run prints all six start steps and sends nothing at all — no socket
+  is opened and, for ``start``, no child is spawned.
 * ``rules intent <kind>`` — one intent through the ONE registry. With an engine
-  live it goes on the spool and the engine's acknowledgement is printed; with no
-  engine it is validated and the would-be admission (or the refusal text,
-  verbatim) is printed, sending nothing.
+  live, spooling it is a MOTION act and goes through the same gate (every kind,
+  motion or not, for uniformity); with no engine it is validated and the would-be
+  admission (or the refusal text, verbatim) is printed, sending nothing — which
+  needs no consent because nothing can leave.
 
 Test seams
 ----------
@@ -39,7 +43,11 @@ Every side effect is a module attribute a test monkeypatches, mirroring
 * ``_client_factory(socket_path) -> RobotClient`` — a connected client;
 * ``_clock`` / ``_sleep`` — the engine's injected clock and sleep, so a whole run
   is deterministic and ``--max-ticks`` terminates without waiting;
-* ``_spawn(argv) -> Popen`` — ``rules engine start``'s detached child;
+* ``_spawn(argv, log_path) -> Popen`` — ``rules engine start``'s detached child,
+  with its stdout and stderr appended to ``<state>/engine.log``;
+* ``_wall_clock() -> float`` — the wall clock the ``<state>/engine.lock`` claim is
+  stamped with (wall, not monotonic: the claim is read by another process, and a
+  monotonic reading means nothing across a reboot);
 * ``_proc_cmdline(pid)`` / ``_kill(pid, sig)`` — ``rules engine stop``'s
   pid-identity check, the same discipline ``env/stack.py`` uses (a pid is not an
   identity: signal only after ``/proc/<pid>/cmdline`` still names the run).
@@ -100,6 +108,27 @@ ENGINE_MARKER = "rules engine run"
 INTENT_WAIT_S = 2.0
 _INTENT_POLL_S = 0.02
 
+#: The start claim inside the state directory. It is NOT a liveness record — the
+#: heartbeat is — it only covers the window between "a start decided to spawn"
+#: and "the child published its first heartbeat", which is precisely the window
+#: two concurrent starts would both walk through otherwise. It expires
+#: (:data:`LOCK_STALE_S`) for the same reason liveness is a heartbeat: a claim
+#: that cannot expire locks the operator out of their own duck.
+ENGINE_LOCK_NAME = "engine.lock"
+
+#: How old a claim may be before a fresh start replaces it (with still no fresh
+#: heartbeat to show for it — both facts are required).
+LOCK_STALE_S = 10.0
+
+#: Where ``rules engine start``'s child's stdout and stderr are APPENDED. Not
+#: ``/dev/null``: a child that dies on its first call must leave the reason
+#: somewhere an operator (or an agent) can read it.
+ENGINE_LOG_NAME = "engine.log"
+
+#: How long ``rules engine start`` waits for the child's first heartbeat.
+DEFAULT_START_WAIT_S = 10.0
+_START_POLL_S = 0.05
+
 # ---------------------------------------------------------------------------
 # Test seams
 # ---------------------------------------------------------------------------
@@ -111,15 +140,21 @@ def _default_client_factory(socket_path: str) -> RobotClient:
     return client.connect(verify_joints=False)
 
 
-def _default_spawn(argv: list[str]) -> Any:
-    return subprocess.Popen(  # nosec B603 - fixed argv built here, never shell=True
-        argv,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        close_fds=True,
-    )
+def _default_spawn(argv: list[str], log_path: str) -> Any:
+    """Spawn the detached child with its output APPENDED to *log_path*."""
+    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+    handle = open(log_path, "a", encoding="utf-8")  # noqa: SIM115 - the child owns it
+    try:
+        return subprocess.Popen(  # nosec B603 - fixed argv built here, never shell=True
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=handle,
+            stderr=handle,
+            start_new_session=True,
+            close_fds=True,
+        )
+    finally:
+        handle.close()  # the child inherited its own dup; ours is done
 
 
 def _default_proc_cmdline(pid: int) -> str | None:
@@ -132,9 +167,10 @@ def _default_proc_cmdline(pid: int) -> str | None:
 
 
 _clock: Callable[[], float] = time.monotonic
+_wall_clock: Callable[[], float] = time.time
 _sleep: Callable[[float], None] = time.sleep
 _client_factory: Callable[[str], Any] = _default_client_factory
-_spawn: Callable[[list[str]], Any] = _default_spawn
+_spawn: Callable[[list[str], str], Any] = _default_spawn
 _proc_cmdline: Callable[[int], "str | None"] = _default_proc_cmdline
 _kill: Callable[[int, int], None] = os.kill
 
@@ -378,7 +414,12 @@ def _resolve_snapshot(args: argparse.Namespace) -> tuple[Any, str, str]:
 
 
 def _read_records(path: str) -> list[dict]:
-    """Parse a replay JSONL file. A broken invocation IS an error (exit 1)."""
+    """Parse a replay JSONL file.
+
+    Raises :class:`CliError` describing the problem. ``rules check`` — a
+    DESCRIPTIVE verb — catches it and reports it as an issue rather than
+    hard-failing on a path; a caller that is not descriptive may let it fly.
+    """
     try:
         text = Path(path).read_text(encoding="utf-8")
     except OSError as exc:
@@ -449,7 +490,14 @@ def cmd_rules_check(args: argparse.Namespace) -> int:
     replay_report: dict[str, object] | None = None
     replay_path = getattr(args, "replay", None)
     if replay_path and config is not None:
-        replay_report = _replay_payload(config, replay_path)
+        try:
+            replay_report = _replay_payload(config, replay_path)
+        except CliError as exc:
+            # A path this verb cannot read is CONTENT, not a broken invocation:
+            # `check` is descriptive and a descriptive verb never hard-fails on a
+            # path (the agent-first rubric). Only argparse's own "expected one
+            # argument" — a malformed invocation — still errors.
+            issues.append(f"replay file unreadable: {exc.message}")
 
     payload: dict[str, object] = {
         "overlay": overlay_path,
@@ -495,8 +543,11 @@ def _render_check(payload: dict[str, object]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _apply_command(args: argparse.Namespace) -> str:
-    parts = ["microduck", "rules", "engine", "run"]
+def _apply_command(args: argparse.Namespace, verb: str = "run") -> str:
+    # TODO(prog-constant): a sibling task adds a shared constant for the parser's
+    # prog name; until then the literal `microduck-cli` is what this CLI answers
+    # to in its own --help and error text.
+    parts = ["microduck-cli", "rules", "engine", verb]
     for flag in ("duck", "socket", "state", "rules"):
         value = getattr(args, flag, None)
         if value:
@@ -510,17 +561,35 @@ def _apply_command(args: argparse.Namespace) -> str:
     return " ".join(parts)
 
 
-def _gate_or_plan(args: argparse.Namespace, address: Any, overlay_path: str | None) -> bool:
-    """The motion gate for ``engine run``. ``False`` means "the plan was printed"."""
+def _gate_or_plan(
+    args: argparse.Namespace,
+    address: Any,
+    overlay_path: str | None,
+    *,
+    verb: str = "run",
+) -> bool:
+    """The motion gate for ``engine run`` AND ``engine start``.
+
+    ``False`` means "the plan was printed and NOTHING happened" — no socket for
+    ``run``, no child for ``start``. A detached engine drives the duck exactly as
+    hard as a foreground one, so it passes through the identical gate.
+    """
     state = consent(bool(getattr(args, "apply", False)))
     if state is Consent.APPLY:
         return True
     plan = compose.start_plan(
         address,
         hz=args.hz,
-        apply_command=_apply_command(args),
+        apply_command=_apply_command(args, verb),
         rules_path=overlay_path,
     )
+    if verb == "start":
+        calls = list(plan["calls"])  # type: ignore[call-overload]
+        calls.append(
+            "(all six run in a DETACHED child: this start would spawn it and wait "
+            "for its first heartbeat)"
+        )
+        plan["calls"] = calls
     if state is Consent.DRY_RUN:
         body = render_dry_run(plan)
         if bool(getattr(args, "json", False)):
@@ -532,7 +601,7 @@ def _gate_or_plan(args: argparse.Namespace, address: Any, overlay_path: str | No
     if not confirm_on_tty(question):
         raise CliError(
             EXIT_USER_ERROR,
-            "rules engine run cancelled",
+            f"rules engine {verb} cancelled",
             remediation="re-run and confirm, or pass --apply for non-interactive (agent) mode",
         )
     return True
@@ -569,6 +638,11 @@ def cmd_rules_engine_run(args: argparse.Namespace) -> int:
     try:
         with release.owning(runtime.client) as owner:
             compose.arm(runtime)
+            # The heartbeat exists from the moment the duck is armed, not from the
+            # first tick: `engine start` is waiting for exactly this record to
+            # know the child it spawned is alive, and it releases the start claim.
+            runtime.heartbeat.beat(tick=0, hz=args.hz)
+            _release_lock(state_dir)
             ticks = runtime.run(max_ticks=getattr(args, "max_ticks", None))
         runtime.heartbeat.clear()
     except (KeyboardInterrupt, release.SignalExit) as exc:
@@ -666,21 +740,145 @@ def _run_argv(args: argparse.Namespace) -> list[str]:
     return argv
 
 
+def lock_path(state_dir: str) -> str:
+    """The start claim's path inside *state_dir*."""
+    return os.path.join(state_dir, ENGINE_LOCK_NAME)
+
+
+def engine_log_path(state_dir: str) -> str:
+    """Where a detached child's stdout and stderr are appended."""
+    return os.path.join(state_dir, ENGINE_LOG_NAME)
+
+
+def _read_lock(path: str) -> dict:
+    """The claim document, or ``{}`` — an unreadable claim is no claim."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _claim_lock(state_dir: str) -> str:
+    """Atomically claim the start window, or refuse (exit 1, ``engine starting``).
+
+    ``O_CREAT | O_EXCL`` is the whole mechanism: two concurrent starts race for
+    one inode and exactly one wins. The loser refuses rather than spawning a
+    second engine into the window before either child has published a heartbeat —
+    the gap the heartbeat alone cannot cover.
+
+    A claim older than :data:`LOCK_STALE_S` with STILL no fresh heartbeat is
+    evidence of a start that died between claiming and spawning, and is replaced.
+    Both facts are required, for the same reason
+    :func:`~microduck_cli.behavior.liveness.engine_is_live` needs two.
+    """
+    path = lock_path(state_dir)
+    os.makedirs(state_dir, exist_ok=True)
+    document = json.dumps({"pid": os.getpid(), "at": _wall_clock()}, sort_keys=True)
+    for attempt in (1, 2):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            existing = _read_lock(path)
+            age = _wall_clock() - float(existing.get("at") or 0.0)
+            live = liveness.engine_is_live(state_dir, now=_clock, report=False)
+            if attempt == 1 and age > LOCK_STALE_S and live is None:
+                _release_lock(state_dir)  # a start that died before it spawned
+                continue
+            raise CliError(
+                EXIT_USER_ERROR,
+                f"'rules engine start' refused: engine starting — a start claimed "
+                f"{path} {age:.1f}s ago (pid {existing.get('pid')})",
+                remediation=(
+                    "wait for it to publish a heartbeat and check 'microduck-cli rules "
+                    "engine status'; if the claim is stale it is replaced automatically "
+                    f"after {LOCK_STALE_S:g}s"
+                ),
+            ) from None
+        else:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(document)
+            return path
+    raise AssertionError("unreachable")  # pragma: no cover - the loop always returns
+
+
+def _release_lock(state_dir: str) -> None:
+    """Drop the start claim. Best effort: absence is the desired state."""
+    try:
+        os.unlink(lock_path(state_dir))
+    except OSError:
+        pass
+
+
+def _await_child_heartbeat(
+    state_dir: str, child: Any, pid: int | None, timeout: float
+) -> tuple[Any, str]:
+    """``(state, reason)`` — wait for a FRESH heartbeat carrying the child's pid.
+
+    Polls with the injected ``_sleep``/``_clock``, so a test drives it without
+    waiting. A child that exits first is not waited on any further: its death is
+    the answer.
+    """
+    waited = 0.0
+    while waited < timeout:
+        state = liveness.engine_is_live(state_dir, now=_clock, report=False)
+        if state is not None and (pid is None or state.pid == pid):
+            return state, "live"
+        poll = getattr(child, "poll", None)
+        code = poll() if callable(poll) else None
+        if code is not None:
+            return None, f"the child exited with status {code} before publishing a heartbeat"
+        _sleep(_START_POLL_S)
+        waited += _START_POLL_S
+    return None, f"no heartbeat carrying pid {pid} appeared within {timeout:g}s"
+
+
 def cmd_rules_engine_start(args: argparse.Namespace) -> int:
     json_mode = bool(getattr(args, "json", False))
     address = _resolve_duck(args)
     state_dir = _state_dir(args, address)
-    liveness.refuse_if_engine_live(state_dir, verb="rules engine start", now=_clock)
+    overlay_path = _overlay_path(args, state_dir)
 
+    # A detached engine drives the duck exactly as hard as a foreground one: the
+    # same gate, and a dry-run spawns NOTHING.
+    if not _gate_or_plan(args, address, overlay_path, verb="start"):
+        return EXIT_SUCCESS
+
+    liveness.refuse_if_engine_live(state_dir, verb="rules engine start", now=_clock)
+    _claim_lock(state_dir)
+
+    log_path = engine_log_path(state_dir)
     argv = _run_argv(args)
-    child = _spawn(argv)
+    try:
+        child = _spawn(argv, log_path)
+    except OSError as exc:
+        _release_lock(state_dir)
+        raise CliError(
+            EXIT_ENV_ERROR,
+            f"rules engine start could not spawn the engine: {exc}",
+            remediation=f"run it in the foreground instead: {_apply_command(args)}",
+        ) from exc
+
     pid = getattr(child, "pid", None)
+    wait_s = float(getattr(args, "wait_s", DEFAULT_START_WAIT_S) or 0.0)
+    state, reason = _await_child_heartbeat(state_dir, child, pid, wait_s)
+    if state is None:
+        _release_lock(state_dir)
+        raise CliError(
+            EXIT_ENV_ERROR,
+            f"rules engine start failed: {reason}",
+            remediation=f"read the child's log at {log_path}, then retry",
+        )
+
     payload = {
         "duck": address.name,
         "state_dir": state_dir,
         "pid": pid,
         "argv": argv,
         "liveness": os.path.join(state_dir, liveness.STATE_FILENAME),
+        "log": log_path,
+        "heartbeat_pid": state.pid,
+        "waited_for_heartbeat": True,
     }
     if json_mode:
         emit_result(payload, json_mode=True)
@@ -688,11 +886,10 @@ def cmd_rules_engine_start(args: argparse.Namespace) -> int:
         emit_result(
             "\n".join(
                 [
-                    f"rules engine start: pid {pid}",
+                    f"rules engine start: pid {pid} (heartbeat confirmed)",
                     f"duck: {address.name}",
                     f"liveness: {payload['liveness']} (the heartbeat IS the liveness record)",
-                    "the child is detached with its output on /dev/null — run in the "
-                    "foreground to watch the sense log",
+                    f"log: {log_path} (the child's stdout and stderr, appended)",
                 ]
             ),
             json_mode=False,
@@ -732,6 +929,9 @@ def cmd_rules_engine_stop(args: argparse.Namespace) -> int:
     json_mode = bool(getattr(args, "json", False))
     state_dir = _state_dir(args)
     payload: dict[str, object] = {"state_dir": state_dir, **_stop_outcome(state_dir)}
+    # Whatever the outcome, no start claim survives a stop: the operator has just
+    # said "nothing should be starting here".
+    _release_lock(state_dir)
     if json_mode:
         emit_result(payload, json_mode=True)
     else:
@@ -769,6 +969,8 @@ def cmd_rules_engine_status(args: argparse.Namespace) -> int:
     payload: dict[str, object] = {
         "state_dir": state_dir,
         "heartbeat": str(liveness.state_path(state_dir)),
+        "log": engine_log_path(state_dir),
+        "starting": bool(_read_lock(lock_path(state_dir))),
         "live": live is not None,
         "pid": state.pid if state else None,
         "pid_alive": bool(state and state.pid and liveness.pid_is_alive(state.pid)),
@@ -793,7 +995,10 @@ def _render_status(payload: dict[str, object], *, present: bool) -> str:
         f"engine: {verdict} (pid {payload['pid']}, alive={payload['pid_alive']})",
         f"tick {payload['tick']} at {payload['hz']} Hz "
         f"(achieved {payload['achieved_hz']}, overruns {payload['overruns']})",
+        f"log: {payload['log']} (a detached 'engine start' child's output)",
     ]
+    if payload["starting"]:
+        lines.append(f"a start is in progress (claim: {payload['state_dir']}/{ENGINE_LOCK_NAME})")
     daemon = payload["daemon"]
     if not isinstance(daemon, dict):
         lines.append("daemon: not probed (no duck resolved)")
@@ -848,6 +1053,77 @@ def _wait_for_ack(spool: compose.IntentSpool, intent_id: str) -> dict | None:
     return None
 
 
+def _intent_apply_command(args: argparse.Namespace) -> str:
+    # TODO(prog-constant): shared prog-name constant lands in a sibling task.
+    parts = ["microduck-cli", "rules", "intent", str(args.kind)]
+    if getattr(args, "payload", None):
+        parts += ["--payload", f"'{args.payload}'"]
+    if getattr(args, "state", None):
+        parts += ["--state", str(args.state)]
+    parts.append("--apply")
+    return " ".join(parts)
+
+
+def _intent_gate_or_plan(
+    args: argparse.Namespace,
+    state_dir: str,
+    payload: dict,
+    registry: Any,
+    live: Any,
+) -> bool:
+    """The motion gate for ``rules intent`` with an engine live.
+
+    ``False`` means "what WOULD be spooled was printed and the spool was not
+    touched". The verdict in the plan is the ONE registry's own — the same call
+    the engine will make when it drains the line — so a dry-run and an ``--apply``
+    never disagree about whether an intent is admissible.
+    """
+    state = consent(bool(getattr(args, "apply", False)))
+    if state is Consent.APPLY:
+        return True
+    admission = registry.inject(args.kind, dict(payload), now=_clock(), origin=ORIGIN_CLI)
+    verdict = "admitted" if admission.admitted else "refused"
+    spool_path = os.path.join(state_dir, compose.INTENT_SPOOL_NAME)
+    plan = {
+        "verb": args.kind,
+        "target": f"the engine at pid {live.pid}",
+        "calls": [
+            f"append to {spool_path}: "
+            + json.dumps({"kind": args.kind, "payload": payload}, sort_keys=True),
+            f"validation ({verdict}): {admission.reason}",
+        ],
+        "apply_command": _intent_apply_command(args),
+    }
+    if state is Consent.DRY_RUN:
+        body = render_dry_run(plan)
+        if bool(getattr(args, "json", False)):
+            emit_result(
+                {
+                    "mode": "dry_run",
+                    "kind": args.kind,
+                    "payload": payload,
+                    "engine": live.pid,
+                    "admitted": bool(admission.admitted),
+                    "reason": admission.reason,
+                    "sent": False,
+                    "plan": plan,
+                    "text": body,
+                },
+                json_mode=True,
+            )
+        else:
+            emit_result(body, json_mode=False)
+        return False
+    question = f"{render_dry_run(plan)}\n\nSpool this intent to the live engine? [y/N]"
+    if not confirm_on_tty(question):
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"rules intent {args.kind} cancelled",
+            remediation="re-run and confirm, or pass --apply for non-interactive (agent) mode",
+        )
+    return True
+
+
 def cmd_rules_intent(args: argparse.Namespace) -> int:
     json_mode = bool(getattr(args, "json", False))
     state_dir = _state_dir(args)
@@ -870,6 +1146,13 @@ def cmd_rules_intent(args: argparse.Namespace) -> int:
             json_mode=json_mode,
         )
 
+    # An engine IS live, so spooling this intent moves the duck: same gate as
+    # `engine run`. Every kind goes through it, `sound` and `idle` included — a
+    # gate an agent has to reason about per kind is a gate it will get wrong, and
+    # a uniform one costs a refused non-motion intent nothing but a --apply.
+    if not _intent_gate_or_plan(args, state_dir, payload, registry, live):
+        return EXIT_SUCCESS
+
     spool = compose.IntentSpool(
         Path(state_dir) / compose.INTENT_SPOOL_NAME,
         Path(state_dir) / compose.INTENT_LOG_NAME,
@@ -882,9 +1165,10 @@ def cmd_rules_intent(args: argparse.Namespace) -> int:
             EXIT_ENV_ERROR,
             f"the engine (pid {live.pid}) did not acknowledge intent {intent_id} "
             f"within {INTENT_WAIT_S:g}s",
+            # TODO(prog-constant): shared prog-name constant lands in a sibling task.
             remediation=(
-                "check 'microduck rules engine status' — the intent is still on the spool "
-                "and a running engine drains it on its next tick"
+                "check 'microduck-cli rules engine status' — the intent is still on the "
+                "spool and a running engine drains it on its next tick"
             ),
         )
     return _emit_admission(
@@ -930,6 +1214,23 @@ def _add_duck_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--state", default=None, help="Override the state directory.")
 
 
+def _add_json_flag(parser: argparse.ArgumentParser) -> None:
+    """Add ``--json`` that does NOT clobber the noun-level flag.
+
+    ``default=argparse.SUPPRESS`` is load-bearing. A subparser parses into its own
+    namespace and copies EVERY attribute back over the parent's, so a verb-level
+    ``--json`` with ``default=False`` silently overwrites the ``True`` that
+    ``microduck-cli rules --json list`` had already set. Suppressed, the attribute
+    only exists when the flag was actually given, and the noun's value survives.
+    """
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Emit structured JSON.",
+    )
+
+
 def _add_run_flags(parser: argparse.ArgumentParser) -> None:
     _add_duck_flags(parser)
     parser.add_argument(
@@ -938,15 +1239,15 @@ def _add_run_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--hz", type=float, default=compose.DEFAULT_HZ, help="Tick rate.")
     parser.add_argument("--max-ticks", type=int, default=None, help="Stop after N ticks.")
     parser.add_argument("--no-idle", action="store_true", help="Do not register the idle base.")
-    parser.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _add_json_flag(parser)
 
 
 def _register_engine(noun_sub: argparse._SubParsersAction, parser_class: type) -> None:
     engine = noun_sub.add_parser(
         "engine", help="Run the tick engine (see 'microduck-cli rules engine overview')."
     )
-    engine.add_argument("--json", action="store_true", help="Emit structured JSON.")
-    engine.set_defaults(func=_no_engine_verb, json=False)
+    _add_json_flag(engine)
+    engine.set_defaults(func=_no_engine_verb)
     engine_sub = engine.add_subparsers(dest="rules_engine_command", parser_class=parser_class)
 
     ov = engine_sub.add_parser("overview", help="Describe the rules engine sub-noun.")
@@ -956,7 +1257,7 @@ def _register_engine(noun_sub: argparse._SubParsersAction, parser_class: type) -
         help="Ignored — overview always describes this noun. Accepted so a stray "
         "path argument never hard-fails.",
     )
-    ov.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _add_json_flag(ov)
     ov.set_defaults(func=cmd_rules_engine_overview)
 
     run = engine_sub.add_parser("run", help="Run the engine in the foreground (gated).")
@@ -964,18 +1265,29 @@ def _register_engine(noun_sub: argparse._SubParsersAction, parser_class: type) -
     run.add_argument("--apply", action="store_true", help="Send the gated calls (agent mode).")
     run.set_defaults(func=cmd_rules_engine_run)
 
-    start = engine_sub.add_parser("start", help="Spawn a detached 'engine run --apply'.")
+    start = engine_sub.add_parser("start", help="Spawn a detached 'engine run --apply' (gated).")
     _add_run_flags(start)
+    start.add_argument(
+        "--apply",
+        action="store_true",
+        help="Spawn the detached engine (agent mode); without it a non-TTY prints the plan.",
+    )
+    start.add_argument(
+        "--wait-s",
+        type=float,
+        default=DEFAULT_START_WAIT_S,
+        help="How long to wait for the child's first heartbeat before failing (default: 10).",
+    )
     start.set_defaults(func=cmd_rules_engine_start)
 
     stop = engine_sub.add_parser("stop", help="SIGTERM the engine named by the heartbeat.")
     _add_duck_flags(stop)
-    stop.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _add_json_flag(stop)
     stop.set_defaults(func=cmd_rules_engine_stop)
 
     status = engine_sub.add_parser("status", help="Report engine liveness and daemon reachability.")
     _add_duck_flags(status)
-    status.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _add_json_flag(status)
     status.set_defaults(func=cmd_rules_engine_status)
 
 
@@ -998,13 +1310,13 @@ def register(sub: argparse._SubParsersAction) -> None:
         help="Ignored — overview always describes this noun. Accepted so a stray "
         "path argument never hard-fails.",
     )
-    ov.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _add_json_flag(ov)
     ov.set_defaults(func=cmd_rules_overview)
 
     listing = noun_sub.add_parser("list", help="Render the merged rules config.")
     listing.add_argument("--rules", default=None, help="Overlay rules TOML.")
     listing.add_argument("--state", default=None, help="Override the state directory.")
-    listing.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _add_json_flag(listing)
     listing.set_defaults(func=cmd_rules_list)
 
     check = noun_sub.add_parser("check", help="Validate the rules, their actions, and a replay.")
@@ -1012,7 +1324,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     check.add_argument("--rules", default=None, help="Overlay rules TOML.")
     check.add_argument("--skills", default=None, help="A skills snapshot JSON file.")
     check.add_argument("--replay", default=None, help="A recorded sense JSONL to replay.")
-    check.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _add_json_flag(check)
     check.set_defaults(func=cmd_rules_check)
 
     _register_engine(noun_sub, type(p))
@@ -1021,5 +1333,11 @@ def register(sub: argparse._SubParsersAction) -> None:
     intent.add_argument("kind", help="The intent kind (do, look, move, sound, stop, mode, idle).")
     intent.add_argument("--payload", default=None, help="A JSON object of parameters.")
     intent.add_argument("--state", default=None, help="Override the state directory.")
-    intent.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    intent.add_argument(
+        "--apply",
+        action="store_true",
+        help="Spool the intent to a live engine (agent mode); without it a non-TTY "
+        "prints what would be spooled.",
+    )
+    _add_json_flag(intent)
     intent.set_defaults(func=cmd_rules_intent)

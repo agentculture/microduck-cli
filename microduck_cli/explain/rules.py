@@ -25,7 +25,8 @@ VERBS: list[str] = [
     "rules engine overview — describe the engine sub-noun, its verbs and its start sequence",
     "rules engine run — run the engine in the foreground: connect, hello, health, init,"
     " enable, armed",
-    "rules engine start — spawn a detached 'engine run --apply'; the heartbeat is the liveness",
+    "rules engine start — spawn a detached 'engine run --apply' (gated), waiting for its"
+    " first heartbeat",
     "rules engine stop — SIGTERM the engine the heartbeat names, after a pid-cmdline check",
     "rules engine status — heartbeat freshness, pid liveness, tick rate, daemon reachability",
     "rules intent <kind> — submit one intent through the ONE registry (spooled to a live engine)",
@@ -128,8 +129,10 @@ Three checks, none of which touches the robot's motion:
    (ticks, fires, drops by reason, inhibited actions); `--json` carries every
    tick.
 
-A broken *invocation* — an unreadable or non-JSONL `--replay` file — is still an
-error (exit 1). Only rule CONTENT is reported without failing.
+An unreadable or non-JSONL `--replay` file is CONTENT too: it is reported in
+`issues` as `replay file unreadable: <reason>` and the command still exits 0. A
+descriptive verb never hard-fails on a path. Only a malformed *invocation* —
+`--replay` with no argument at all — is an error (exit 1).
 
 ## Usage
 
@@ -232,19 +235,36 @@ _RULES_ENGINE_START = f"""\
 # microduck-cli rules engine start
 
 Spawns `rules engine run ... --apply` as a detached child with the same
-addressing and rules arguments, and returns immediately with the child's pid.
+addressing and rules arguments — and a detached engine drives the duck exactly
+as hard as a foreground one, so it goes through the SAME motion gate as `run`:
+on a TTY without `--apply` it confirms interactively; on a non-TTY without
+`--apply` it prints the six-step plan and spawns **nothing at all**; with
+`--apply` it spawns (agent mode).
 
-It writes **nothing else**: there is no pidfile, because the engine's own
-heartbeat (`<state>/state.json`) is the liveness record, and a second file that
-cannot expire is exactly the failure mode the heartbeat exists to avoid.
+Two concurrent starts would both pass the heartbeat check — neither child has
+published one yet — so the start window is claimed by an atomically created
+`<state>/engine.lock` (`O_CREAT | O_EXCL`) holding the starting process's pid
+and wall-clock stamp. A second start finds it and exits 1 naming `engine
+starting`, unless the claim is older than 10 s AND there is still no fresh
+heartbeat, in which case it is a start that died before it spawned and is
+replaced. The child drops the claim once its own heartbeat is written; `stop`
+and a failed start drop it too. It is NOT a liveness record — the heartbeat is
+— and, like the heartbeat, it expires.
 
-The child's stdout and stderr go to `/dev/null` — run the engine in the
-foreground when you want to watch the sense log.
+The start then WAITS (up to `--wait-s`, default 10 s) for a fresh heartbeat
+carrying the child's pid. A child that exits first, or one that never publishes,
+is an exit-2 failure naming what happened and where to read about it — a start
+that reported success over a dead child is worse than one that failed.
+
+The child's stdout and stderr are APPENDED to `<state>/engine.log` (never
+`/dev/null`: a child that dies on its first call must leave the reason
+somewhere). `rules engine status` names the same path.
 
 ## Usage
 
-    microduck-cli rules engine start --duck duck-a
-    microduck-cli rules engine start --json
+    microduck-cli rules engine start --duck duck-a --apply
+    microduck-cli rules engine start          # non-TTY: prints the plan, spawns nothing
+    microduck-cli rules engine start --apply --wait-s 20 --json
 
 ## See also
 
@@ -283,7 +303,10 @@ that died milliseconds ago, and a live pid with a stale stamp is a wedged or
 unrelated process.
 
 Also reports the last tick, the configured and achieved rate, the overrun count,
-and whether the duck's daemon answers a `hello` probe at all.
+whether the duck's daemon answers a `hello` probe at all, the path of
+`<state>/engine.log` (where a detached `engine start` child's stdout and stderr
+are appended), and whether a start is in progress (an unexpired
+`<state>/engine.lock` claim).
 
 ## Usage
 
@@ -305,19 +328,29 @@ whether a rule, a human or an agent submitted it.
 
 Two paths, and the verb picks by itself:
 
-- **an engine is live** — the intent is appended to `<state>/intents.jsonl`, the
-  spool the engine drains on its next tick, and this verb waits up to 2 seconds
-  for the engine's acknowledgement in `<state>/intents.log`, then prints it.
+- **an engine is live** — spooling the intent MOVES the duck, so it goes through
+  the same motion gate as `rules engine run`: a TTY confirms interactively; a
+  non-TTY without `--apply` prints what WOULD be spooled (the kind, the payload,
+  and the ONE registry's own admitted/refused verdict) and spools **nothing**;
+  with `--apply` the intent is appended to `<state>/intents.jsonl`, the spool the
+  engine drains on its next tick, and this verb waits up to 2 seconds for the
+  engine's acknowledgement in `<state>/intents.log`, then prints it.
 - **no engine is live** — the intent is validated and the would-be admission is
   printed. Nothing is sent: with no engine there is nobody to compose it onto a
-  tick, and a lone socket write would be a second author.
+  tick, and a lone socket write would be a second author. No consent is asked
+  for, because nothing can leave.
+
+EVERY kind passes the gate, `sound` and `idle` included, not just the motion
+kinds (`move`, `do`, `look`, `mode`, `stop`). A gate an agent has to reason about
+per kind is a gate it will eventually get wrong; a uniform one costs a
+non-motion intent nothing but an `--apply`.
 
 A refusal prints the registry's text VERBATIM and exits 1.
 
 ## Usage
 
-    microduck-cli rules intent stop
-    microduck-cli rules intent move --payload '{{"vx": 0.1, "duration_s": 2}}'
+    microduck-cli rules intent stop --apply
+    microduck-cli rules intent move --payload '{{"vx": 0.1, "duration_s": 2}}' --apply
     microduck-cli rules intent do --payload '{{"skill": "kick_left"}}' --json
 
 ## See also
