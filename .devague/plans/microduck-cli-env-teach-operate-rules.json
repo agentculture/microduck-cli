@@ -1,0 +1,1202 @@
+{
+  "slug": "microduck-cli-env-teach-operate-rules",
+  "title": "microduck-cli: env, teach, operate, rules",
+  "frame_slug": "microduck-cli-env-teach-operate-rules",
+  "schema_version": 5,
+  "status": "exported",
+  "created": "2026-09-03T19:23:57Z",
+  "updated": "2026-09-03T19:49:22Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "microduck-cli sets up a MicroDuck environment (sim or real), trains and publishes policies through microduck_rl, drives the duck directly over robotd's JSON-RPC, and runs a data-only rules layer (events -> rules -> actions) \u2014 one CLI that any agent or human drives, implementing the upstream pollen-robotics docs and pointing users at them.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "The announcement is true only if every operate verb works unchanged against BOTH 'robotd --fake' (CI) and 'robotd --sim' (MuJoCo) through the same socket client \u2014 no sim-specific code path above the transport seam.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "boundary",
+      "text": "No motor is ever commanded except as an intent through robotd's JSON-RPC (robot.move/head/look/do/init/relax/stop/setMode/loadPolicy). robotd is authoritative on safety (architecture.md \u00a71.1 invariant 2: fall detection, joint/thermal limits, deadman, safe pose) and is the only process on the Dynamixel bus; microduck-cli never opens the serial port, never bypasses a clamp, and treats a refused intent as the correct answer.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "A grep of microduck_cli/ finds no serial-port open, no Dynamixel/rustypot import and no write to /dev/tty*; every motion path ends in a JSON-RPC call, and a refused intent is reported by the daemon's reason code with exit 0 for the engine and exit 1 for a verb.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c4",
+      "kind": "requirement",
+      "text": "Transport is JSON-RPC 2.0 NDJSON over robotd's unix socket, implemented with stdlib socket+json only. The socket path is configurable (--socket / DUCK_SOCKET): in simulation it is the short state-dir path robotd --sim was started with (upstream's scripts/duck-sim uses $DUCK_SIM_STATE/duck-a.sock; a unix path is capped at ~108 bytes), and when a real duck exists the same client points at a forwarded /run/robotd.sock ('ssh -L \u2026', cheatsheet-dev.md). Method names, API_VERSION, the 'hello' handshake, error codes and JOINT_NAMES come from duck-ipc-proto/src/lib.rs and are re-checked at connect. Continuous intents (robot.move/head/pose/mouth/sound hold) are sent as notifications at 20\u201350 Hz, last-writer-wins and expiring; discrete ones (robot.do/look/stop/enable/init/relax) as answered requests \u2014 the split the proto crate documents.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "A daemon answering hello with a newer API_VERSION runs; an unknown method answers METHOD_NOT_FOUND and is logged as a named drop, never a traceback; a daemon whose JOINT_NAMES or obs/action lengths differ from the client's table refuses to start the engine with both numbers in the message.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "Addressing follows upstream's simulation naming: a duck is a name (duck-a, duck-b \u2026) that resolves to <state-dir>/<name>.sock (and <name>-tof.sock), the convention scripts/duck-sim establishes; DUCK_SIM_DUCK / --duck select one. duckctl (BLE, 'never on a robot') is wrapped only when a real duck exists \u2014 it is not a sim transport. The env doctor names exactly what is missing for the sim stack (a microduck clone on sim-remote-io, cargo/rust \u22651.89, a built robotd+robotctl, a microduck_rl .venv with libonnxruntime, a short state dir, a free body port) with the upstream doc line as the remediation.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "Given a state dir and a name, the CLI resolves <state>/<name>.sock without any network or BLE call; env doctor on a box with no microduck clone, no cargo, no RL venv or no libonnxruntime lists each missing item with the upstream doc line and exits 2.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c6",
+      "kind": "requirement",
+      "text": "The operate surface uses robotctl's words so a command learned on the robot works here: robot init/relax/do/mode/look, policy list/load/add/remove/reset/search/check/update, pad status/bindings/bind/reset, health, monitor (--json NDJSON), configure --list, quack. It adds one verb robotctl lacks \u2014 a velocity 'move' driving robot.move with the deadman refreshed at intent rate, the way padd and the WebRTC console do \u2014 and every verb takes --json.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "Every verb name and flag in the duck noun matches a robotctl subcommand of the same name (robot init/relax/do/mode/look, policy *, pad *, health, monitor, configure --list, quack) plus exactly one addition, move; a table test pins that list against robotctl's Namespace enum.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c7",
+      "kind": "requirement",
+      "text": "Every verb that moves or de-energizes the duck is gated the arm101 way: confirm on a TTY, print a zero-side-effect dry-run plan on a non-TTY without --apply, proceed on a non-TTY with --apply (agent mode). Applies to init, relax (which additionally keeps upstream's --yes semantics), do, move, mode, policy load/add/reset, and pad bind. Upstream's own safety wording is surfaced verbatim: 'init moves every joint \u2014 have the robot on its stand', 'relax cuts power and the robot collapses', 'stop zeroes intents and is NOT an emergency stop', 'nothing a stranger publishes is verified by anybody'.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "Each gated verb has three tests: TTY without --apply prompts, non-TTY without --apply prints a plan and sends nothing (asserted on a --fake daemon's call log), non-TTY with --apply sends; the four upstream safety sentences appear verbatim in the verb's dry-run output.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "requirement",
+      "text": "The teach/train lane orchestrates microduck_rl by its documented commands, never by importing it: env check (CUDA GPU, uv, Python 3.12 (<3.13 pinned by bam), UV_HTTP_TIMEOUT=600 on ARM, hf auth, optional wandb), 'uv run list-envs', the mandatory 64-env/5-iter smoke test, 'uv run train <task> [--hf-jobs]', 'uv run play', 'uv run scripts/export.py' (the only safe ONNX path \u2014 normalizer baked in), 'uv run publish' (schema-2 manifest, [1,61]->[1,14] gate), then 'robotctl policy add|load' on the duck. The CLI plans and sequences that pipeline, records the artifacts (task id, run path, checkpoint, ONNX, HF repo), and points at AGENTS.md for reward design.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "The train lane never imports mjlab_microduck; each stage is a subprocess whose argv equals the upstream-documented command, and the lane refuses to start a long run whose 64-env/5-iteration smoke test has not passed in this session or a recorded artifact.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c9",
+      "kind": "boundary",
+      "text": "microduck_rl is orchestrated as a sibling checkout via subprocess ('uv run --project <path> \u2026'), never added as a dependency or extra of microduck-cli: its dependency tree (mjlab, warp, torch+CUDA, bam from git, requires-python <3.13) must not enter this package's resolution. Base runtime deps stay [] (CLAUDE.md hard constraint); if a hardware library is ever needed it goes behind an extra with a lazy import.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "pyproject.toml dependencies stays []; a CI check fails if it is non-empty or if any [project.optional-dependencies] entry names mjlab, warp-lang, torch or better-actuator-models.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c12",
+      "kind": "requirement",
+      "text": "The rules layer follows reachy-mini-cli's shape: data-only TOML \u2014 [[react]] (when <predicate> then run <action>), [[inhibit]], [modes.<name>] \u2014 predicates as field/op/value over a sense snapshot (never code), unique ids, cooldown_s, hysteresis, bounded duration_s, two-layer per-id merge (shipped resource + box-local overlay with 'enabled = false' tombstones), fail-closed validation, and 'rules list/check/overview' verbs. Duck sense fields are derived from robot.state / robot.health / pad.input / tof.frame / chorale.heard (fallen, projected gravity, battery fraction, hottest servo, loop Hz, pad buttons, ToF nearest, nearby-duck beacons); actions are robotd intents (do <skill>, look, move, sound/quack, stop, mode).",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h11",
+      "kind": "honesty",
+      "text": "RulesConfig.from_dict refuses every documented bad shape (unknown field, callable value, unknown skill, unknown predicate field/op, negative cooldown, duplicate id, unbounded looping) with the rule id in the message; a two-layer merge test proves per-id override and enabled=false tombstones survive an upgrade of the shipped layer.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c16",
+      "kind": "requirement",
+      "text": "Duck verbs land as noun groups in microduck_cli/cli/_commands/ following the cli.py pattern (parser_class=type(p), own 'overview', CliError-only failures, emit_result/emit_error split), with engine logic in sibling packages (microduck_cli/duck/, /rules/, /train/) and argparse wiring only in _commands/. Proposed nouns: 'env' (setup + doctor for sim/real/training), 'duck' (operate), 'policy' (train\u2192export\u2192publish\u2192install pipeline), 'rules' (the neurosymbolic layer). Each new verb updates explain/catalog.py ENTRIES, overview.py _VERBS and learn.py in the same change, and 'teken cli doctor . --strict' stays green.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "Every noun has an overview verb, every verb takes --json, and adding a verb without a catalog entry, an overview _VERBS line and a learn mention fails a lockstep test; teken cli doctor . --strict passes in CI.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c17",
+      "kind": "requirement",
+      "text": "The explain catalog and every error remediation point at the owning upstream page rather than restating it: docs/robot/cheatsheet.md (robotctl), docs/robot/duckctl.md, docs/policy-manifest.md, docs/design/architecture.md, microduck_rl AGENTS.md and scripts/hf/README.md. This honours upstream's own rule that one page owns a mechanism and everyone else says a sentence and points.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "Each explain entry and each CliError remediation for a robot or training topic contains a URL into pollen-robotics/microduck or microduck_rl docs, and a test asserts no explain body restates a robotctl command table longer than three lines.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c22",
+      "kind": "requirement",
+      "text": "The env noun brings up and checks the simulation stack by reproducing upstream's documented steps (or shelling out to scripts/duck-sim when the clone has it): clone/checkout microduck at sim-remote-io, 'cargo build -p robotd -p robotctl -p tof -p sounds', locate libonnxruntime in the microduck_rl .venv, generate a params toml naming the policy files from the clone, start 'duck-body' on a port then 'robotd --sim host:port --socket <state>/<name>.sock', wait for 'hello' + robot.health, and optionally 'robot.init'. It supports N ducks (one port each, one MuJoCo world), a scene (bare floor or apartment), headless mode, and a --fake backend for tests; 'env down' stops by pidfile after confirming /proc cmdline (upstream's stop_one lesson), never by name.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "env up on a box with the two clones and a synced RL venv reaches robot.health healthy within 60 s on --fake and within 120 s on --sim; env down leaves no robotd, duck-body or tofd process and never signals a pid whose /proc cmdline does not match.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c23",
+      "kind": "requirement",
+      "text": "The engine package (microduck_cli/behavior/ or engine/) mirrors reachy-mini-cli's shape so it can be extracted: engine.run(tick_seam=\u2026) with a TickBus of drivers; a pure data model (channels, StopClass priorities, Lifetime) with duck channels = the intent families robotd exposes (twist, head, body pose, mouth, sound, skill); SenseProviders fed from robot.subscribe/robot.state + robot.health polled at 2 Hz + tof.frame + chorale.heard (peek callables, *_age_s freshness, None on failure); a TargetSink that emits intents through the JSON-RPC client; rules-as-data loaded in two layers; bounded lifetimes fail-closed; senselog drop reasons on stderr; a state.json heartbeat so a second engine process refuses early. No SDK, transport or CLI error type is imported below the composition root.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "The engine adds no command filtering of its own: robotd's cmd_alpha/head_alpha EMA (0.2 default in deploy/robotd.toml) is treated as part of the plant, so a rule's step command arrives as the ramp the daemon documents.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c24",
+      "kind": "requirement",
+      "text": "Instruction injection has ONE admission path: a KindRegistry-style registry that validates fail-closed and admits (a) intents fired by react rules and (b) ad-hoc intents an agent or human sends via a CLI verb (e.g. 'duck intent <kind> \u2026' / a spool file) \u2014 same validator, same bounds (duration caps, per-axis limits, cooldowns), same named refusals. Rules are the durable form of an instruction; an ad-hoc intent is the one-shot form. Every admitted instruction becomes robotd intents that robotd's own safety may still refuse, and the refusal is surfaced by name.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h15",
+      "kind": "honesty",
+      "text": "One KindRegistry instance serves both rule-fired and CLI-injected intents: a test injects the same over-limit payload by both paths and gets the same refusal text; a static check finds no second validator.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c25",
+      "kind": "requirement",
+      "text": "The train lane targets three local hosts (DGX Spark GB10, Jetson Thor, Jetson AGX Orin) plus Hugging Face Jobs, and its env doctor detects which it is on (uname -m, nvidia-smi / JetPack markers, CUDA version) and reports whether microduck_rl's pinned torch source applies. wandb is optional: the lane runs without a key and only passes --wandb-run-path / forwards a key when configured.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "env doctor on GB10, Jetson Thor and AGX Orin prints the detected host class and whether microduck_rl's torch source applies; with no wandb key the smoke test still runs and play/export accept a local checkpoint path.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c26",
+      "kind": "requirement",
+      "text": "This repo's CLAUDE.md and README are updated in the first engine PR to record decision c20: the engine lives here for now, is built extraction-first, and neurosymbolic-system is the later home \u2014 replacing the current 'a tick loop here belongs upstream' guidance so a reviewer does not reject the engine on stale instructions.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h17",
+      "kind": "honesty",
+      "text": "The first engine PR's diff touches CLAUDE.md's neurosymbolic-system section and cicd/SKILL.md's triage defaults, replacing the 'engine belongs upstream' guidance with the extraction-first decision.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c27",
+      "kind": "audience",
+      "text": "Two kinds of operator, one surface: (1) AI agents on the AgentCulture mesh (any backend \u2014 the colleague resident, Claude Code, Codex, Copilot) that set up the duck's environment, author rules, inject ad-hoc instructions, and run training without a human at the keyboard; (2) the human who owns the duck and does the same things interactively. Every verb serves both: --json and --apply for agents, TTY confirmation and readable text for the human.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "Every duck verb runs unattended with --json --apply in a non-TTY test and interactively with a prompt in a pty test; no verb requires a TTY to succeed.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c28",
+      "kind": "after_state",
+      "text": "A person or agent runs one CLI to (a) bring up a MicroDuck \u2014 today the MuJoCo twin driven by the real robotd, later a physical duck at the same socket contract \u2014 and know from 'env doctor' exactly what is missing; (b) operate it in robotctl's own words plus velocity 'move', with motion gated; (c) train, export, publish and install a policy through microduck_rl's documented pipeline on a local GPU box or HF Jobs; and (d) run an off-board engine whose data-only rules turn observed events into injected instructions, with agents able to inject ad-hoc instructions through the same admission path. The duck keeps whatever autonomy upstream ships; this layer sits above it.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h19",
+      "kind": "honesty",
+      "text": "The six success-signal commands of c30 all pass on the dev box against --sim, and the operate verbs pass unchanged against --fake in CI.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c29",
+      "kind": "why_it_matters",
+      "text": "Today driving a MicroDuck means reading two upstream repos, hand-assembling a sim from a branch, a params file, a dlopen'd ONNX runtime and a socket path, and typing raw robotctl or gamepad input; teaching it means a separate GPU project with its own conventions. None of that is agent-operable and all of it is re-derived per person. One CLI that implements those docs \u2014 and links to them \u2014 lets any agent or human spare that work, and gives the engine that neurosymbolic-system will be extracted from a second robot to generalise against.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h20",
+      "kind": "honesty",
+      "text": "A clean-box walkthrough of env doctor \u2192 env up \u2192 duck health needs no manual params file, ORT path or socket path from the operator; each is derived or reported.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c30",
+      "kind": "success_signal",
+      "text": "Observable when done: 'microduck env up --sim' on a clean box (given the two upstream clones) yields a standing duck and 'microduck duck health --json' reports healthy at 50 Hz; 'microduck duck do roulade --apply' runs a skill in sim; a rules.toml with one react rule fires an intent visible in 'duck monitor' within its cooldown and 'rules check' refuses a malformed one; the train lane's smoke test (64 envs, 5 iters) runs end to end locally and the same command submits to HF Jobs; 'teken cli doctor . --strict', the lint stack and coverage \u226560% stay green with zero base dependencies.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h21",
+      "kind": "honesty",
+      "text": "Each of the six checks is a named CI job or a documented manual step with its expected output recorded in docs/, and a failing check blocks the PR that regresses it.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c31",
+      "kind": "requirement",
+      "text": "The engine yields to a human driver. robotd applies intents last-writer-wins with no arbitration between clients, and padd (gamepad), the mediad console and a second CLI all send the same robot.move/head/pose notifications. The engine therefore watches pad.input (padd's raw tap) and robot.remoteSessionActive, and while a human is driving it inhibits its own continuous intents (a named 'human-driving' drop) \u2014 rules that fire a discrete skill are still admitted but robotd's refusal, if any, is surfaced by name.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h22",
+      "kind": "honesty",
+      "text": "With a --fake daemon and a simulated pad.input stream, the engine's call log shows zero robot.move/head/look/pose/do/setMode calls while the pad is active and a human-driving drop count on stderr; sound and mouth calls continue.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c32",
+      "kind": "requirement",
+      "text": "'robot.enable' is part of the gated-motion set alongside init/relax/do/move/mode (it 'can bring a limp robot up as a side effect of being asked to drive'), and the engine's start sequence is explicit: connect \u2192 hello (API version) \u2192 health \u2192 init (gated) \u2192 enable (gated) \u2192 rules armed. A skill fired by a rule while the robot is not driving is refused by robotd ('press Start first'); the engine surfaces that as a named drop rather than retrying.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h23",
+      "kind": "honesty",
+      "text": "A rule that fires a skill before enable produces a named drop and no retry; init and enable each pass the three gate tests of c7; the engine's start log shows the six steps in order.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c33",
+      "kind": "requirement",
+      "text": "'rules check' validates every action a rule names against what THIS duck actually has: the skill list comes from robot.policies at check time (or from a recorded skills snapshot for offline checks), a rule naming a missing skill is reported by id with the robot's list \u2014 the same behaviour upstream gives a pad binding for a skill the robot does not have. Skill names are never assumed from a static table.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h24",
+      "kind": "honesty",
+      "text": "rules check against a --fake daemon reporting skills [a, b] refuses a rule naming c with 'c not in [a, b]' and the rule id; --replay with a recorded skills snapshot gives the same answer offline.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c34",
+      "kind": "boundary",
+      "text": "microduck-cli never writes /etc/robot/robotd.toml or the params file of a running daemon: policy slots change only through robot.loadPolicy / robotctl policy (robotd writes the key under a file lock), pad bindings only through pad.bind, config only through robotctl configure. The CLI surfaces upstream's durability verbatim \u2014 a policy load 'survives a reboot and survives updates'; 'policy reset' puts it back \u2014 so a trial never silently becomes the boot default without saying so.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h25",
+      "kind": "honesty",
+      "text": "A grep of microduck_cli/ finds no open of robotd.toml or updater.toml for writing; the only file the env noun writes is the sim params file, before robotd is started; policy load's text output contains 'survives a reboot' and names policy reset.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c35",
+      "kind": "requirement",
+      "text": "Own what you energize: on any abnormal engine exit (exception, Ctrl-C, socket error) the engine best-effort sends robot.stop, robot.pose {active:false}, robot.mouth 0 and robot.sound hold:false, each independently so one failure does not skip the rest, then exits non-zero naming what it could not send. It does NOT relax the robot (a deliberate hold must survive; relax collapses it). A dead socket is stated as the limit: robotd's own deadman zeroes velocity, but a held pose/mouth outlives us until its notification expires.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h26",
+      "kind": "honesty",
+      "text": "Killing the engine with SIGINT mid-behaviour against a --fake daemon yields exactly stop, pose active:false, mouth 0 and sound hold:false in its call log, no relax, and a non-zero exit naming any release that failed when one is forced to fail.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c36",
+      "kind": "requirement",
+      "text": "The JSON-RPC client is a background I/O thread pair (writer with a bounded outbound queue; reader correlating replies by id and fanning notifications such as robot.state to peek slots). The tick thread only does put_nowait: a full queue, a wedged socket or a slow daemon resolve to a named drop ('ipc-queue-full', 'ipc-down'), never to a blocked tick. Requests from verbs (do/look/init) wait on their own future with a timeout; notifications are fire-and-forget.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h27",
+      "kind": "honesty",
+      "text": "A test that wedges the fake socket shows the tick period unchanged (measured over 100 ticks) and an ipc-down drop; a test that fills the queue shows an ipc-queue-full drop and no blocked tick.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c39",
+      "kind": "requirement",
+      "text": "The shipped default rules are few and safety-first, mirroring default_rules.toml's discipline: an inhibit rule that disables every skill and the idle base while robot.state reports fallen (recovery is the daemon's/VelStand policy's job), a low-battery inhibit keyed on robot.health's charge fraction, and at most one or two reactions that are obviously correct in any room. Rule ids are a public interface pinned by a test; everything else is the operator's overlay.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h28",
+      "kind": "honesty",
+      "text": "The shipped rules file contains at most four rules; a test pins their ids; a replay of a recorded fall shows every skill and the idle base inhibited within one tick of fallen=true.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c40",
+      "kind": "boundary",
+      "text": "No secret ever reaches stdout or a --json payload: HF_TOKEN, wandb keys, DUCK_PIN and the sim's account token file are reported as set/unset by 'env doctor' and never echoed; the train lane passes them by environment to subprocesses, never on a command line (visible in /proc cmdline).",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h29",
+      "kind": "honesty",
+      "text": "A test sets HF_TOKEN, DUCK_PIN and a wandb key to sentinel strings and asserts none appears in any stdout, --json or stderr output of env doctor, train or duck verbs, nor in any subprocess argv the lane spawns.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c41",
+      "kind": "requirement",
+      "text": "'duck record' captures robot.state (via robot.subscribe), robot.health polls, pad.input and tof.frame to JSONL with monotonic timestamps \u2014 the artifact 'rules check --replay' and the engine's offline tests consume, and the source of truth for the duck sense-field vocabulary (resolving the parked unknown about the state payload). Stdout stays pure JSONL; all diagnostics go to stderr.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h30",
+      "kind": "honesty",
+      "text": "duck record against --fake writes one JSON object per line with a monotonic timestamp and source tag; stdout contains nothing but JSONL; rules check --replay accepts that file.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c42",
+      "kind": "requirement",
+      "text": "rules.toml carries a schema_version; the loader refuses an unknown or missing version fail-closed with the fix named. This is what lets the schema move to neurosymbolic-system later without silently reinterpreting an operator's overlay.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h31",
+      "kind": "honesty",
+      "text": "A rules.toml without schema_version or with an unknown one is refused with the expected version named; the shipped layer and every fixture carry the current version.",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "IPC protocol table \u2014 microduck_cli/ipc/proto.py: method names, API_VERSION, JOINT_NAMES (15), POLICY_OBS_LEN 61 / ACTION_LEN 14, JSON-RPC + duck error codes, and a continuous-vs-discrete classification (notification vs request) per method, transcribed from duck-ipc-proto/src/lib.rs at a pinned commit",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "A table test asserts every constant against a fixture copied from the pinned duck-ipc-proto commit and fails if the fixture and the table disagree",
+        "is_notification(method) returns True for robot.move/head/pose/mouth/sound-hold and False for robot.do/look/stop/enable/init/relax/setMode/loadPolicy",
+        "The module imports nothing outside the stdlib"
+      ],
+      "deps": [],
+      "covers": [
+        "c4",
+        "h3"
+      ],
+      "instruction": "Own only microduck_cli/ipc/proto.py and its tests; transcribe from the pinned duck-ipc-proto commit recorded in docs/, never from memory; keep the module stdlib-only."
+    },
+    {
+      "id": "t2",
+      "summary": "In-process fake robotd for tests \u2014 tests/fake_robotd.py: a unix-socket JSON-RPC 2.0 NDJSON server speaking the proto table (hello, robot.health, robot.subscribe/state stream at a configurable rate, robot.policies/skills, init/enable/relax/do/look/stop/move/pose/mouth/sound, pad.input tap, tof.frame) that records every call in order, can be told to refuse a method with a reason, answer METHOD_NOT_FOUND, report fallen, wedge, or delay replies",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "A test opens the fake, sends hello and gets API_VERSION back; an unknown method returns JSON-RPC -32601 with the method name",
+        "Call log preserves order and distinguishes notifications (no id) from requests (id) so later tests can assert exact sequences",
+        "wedge() makes the server stop reading; delay(ms) delays replies; both are used by the client tests",
+        "Safe under pytest -n auto: each instance binds its own short temp socket path (< 100 bytes)"
+      ],
+      "deps": [],
+      "covers": [
+        "h1"
+      ],
+      "instruction": "Own tests/fake_robotd.py and tests/test_fake_robotd.py only. Model the wire on duck-ipc-proto: JSON-RPC 2.0, one object per line, notifications have no id. Bind each instance to a short path under tempfile.mkdtemp (assert < 100 bytes). Expose: call_log (ordered, with a 'kind' of request|notification), refuse(method, code, message), wedge(), delay(ms), set_state(fallen=..., skills=[...]), and a state stream at a configurable Hz. No third-party imports."
+    },
+    {
+      "id": "t3",
+      "summary": "Rules data model \u2014 microduck_cli/behavior/rules.py + tests/test_rules.py: schema_version, [[react]] / [[inhibit]] / [modes], Predicate as field/op/value, RulesConfig.from_dict as the single fail-closed gate, per-id two-layer merge with enabled=false tombstones, cooldown_s / hysteresis / bounded duration_s, duck SENSE_FIELDS and ACTION vocabulary placeholders",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "from_dict refuses unknown field, callable value, unknown predicate field or op, negative cooldown, duplicate id, unbounded looping action, and names the rule id in every message",
+        "merge_rules: overlay entry with a matching id replaces wholesale keeping position; a new id appends; enabled=false disables the shipped id",
+        "A file without schema_version or with an unknown one is refused naming the expected version",
+        "Module imports nothing from the CLI, the IPC client, or any transport"
+      ],
+      "deps": [],
+      "covers": [
+        "c12",
+        "h11",
+        "c42",
+        "h31"
+      ],
+      "instruction": "Own microduck_cli/behavior/rules.py and tests/test_rules.py. Mirror reachy-mini-cli reachy/behavior/rules.py's from_dict gate and merge_rules semantics (read it, do not copy prose). Add schema_version = 1 as a required top-level int; refuse absent or unknown with the expected version in the message. Sense field and action name sets are frozen sets imported from behavior/sense.py once t4 lands \u2014 until then define them locally and mark with a TODO(t4) that t11 removes."
+    },
+    {
+      "id": "t4",
+      "summary": "Behavior model and sense snapshot \u2014 microduck_cli/behavior/model.py + sense.py + tests: duck channels (twist, head, pose, mouth, sound, skill), StopClass priorities, Lifetime, Behavior spec + contribution fn; Sense snapshot (fallen, gravity, battery_frac, hottest_servo_c, loop_hz, pad_active, remote_session, tof_nearest_m, skills, *_age_s) and SenseProviders as injected zero-arg peek callables degrading to None",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "A provider that raises, returns None, or is missing yields the same None field and never propagates",
+        "Arbitration test: a higher StopClass owns a contested channel; PASSIVE only fills an unclaimed one; UNSTOPPABLE/STOPPING block admission",
+        "Every sense field a rule predicate can name is declared once in a frozen set the rules module imports"
+      ],
+      "deps": [],
+      "covers": [
+        "c23"
+      ],
+      "instruction": "Own microduck_cli/behavior/model.py, sense.py and their tests. Channels are the duck's intent families: twist, head, pose, mouth, sound, skill. Sense fields are provisional (risk on this task): fallen, gravity (3), battery_frac, hottest_servo_c, loop_hz, pad_active, remote_session, tof_nearest_m, skills, plus *_age_s for each \u2014 expect a rename pass after t18's first real recording. No I/O, no transport, no CLI imports."
+    },
+    {
+      "id": "t5",
+      "summary": "Motion gate helper \u2014 microduck_cli/duck/gate.py + tests: the arm101 tri-state (TTY prompt / non-TTY dry-run plan with zero sends / non-TTY --apply proceeds), plus the four upstream safety sentences as constants rendered verbatim into every dry-run plan",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "consent(args, plan) returns PROMPT on a TTY without --apply, DRY_RUN on a non-TTY without --apply, APPLY with --apply; a pty test and a non-TTY test cover all three",
+        "Dry-run output contains the exact strings for init (moves every joint, on its stand), relax (collapses), stop (not an emergency stop) and community policies (verified by nobody)"
+      ],
+      "deps": [],
+      "covers": [
+        "c7",
+        "h8"
+      ],
+      "instruction": "Own microduck_cli/duck/gate.py and tests/test_gate.py. Copy the tri-state semantics from arm101-cli calibrate.py / set_baudrate.py (read, do not paste): TTY without --apply prompts; non-TTY without --apply prints a plan and performs zero sends; non-TTY with --apply proceeds. The four safety sentences are module constants quoted verbatim from microduck docs/robot/cheatsheet.md and duckctl.md. Use a pty in tests for the TTY branch."
+    },
+    {
+      "id": "t6",
+      "summary": "Duck addressing \u2014 microduck_cli/duck/addressing.py + tests: name -> <state>/<name>.sock and <name>-tof.sock, DUCK_SIM_STATE / DUCK_SIM_DUCK / --duck / --socket precedence, the 108-byte socket path check, and a 'no such duck' CliError that lists the sockets present in the state dir",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "resolve('duck-b') returns the expected paths with no network or subprocess call (asserted by monkeypatching socket and subprocess)",
+        "A resolved path longer than 100 bytes raises CliError exit 2 naming the limit and DUCK_SIM_STATE"
+      ],
+      "deps": [],
+      "covers": [
+        "c5",
+        "h6"
+      ],
+      "instruction": "Own microduck_cli/duck/addressing.py and tests/test_addressing.py. Precedence: --socket > --duck/DUCK_SIM_DUCK + DUCK_SIM_STATE (default ~/.cache/duck-sim) > first *.sock in the state dir. Return both <name>.sock and <name>-tof.sock. Raise CliError exit 2 with the sockets present when the name is unknown, and when a path exceeds 100 bytes."
+    },
+    {
+      "id": "t7",
+      "summary": "Static guard tests and CI wiring \u2014 tests/test_zero_deps.py (dependencies == [] and no extra names mjlab/warp-lang/torch/better-actuator-models), tests/test_no_hardware_paths.py (no serial/rustypot/dynamixel import, no /dev/tty open under microduck_cli/), tests/test_no_config_writes.py (no write-open of robotd.toml/updater.toml), tests/test_no_secrets_in_output.py scaffold (sentinel env values never appear in captured stdout/stderr/argv), and .markdownlint-cli2.yaml ignoring docs/specs/** and docs/plans/**",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "Each guard test fails when a fixture module violating it is added under microduck_cli/ (asserted by writing a temp module inside the test)",
+        "markdownlint-cli2 passes on the exported spec in docs/specs/ with the new ignore",
+        "The secrets test exposes a helper assert_no_secrets(captured, argv_log) that later noun tests reuse"
+      ],
+      "deps": [],
+      "covers": [
+        "c3",
+        "h5",
+        "c9",
+        "h10",
+        "c34",
+        "h25",
+        "c40",
+        "h29"
+      ],
+      "instruction": "Own the four guard tests, .markdownlint-cli2.yaml, and only the lines of .github/workflows/tests.yml you add. Each guard writes a temporary violating module under a tmp copy of microduck_cli/ to prove it fails. test_no_secrets_in_output exports assert_no_secrets(captured_text, argv_list) reused by t14/t15/t18/t19. Add docs/specs/** and docs/plans/** to markdownlint ignores; run markdownlint on both exported files."
+    },
+    {
+      "id": "t8",
+      "summary": "Host detection for the train lane \u2014 microduck_cli/env/hosts.py + tests: classify GB10 (DGX Spark), Jetson Thor, Jetson AGX Orin, other aarch64, x86_64 and 'hf-jobs' from uname/nvidia-smi/JetPack markers (all injected for tests), and report whether microduck_rl's torch source (cu129 index, linux-aarch64) applies",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "Fixtures for each of the five host classes produce the expected class name and torch-source verdict",
+        "An unknown host yields class 'unknown' with a remediation string, never an exception"
+      ],
+      "deps": [],
+      "covers": [
+        "c25",
+        "h16"
+      ],
+      "instruction": "Own microduck_cli/env/hosts.py and tests/test_hosts.py. Inputs (uname -m, nvidia-smi name, /etc/nv_tegra_release, CUDA version) are injected callables. Classes: gb10, jetson-thor, jetson-agx-orin, aarch64-other, x86_64, hf-jobs, unknown. torch-source verdict follows microduck_rl pyproject [tool.uv.sources] (cu129 index only on linux-aarch64) \u2014 cite the file in a comment."
+    },
+    {
+      "id": "t9",
+      "summary": "Noun scaffolds and lockstep docs test \u2014 register env/duck/policy/rules noun groups in cli/__init__.py with overview verbs only, split the explain catalog into per-noun modules (explain/env.py, duck.py, policy.py, rules.py merged into ENTRIES), make overview._VERBS and learn read the per-noun verb lists, and add tests/test_lockstep.py asserting every registered verb has a catalog entry, an overview line and a learn mention",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "teken cli doctor . --strict passes with the four empty nouns registered",
+        "Adding a verb to a noun without its catalog entry fails test_lockstep naming the verb",
+        "Later noun tasks only touch their own _commands/<noun>.py, explain/<noun>.py and tests/test_<noun>.py"
+      ],
+      "deps": [],
+      "covers": [
+        "c16",
+        "h12"
+      ],
+      "instruction": "Own cli/__init__.py, the four _commands/<noun>.py stubs (overview only), explain/{env,duck,policy,rules}.py, explain/catalog.py (merge per-noun ENTRIES), _commands/overview.py, _commands/learn.py, tests/test_lockstep.py. Each noun uses parser_class=type(p) per cli.py. After this task, wave-2 noun tasks may only edit their own _commands/<noun>.py, explain/<noun>.py, tests/test_<noun>.py. Keep teken cli doctor . --strict green. Decide the console-script rename question with the user before opening this PR (risk on this task)."
+    },
+    {
+      "id": "t10",
+      "summary": "JSON-RPC client \u2014 microduck_cli/ipc/client.py + tests: writer thread draining a bounded queue, reader thread correlating replies by id and fanning notifications (robot.state, pad.input, tof.frame, update.progress) into peek slots, hello handshake that records API_VERSION and refuses on JOINT_NAMES / obs / action mismatch naming both numbers, per-request timeouts, and named drops ipc-queue-full / ipc-down / method-not-found on stderr",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "Against the fake: notify() returns in under 1 ms with the socket wedged, and the drop counter shows ipc-queue-full once the queue is full",
+        "A method the fake answers with -32601 is logged as a named drop and does not raise into the caller's tick",
+        "A fake advertising a joint table of 14 names makes connect() raise CliError exit 2 whose message contains both 14 and 15",
+        "The module imports only stdlib"
+      ],
+      "deps": [
+        "t1",
+        "t2"
+      ],
+      "covers": [
+        "c4",
+        "h3",
+        "c36",
+        "h27"
+      ],
+      "instruction": "Own microduck_cli/ipc/client.py and tests/test_client.py. Writer thread + queue.Queue(maxsize=N); reader thread correlates by id and writes notifications into per-method peek slots (last value + monotonic timestamp). hello() records API_VERSION and compares JOINT_NAMES / obs / action lens from t1's table; mismatch raises CliError exit 2 naming both values. Drops go through a logger named microduck.sense (stderr-only) as [SENSE stage=ipc event=<reason>] lines. Test against tests/fake_robotd.py from t2."
+    },
+    {
+      "id": "t11",
+      "summary": "Rule engine and the single admission registry \u2014 microduck_cli/behavior/rule_engine.py + intents.py + tests: evaluates react/inhibit rules against the Sense snapshot each tick with cooldown, hysteresis and duration bounds; KindRegistry validates and admits intents from BOTH rule firings and an injected spool/CLI path through the same validator with per-axis limits and duration caps; every refusal is a named drop",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The same over-limit payload submitted via a rule and via registry.inject() yields byte-identical refusal text",
+        "A static test asserts exactly one KindRegistry class and one validate() entry point exist under microduck_cli/behavior/",
+        "A rule with cooldown_s=5 fires at most once in 250 simulated ticks at 50 Hz"
+      ],
+      "deps": [
+        "t3",
+        "t4"
+      ],
+      "covers": [
+        "c24",
+        "h15"
+      ],
+      "instruction": "Own microduck_cli/behavior/rule_engine.py, intents.py and tests. One KindRegistry class, one validate(kind, payload) entry; rule firings call the same admit() the CLI/spool path calls. Bounds are module constants with a cited precedent (reachy goto_intent MAX_DURATION_S pattern). Enforce cooldown/hysteresis/duration_s from t3. Never import ipc or cli modules."
+    },
+    {
+      "id": "t12",
+      "summary": "Engine core, tick seam, liveness, senselog, and the CLAUDE.md decision update \u2014 microduck_cli/behavior/engine.py (50 Hz loop with injected clock, engine.run(tick_seam=...) called once per tick), TickBus fault-isolating fan-out, liveness.py (state.json heartbeat, refuse_if_engine_live), senselog.py (stderr-only [SENSE stage= source= event=] lines); plus CLAUDE.md and cicd/SKILL.md rewritten to record decision c20 (engine lives here, extraction-first)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "With max_ticks=500 and a fake clock the loop is deterministic: two runs produce identical seam call sequences",
+        "A driver that raises is isolated by TickBus (logged, others still run) and the tick period is unchanged",
+        "A second engine started against the same state dir exits 1 with 'engine live' while the heartbeat is fresh, and starts once it is stale",
+        "The PR diff touches the CLAUDE.md neurosymbolic-system section and cicd/SKILL.md triage defaults, replacing the 'engine belongs upstream' guidance"
+      ],
+      "deps": [
+        "t4"
+      ],
+      "covers": [
+        "c23",
+        "c26",
+        "h17"
+      ],
+      "instruction": "Own microduck_cli/behavior/engine.py, liveness.py, senselog.py, tests/test_engine.py, CLAUDE.md, .claude/skills/cicd/SKILL.md (prose only, record the divergence in docs/skill-sources.md). engine.run(tick_seam=..., clock=..., max_ticks=...) calls seam(ctx) once per tick after the sink write; TickBus isolates driver exceptions. Heartbeat is state.json under the state dir with a monotonic stamp; refuse_if_engine_live() reads it. This is the first engine PR: rewrite the CLAUDE.md sibling section to record decision c20 and drop the 'engine belongs upstream' triage line from cicd."
+    },
+    {
+      "id": "t13",
+      "summary": "Sim stack params and lifecycle \u2014 microduck_cli/env/params.py (generate the robotd params toml naming policy files from the microduck clone, short state dir) and env/stack.py (build robotd/robotctl/tof/sounds with cargo, locate libonnxruntime in the RL venv, start duck-body on a port and robotd --sim or --fake with --socket, pidfiles, stop by pid only after /proc cmdline matches), all subprocess calls injected for tests",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "With injected fake subprocesses, up() issues the documented command lines in order and down() sends TERM only to pids whose cmdline matches, never by name",
+        "A stale pidfile whose pid now belongs to another process is removed without signalling it",
+        "The generated params toml round-trips through tomllib and names every policy file that exists in the clone"
+      ],
+      "deps": [
+        "t6"
+      ],
+      "covers": [
+        "c22",
+        "h14"
+      ],
+      "instruction": "Own microduck_cli/env/params.py, stack.py, tests/test_stack.py. Reproduce scripts/duck-sim from the pinned sim-remote-io commit step by step (read it, do not copy): cargo build -p robotd -p robotctl -p tof -p sounds; ORT = first libonnxruntime.so.* under <rl>/.venv; params toml names policy files found in the clone; duck-body --port N [--ducks --headless --scene]; robotd --sim 127.0.0.1:N --socket <state>/<name>.sock --params <file>, or --fake. Pidfiles per process; stop only after /proc/<pid>/cmdline contains the expected binary name. All subprocess.Popen calls go through an injected runner."
+    },
+    {
+      "id": "t14",
+      "summary": "Train lane \u2014 microduck_cli/train/lane.py + artifacts.py + tests: argv builders for list-envs, smoke (64 envs / 5 iters), train (local or --hf-jobs with flavor/namespace/timeout), play, export via scripts/export.py, publish, and install (robotctl policy add|load); a smoke-gate record that refuses a long run without a passed smoke; wandb optional (only passes --wandb-run-path or a key when configured); secrets passed by environment only",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "Each builder's argv equals the command in microduck_rl README/AGENTS.md for a fixture task id (table test)",
+        "train() without a recorded smoke pass raises CliError exit 1 naming the smoke command",
+        "assert_no_secrets passes over every argv the lane builds with HF_TOKEN and a wandb key set to sentinels",
+        "grep finds no import of mjlab_microduck anywhere under microduck_cli/"
+      ],
+      "deps": [
+        "t8"
+      ],
+      "covers": [
+        "c8",
+        "h9",
+        "c40",
+        "h29"
+      ],
+      "instruction": "Own microduck_cli/train/lane.py, artifacts.py, tests/test_lane.py. Argv builders only \u2014 never import mjlab_microduck. Commands from microduck_rl README/AGENTS.md/scripts/hf/README.md at the pinned commit: uv run --project <rl> list-envs | train <task> --env.scene.num-envs 64 --agent.max_iterations 5 (smoke) | train ... [--hf-jobs --flavor --namespace --timeout] | play | scripts/export.py | publish; install = robotctl policy add|load via the IPC client later. Smoke-gate record lives under the state dir. Secrets only via env of the child; never on argv."
+    },
+    {
+      "id": "t15",
+      "summary": "Env doctor \u2014 microduck_cli/env/doctor.py + tests: checks for the microduck clone on the pinned sim-remote-io commit, cargo >= 1.89, built daemons, RL venv with libonnxruntime, state dir length, free body port, host class (from hosts.py), hf auth / wandb / DUCK_PIN reported as set/unset only; each failing check names the upstream doc line; exit 2 when anything required is missing",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "On a fixture box with nothing installed the report lists every missing item with a URL into pollen-robotics docs and exits 2; on a complete fixture it exits 0",
+        "Output never contains the sentinel values of HF_TOKEN, DUCK_PIN or a wandb key (uses assert_no_secrets)",
+        "Report is rubric-shaped {healthy, checks:[{id, passed, severity, message, remediation}]} in --json"
+      ],
+      "deps": [
+        "t6",
+        "t8"
+      ],
+      "covers": [
+        "c5",
+        "h6",
+        "c25",
+        "h16",
+        "h20"
+      ],
+      "instruction": "Own microduck_cli/env/doctor.py and tests/test_env_doctor.py. Checks (each a rubric-shaped dict): microduck clone present and at the pinned commit, cargo >= 1.89, built binaries, RL venv + libonnxruntime, state dir path length, body port free, host class from t8, hf auth / wandb / DUCK_PIN as set|unset. Every remediation carries a URL into the upstream docs. All probes injected for tests; exit 2 on any required failure."
+    },
+    {
+      "id": "t16",
+      "summary": "Target sink, abnormal-exit release, human-driving gate, and idle base \u2014 microduck_cli/behavior/sink.py (intents -> IPC client, notifications for continuous channels, requests for discrete, no filtering), release.py (stop, pose active:false, mouth 0, sound hold:false \u2014 each independent, never relax), human_gate.py (pad.input activity or robot.remoteSessionActive withholds twist/head/look/pose/skill/mode as 'human-driving' drops while sound/mouth pass), idle.py (feel-alive base, silent when fallen/disabled/human)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "SIGINT mid-behaviour against the fake yields exactly stop, pose active:false, mouth 0, sound hold:false in the call log, no relax, and exit non-zero naming a release the fake was told to refuse",
+        "With a simulated pad.input stream the call log has zero motion calls over 200 ticks, a human-driving drop count on stderr, and sound/mouth calls continue",
+        "A rule's step command reaches the fake unchanged (no EMA or rate limit applied client-side)",
+        "Idle emits nothing while fallen=True, enabled=False, or the human gate is active"
+      ],
+      "deps": [
+        "t10",
+        "t12"
+      ],
+      "covers": [
+        "c31",
+        "h22",
+        "c35",
+        "h26",
+        "h2"
+      ],
+      "instruction": "Own microduck_cli/behavior/sink.py, release.py, human_gate.py, idle.py and their tests. sink: continuous channels -> client.notify, discrete -> client.request, no smoothing or rate limit (h2). release: four independent best-effort sends in a finally block, never robot.relax, exit non-zero naming failures. human_gate: pad.input activity within N ms or remoteSessionActive => withhold twist/head/look/pose/skill/mode with a human-driving drop; sound and mouth pass. idle: PASSIVE base, silent when fallen, not enabled, or gated. Test against t2's fake with SIGINT delivered mid-behaviour."
+    },
+    {
+      "id": "t17",
+      "summary": "Shipped default rules, skill validation, and JSONL replay \u2014 microduck_cli/behavior/default_rules.toml (fallen-inhibit, low-battery-inhibit, at most two reactions; ids pinned by test), behavior/skills.py (validate rule actions against robot.policies or a recorded skills snapshot), behavior/replay.py (evaluate rules over a recorded JSONL stream offline)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The shipped file has at most four rules and a test pins their ids and fields",
+        "Replaying a fixture with fallen=true shows every skill and the idle base inhibited within one tick",
+        "validate() against skills [a, b] refuses a rule naming c with the message 'c not in [a, b]' and the rule id, identically online (fake robot.policies) and from a snapshot"
+      ],
+      "deps": [
+        "t3",
+        "t11"
+      ],
+      "covers": [
+        "c39",
+        "h28",
+        "c33",
+        "h24"
+      ],
+      "instruction": "Own microduck_cli/behavior/default_rules.toml, skills.py, replay.py and their tests. Shipped rules: fallen-inhibit (disable all skills + idle), low-battery-inhibit, at most two reactions; document why each is safe in any room, ids pinned by test. skills.validate(rules, skills_list) with the exact message 'c not in [a, b]'. replay.run(rules, jsonl_path) evaluates tick by tick using t11's engine with an injected clock."
+    },
+    {
+      "id": "t18",
+      "summary": "duck noun \u2014 microduck_cli/cli/_commands/duck.py + explain/duck.py + tests/test_duck.py: health, monitor (--json NDJSON), init, relax (--yes), enable, do, mode, look, stop, move (deadman-refreshed robot.move), quack, configure --list, and record (JSONL of state/health/pad/tof with monotonic timestamps, pure stdout); every verb in robotctl's words plus move; init/relax/enable/do/move/mode gated via gate.py; upstream durability and safety sentences verbatim",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "A table test pins the verb list against robotctl's Namespace/RobotCommand names with exactly one addition, move",
+        "Each gated verb passes the three gate tests (pty prompt, non-TTY dry-run with zero calls in the fake log, non-TTY --apply sends)",
+        "record against the fake writes one JSON object per line with monotonic ts and source tag, stdout contains nothing else, and replay.py accepts the file",
+        "Every verb runs unattended with --json --apply in a non-TTY test and prompts in a pty test"
+      ],
+      "deps": [
+        "t5",
+        "t6",
+        "t10"
+      ],
+      "covers": [
+        "c6",
+        "h7",
+        "c7",
+        "h8",
+        "c32",
+        "h23",
+        "c41",
+        "h30",
+        "c27",
+        "h18"
+      ],
+      "instruction": "Own _commands/duck.py, explain/duck.py, tests/test_duck.py only. Verb names and flags mirror robotctl (read robotctl/src/main.rs at the pinned commit); the only addition is move, which sends robot.move notifications at intent rate and exits on Ctrl-C with a stop. Gate init/relax/enable/do/move/mode through t5. record writes JSONL to stdout only; diagnostics to stderr. Reuse assert_no_secrets. Every verb: --json, catalog entry, pty + non-TTY tests."
+    },
+    {
+      "id": "t19",
+      "summary": "policy noun \u2014 microduck_cli/cli/_commands/policy.py + explain/policy.py + tests/test_policy.py: list/load/add/remove/reset/search/check/update via robot.loadPolicy and policy.* calls, pad bindings/bind/reset via pad.*, the train sub-verbs (smoke, train, play, export, publish, install) driving train/lane.py, load output stating 'survives a reboot' and naming policy reset; gated per c7",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "policy load issues robot.loadPolicy only and never opens a config file (test_no_config_writes covers the module); its text output contains 'survives a reboot' and 'policy reset'",
+        "policy train without a smoke record exits 1 naming the smoke command; with --hf-jobs the argv matches scripts/hf/README.md",
+        "Every verb takes --json and has a catalog entry (test_lockstep)"
+      ],
+      "deps": [
+        "t10",
+        "t14"
+      ],
+      "covers": [
+        "c8",
+        "h9",
+        "c34",
+        "h25"
+      ],
+      "instruction": "Own _commands/policy.py, explain/policy.py, tests/test_policy.py only. Slot and skill changes go through robot.loadPolicy / policy.* / pad.* calls on the client \u2014 never a file. Load output must include 'survives a reboot' and name 'policy reset'. Train sub-verbs call t14's builders through an injected runner; train refuses without a smoke record. Gate load/add/reset/bind through t5."
+    },
+    {
+      "id": "t20",
+      "summary": "env noun \u2014 microduck_cli/cli/_commands/env.py + explain/env.py + tests/test_env.py: doctor, up (--sim | --fake, --ducks N, --scene, --headless), down, status, hosts; wraps scripts/duck-sim when the clone has it, otherwise drives env/stack.py; exit 2 on a failed doctor",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "env up --fake with injected subprocesses reaches a 'healthy' report from the fake within the timeout and env down leaves no tracked pid",
+        "env doctor output on the no-tools fixture matches the doctor module's report and exits 2",
+        "No verb requires a params file, ORT path or socket path from the operator; each is derived or reported"
+      ],
+      "deps": [
+        "t13",
+        "t15"
+      ],
+      "covers": [
+        "c22",
+        "h14",
+        "h20"
+      ],
+      "instruction": "Own _commands/env.py, explain/env.py, tests/test_env.py only. If <clone>/scripts/duck-sim exists, shell out to it with the DUCK_SIM_* env mapped from flags; otherwise drive t13. doctor delegates to t15 and exits 2 on failure. up waits for robot.health healthy via the client with a timeout and prints the socket path; down verifies nothing is left listening."
+    },
+    {
+      "id": "t21",
+      "summary": "rules noun with engine and intent verbs \u2014 microduck_cli/cli/_commands/rules.py + explain/rules.py + tests/test_rules_cli.py: overview, list, check (--replay <jsonl>, --skills <snapshot>), engine run|start|stop|status (start sequence connect -> hello -> health -> init -> enable -> armed, gated steps), and intent <kind> [payload] injecting through the one registry",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "rules check on a malformed file exits 0 with the content issue named by rule id; against the fake reporting skills [a, b] a rule naming c is refused with 'c not in [a, b]'",
+        "engine run against the fake logs the six start steps in order; a rule that fires a skill before enable is a named drop with no retry",
+        "rules intent with an over-limit payload gets the same refusal text a rule would (shared test with t11)"
+      ],
+      "deps": [
+        "t11",
+        "t16",
+        "t17"
+      ],
+      "covers": [
+        "c12",
+        "c24",
+        "h15",
+        "c33",
+        "h24",
+        "c32",
+        "h23"
+      ],
+      "instruction": "Own _commands/rules.py, explain/rules.py, tests/test_rules_cli.py only. check: exit 0 on content issues (rubric), naming rule ids; --replay and --skills use t17. engine run: connect -> hello -> health -> init (gated) -> enable (gated) -> armed, each logged; start/stop/status use t12's heartbeat; refuse a second engine. intent <kind> [json] calls the one registry from t11 and prints the admission or the refusal text verbatim."
+    },
+    {
+      "id": "t22",
+      "summary": "Lockstep docs and upstream links \u2014 README, explain root entry, overview and learn text for the four nouns; every robot/training explain entry and CliError remediation carries a URL into pollen-robotics/microduck or microduck_rl docs; a test asserts no explain body restates a robotctl command table longer than three lines; docs/skill-sources.md unchanged",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "tests/test_links.py finds a pollen-robotics URL in every explain entry under duck/policy/env/rules and in every remediation string those modules raise",
+        "markdownlint-cli2 and test_lockstep pass; teken cli doctor . --strict passes"
+      ],
+      "deps": [
+        "t18",
+        "t19",
+        "t20",
+        "t21"
+      ],
+      "covers": [
+        "c17",
+        "h13",
+        "c16",
+        "h12"
+      ],
+      "instruction": "Own README.md, the explain root entry, overview/learn prose, docs/ and tests/test_links.py. Every explain body and remediation for a robot or training topic links to the owning upstream page (cheatsheet.md, duckctl.md, policy-manifest.md, architecture.md, microduck_rl AGENTS.md, scripts/hf/README.md). The test also fails on any explain body containing more than three consecutive robotctl command lines. Run markdownlint, test_lockstep and the rubric gate."
+    },
+    {
+      "id": "t23",
+      "summary": "On-box verification against robotd --fake and --sim, and the success-signal record \u2014 build the pinned sim-remote-io commit, run the six c30 checks on the dev box, record each command with its expected output in docs/verification/<date>-sim-bringup.md, add an optional CI job that runs the operate verbs against robotd --fake when cargo and the clone are available (skipped otherwise), and pin the upstream commit hashes in docs/",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "docs/verification/ records the six checks with pass/fail and the exact output for --fake and --sim on this box, plus the microduck and microduck_rl commit hashes used",
+        "The operate verbs pass unchanged against robotd --fake (real binary) and against the in-process fake; any divergence is filed as an issue before merge",
+        "The optional CI job is green when it runs and 'skipped' (not failed) when cargo or the clone is absent"
+      ],
+      "deps": [
+        "t22"
+      ],
+      "covers": [
+        "c1",
+        "h1",
+        "c28",
+        "h19",
+        "c29",
+        "h20",
+        "c30",
+        "h21"
+      ],
+      "instruction": "Own docs/verification/<date>-sim-bringup.md, the optional CI job in .github/workflows/tests.yml, and the pinned-commit note in docs/. On this box: clone microduck at the pinned sim-remote-io commit and microduck_rl at its pinned commit, uv sync the RL repo with UV_HTTP_TIMEOUT=600, build, run env up --fake then --sim, and execute the six c30 checks, pasting exact outputs. Run the operate test-suite against the real robotd --fake and file any divergence from the Python fake as an issue before merge. The CI job must skip (not fail) when cargo or the clone is absent."
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "sim-remote-io is unmerged (32 ahead / 87 behind main on 2026-09-03); pin one commit for t13/t23 and re-validate when it merges \u2014 API_VERSION and body protocol may move",
+      "kind": "follow_up",
+      "task_id": "t23",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "Native aarch64 build of robotd/robotctl/tof/sounds and duck-body (warp/mujoco on GB10) unverified on this box; settle in t23 before anything depends on --sim timings",
+      "kind": "unknown_nonblocking",
+      "task_id": "t23",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r3",
+      "text": "CI cannot run the real robotd --fake without cargo and the upstream clone: the in-process Python fake (t2) is the CI surface and the real --fake run is the on-box step in t23; a behaviour the Python fake gets wrong stays invisible until t23",
+      "kind": "unknown_nonblocking",
+      "task_id": "t2",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r4",
+      "text": "robot.state / robot.health payload field names are unread; t4's Sense fields are provisional until t18's first recording against the real daemon, after which t4/t17 may need a field-rename pass",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r5",
+      "text": "Jetson Thor / AGX Orin torch+warp path for microduck_rl is unverified; t8/t15 classify the host but cannot promise training runs there until tried on a board",
+      "kind": "unknown_nonblocking",
+      "task_id": "t8",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r6",
+      "text": "Upstream may ship the deferred WebSocket JSON-RPC surface (remote-webrtc.md \u00a711); keep the transport behind the t10 client seam so a second transport is additive",
+      "kind": "unknown_nonblocking",
+      "task_id": "t10",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r7",
+      "text": "Console-script half-rename (microduck vs microduck-cli) is still open; decide whether it rides with t9's scaffold PR or ships alone first \u2014 it touches pyproject, prog=, every _commands module, catalog, README and tests",
+      "kind": "follow_up",
+      "task_id": "t9",
+      "resolved": false,
+      "resolution": ""
+    }
+  ],
+  "obligations": [
+    {
+      "id": "o1",
+      "task_id": "t1",
+      "criterion_index": 1,
+      "criterion_snapshot": "A table test asserts every constant against a fixture copied from the pinned duck-ipc-proto commit and fails if the fixture and the table disagree",
+      "seam": "ipc/proto.py vs the pinned duck-ipc-proto fixture",
+      "behavior": "every method name, API_VERSION, JOINT_NAMES and obs/action length equals the fixture",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o2",
+      "task_id": "t2",
+      "criterion_index": 2,
+      "criterion_snapshot": "Call log preserves order and distinguishes notifications (no id) from requests (id) so later tests can assert exact sequences",
+      "seam": "tests/fake_robotd.py call log",
+      "behavior": "records every call in arrival order and marks notifications (no id) apart from requests",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o3",
+      "task_id": "t3",
+      "criterion_index": 1,
+      "criterion_snapshot": "from_dict refuses unknown field, callable value, unknown predicate field or op, negative cooldown, duplicate id, unbounded looping action, and names the rule id in every message",
+      "seam": "RulesConfig.from_dict",
+      "behavior": "refuses each documented bad shape naming the rule id; never loads a partially valid file",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o4",
+      "task_id": "t4",
+      "criterion_index": 1,
+      "criterion_snapshot": "A provider that raises, returns None, or is missing yields the same None field and never propagates",
+      "seam": "SenseProviders peek boundary",
+      "behavior": "a raising, missing or None provider yields None on the snapshot and never propagates into the tick",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o5",
+      "task_id": "t5",
+      "criterion_index": 1,
+      "criterion_snapshot": "consent(args, plan) returns PROMPT on a TTY without --apply, DRY_RUN on a non-TTY without --apply, APPLY with --apply; a pty test and a non-TTY test cover all three",
+      "seam": "duck/gate.py consent()",
+      "behavior": "non-TTY without --apply performs zero sends; --apply proceeds; TTY prompts",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o6",
+      "task_id": "t6",
+      "criterion_index": 1,
+      "criterion_snapshot": "resolve('duck-b') returns the expected paths with no network or subprocess call (asserted by monkeypatching socket and subprocess)",
+      "seam": "duck/addressing.resolve()",
+      "behavior": "resolves a name to socket paths with no network or subprocess call",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o7",
+      "task_id": "t7",
+      "criterion_index": 1,
+      "criterion_snapshot": "Each guard test fails when a fixture module violating it is added under microduck_cli/ (asserted by writing a temp module inside the test)",
+      "seam": "static guard tests",
+      "behavior": "a violating module under microduck_cli/ fails the matching guard (deps, hardware paths, config writes, secrets)",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o8",
+      "task_id": "t8",
+      "criterion_index": 1,
+      "criterion_snapshot": "Fixtures for each of the five host classes produce the expected class name and torch-source verdict",
+      "seam": "env/hosts.classify()",
+      "behavior": "each of the five host fixtures yields its class and torch-source verdict",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o9",
+      "task_id": "t9",
+      "criterion_index": 2,
+      "criterion_snapshot": "Adding a verb to a noun without its catalog entry fails test_lockstep naming the verb",
+      "seam": "tests/test_lockstep.py",
+      "behavior": "a registered verb without a catalog entry, overview line and learn mention fails the test naming the verb",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o10",
+      "task_id": "t10",
+      "criterion_index": 1,
+      "criterion_snapshot": "Against the fake: notify() returns in under 1 ms with the socket wedged, and the drop counter shows ipc-queue-full once the queue is full",
+      "seam": "ipc/client.notify() on the tick thread",
+      "behavior": "returns in under 1 ms with the socket wedged and counts an ipc-queue-full drop instead of blocking",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o11",
+      "task_id": "t11",
+      "criterion_index": 1,
+      "criterion_snapshot": "The same over-limit payload submitted via a rule and via registry.inject() yields byte-identical refusal text",
+      "seam": "the single KindRegistry",
+      "behavior": "rule-fired and injected intents receive byte-identical refusal text for the same over-limit payload",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o12",
+      "task_id": "t12",
+      "criterion_index": 3,
+      "criterion_snapshot": "A second engine started against the same state dir exits 1 with 'engine live' while the heartbeat is fresh, and starts once it is stale",
+      "seam": "behavior/liveness.refuse_if_engine_live()",
+      "behavior": "a second engine exits 1 while the heartbeat is fresh and starts once it is stale",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o13",
+      "task_id": "t13",
+      "criterion_index": 1,
+      "criterion_snapshot": "With injected fake subprocesses, up() issues the documented command lines in order and down() sends TERM only to pids whose cmdline matches, never by name",
+      "seam": "env/stack.down()",
+      "behavior": "signals only pids whose /proc cmdline matches the expected binary; never kills by name",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o14",
+      "task_id": "t14",
+      "criterion_index": 2,
+      "criterion_snapshot": "train() without a recorded smoke pass raises CliError exit 1 naming the smoke command",
+      "seam": "train/lane.train() smoke gate",
+      "behavior": "refuses to build a long-run argv without a recorded smoke pass, naming the smoke command",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o15",
+      "task_id": "t15",
+      "criterion_index": 1,
+      "criterion_snapshot": "On a fixture box with nothing installed the report lists every missing item with a URL into pollen-robotics docs and exits 2; on a complete fixture it exits 0",
+      "seam": "env/doctor report",
+      "behavior": "every failing required check carries an upstream doc URL and the command exits 2",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o16",
+      "task_id": "t16",
+      "criterion_index": 1,
+      "criterion_snapshot": "SIGINT mid-behaviour against the fake yields exactly stop, pose active:false, mouth 0, sound hold:false in the call log, no relax, and exit non-zero naming a release the fake was told to refuse",
+      "seam": "behavior/release.py on abnormal exit",
+      "behavior": "sends stop, pose active:false, mouth 0, sound hold:false independently and never robot.relax",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o17",
+      "task_id": "t17",
+      "criterion_index": 2,
+      "criterion_snapshot": "Replaying a fixture with fallen=true shows every skill and the idle base inhibited within one tick",
+      "seam": "behavior/replay.py on a recorded fall",
+      "behavior": "every skill and the idle base are inhibited within one tick of fallen=true",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o18",
+      "task_id": "t18",
+      "criterion_index": 2,
+      "criterion_snapshot": "Each gated verb passes the three gate tests (pty prompt, non-TTY dry-run with zero calls in the fake log, non-TTY --apply sends)",
+      "seam": "duck noun gated verbs",
+      "behavior": "init/relax/enable/do/move/mode each pass the three gate tests against the fake's call log",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o19",
+      "task_id": "t19",
+      "criterion_index": 1,
+      "criterion_snapshot": "policy load issues robot.loadPolicy only and never opens a config file (test_no_config_writes covers the module); its text output contains 'survives a reboot' and 'policy reset'",
+      "seam": "policy load path",
+      "behavior": "issues robot.loadPolicy only, never opens a config file, and prints 'survives a reboot' and 'policy reset'",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o20",
+      "task_id": "t20",
+      "criterion_index": 1,
+      "criterion_snapshot": "env up --fake with injected subprocesses reaches a 'healthy' report from the fake within the timeout and env down leaves no tracked pid",
+      "seam": "env up --fake / env down",
+      "behavior": "reaches healthy within the timeout and leaves no tracked pid after down",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o21",
+      "task_id": "t21",
+      "criterion_index": 2,
+      "criterion_snapshot": "engine run against the fake logs the six start steps in order; a rule that fires a skill before enable is a named drop with no retry",
+      "seam": "rules engine run start sequence",
+      "behavior": "connect, hello, health, init, enable, armed appear in order; a skill before enable is a named drop with no retry",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o22",
+      "task_id": "t22",
+      "criterion_index": 1,
+      "criterion_snapshot": "tests/test_links.py finds a pollen-robotics URL in every explain entry under duck/policy/env/rules and in every remediation string those modules raise",
+      "seam": "tests/test_links.py",
+      "behavior": "every explain entry and remediation under the four nouns carries a pollen-robotics docs URL",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o23",
+      "task_id": "t23",
+      "criterion_index": 2,
+      "criterion_snapshot": "The operate verbs pass unchanged against robotd --fake (real binary) and against the in-process fake; any divergence is filed as an issue before merge",
+      "seam": "operate verbs vs the real robotd --fake",
+      "behavior": "the duck verb test-suite passes unchanged against the real daemon on this box, with any divergence filed",
+      "origin": "llm",
+      "status": "approved"
+    }
+  ]
+}

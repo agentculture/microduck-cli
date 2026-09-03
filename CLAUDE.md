@@ -222,8 +222,8 @@ Day to day: **`cicd`** (the PR lane; needs `devex` ≥0.21 on PATH),
 **`communicate`** (cross-repo issues + mesh messages; needs `agtag`; posts auto-sign
 `- microduck-cli (Claude)`), **`version-bump`**, **`run-tests`**, **`sonarclaude`**,
 **`ask-colleague`**, and the devague chain (`scope` → `think` → `challenge` →
-`spec-to-plan` → `assign-to-workforce` → `summarize-delivery`, with `deviate` as the
-mid-run escape hatch).
+`spec-to-plan` → `assign-to-workforce` → `validate-delivery` → `summarize-delivery`,
+with `deviate` as the mid-run escape hatch).
 
 Reach for **`ask-colleague`** reflexively for a diverse second opinion —
 `review`/`explore` are read-only and always safe; side-effecting `write --apply` /
