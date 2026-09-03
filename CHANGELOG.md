@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-04
+
+### Added
+
+- The duck domain, end to end, on a simulated MicroDuck: four noun groups — `env` (doctor / up / down / status / hosts for the MuJoCo twin or the `--fake` body, built from the pinned `pollen-robotics/microduck` `sim-remote-io` commit), `duck` (robotctl's verbs — health, monitor, version, init, relax, enable, do, mode, look, stop, quack, configure --list — plus `move` and `record`), `policy` (list / load / add / remove / reset, robotctl-line verbs for updater-only ops, and the `microduck_rl` train lane: smoke / train / play / export / publish / infer / install), and `rules` (list / check / engine run|start|stop|status / intent).
+- A stdlib-only JSON-RPC 2.0 client for robotd's unix socket (`microduck_cli/ipc/`): writer/reader threads, bounded queue, `hello` + joint-table check, peek slots for the state stream, named drops; the protocol table is transcribed from the pinned `duck-ipc-proto` (API_VERSION 16).
+- The behaviour engine (`microduck_cli/behavior/`), built extraction-first behind the seams neurosymbolic-system will take: 50 Hz tick with `tick_seam` and a fault-isolating `TickBus`, heartbeat liveness, stderr-only senselog, data-only rules (schema_version, per-id two-layer merge, tombstones), the single `KindRegistry` admission path for rule-fired and agent-injected intents, `RobotSink` wire encoding with no client-side filtering, release-on-abnormal-exit (never `relax`), the human-driving gate (a person on the pad owns motion), a passive idle base, three shipped safety rules, skills validation for both daemon APIs, and JSONL record/replay.
+- Gated motion the arm101 way on every verb that moves or de-energises the duck: TTY prompt, non-TTY dry-run plan with zero sends, `--apply` to proceed; upstream's safety sentences verbatim.
+- An in-process fake robotd for tests (`tests/fake_robotd.py`) aligned to the probed daemon, four static guard tests (zero deps, no hardware paths, no config writes, no secrets in output), a lockstep docs test, an upstream-links test, and an opt-in live suite (`tests/live`, `MICRODUCK_LIVE=1 uv run pytest -m live -n0`) that operates the CLI against the real daemon on both bodies; an optional `real-daemon` CI job runs it.
+- `docs/upstream-pins.md` (the pinned upstream commits), `docs/operating-the-duck.md` (the six-command walkthrough), `docs/verification/2026-09-04-sim-bringup.md` (the on-box record), the devague spec, plan, delivery summary and ledger under `docs/specs`, `docs/plans`, `docs/deliveries` and `.devague/`, and the vendored `validate-delivery` skill.
+- Both console scripts install: `microduck` and `microduck-cli`.
+
+### Changed
+
+- CLAUDE.md records decision c20: the engine lives in this repo now and neurosymbolic-system is extracted from it later; the package inventory and the cicd triage prose follow.
+- `explain` is split per noun with the verb lists driving `overview` and `learn`; the root entry describes the MicroDuck CLI, not a template.
+
+### Fixed
+
+- Nothing from a prior release — this is the first duck release. Defects found by the live runs before merge: `achieved_hz` reported work capacity instead of cadence; the intent yaw axis was named `wz` instead of the wire's `vyaw`; the train lane ignored `DUCK_SIM_RL` and leaked a raw FileNotFoundError; `robot.subscribe`'s `hz` must be an integer; `duck look` required `--y`.
+
 ## [0.8.0] - 2026-08-29
 
 ### Changed

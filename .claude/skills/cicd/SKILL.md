@@ -168,11 +168,22 @@ class across AgentCulture repos), test or doc requests, style nits
 aligned with workspace conventions.
 
 Default to **PUSHBACK** for: architecture opinions that conflict with
-`CLAUDE.md` or the all-backends rule; scaffold false-positives — this
-repo has no MicroDuck control code yet, so "this CLI doesn't do
-anything with the robot" is a roadmap item, not a PR defect. Anything
-proposing a second runtime loop in `microduck_cli/` is a PUSHBACK too:
-that code belongs upstream in `neurosymbolic-system` (see `CLAUDE.md`).
+`CLAUDE.md` or the all-backends rule; scaffold false-positives — the
+duck layer is still landing, so "this CLI doesn't do anything with the
+robot yet" is a roadmap item, not a PR defect. "The tick engine belongs
+upstream in `neurosymbolic-system`" is also a PUSHBACK: decision c20
+(recorded in `CLAUDE.md`) puts the engine in `microduck_cli/behavior/`
+now, built extraction-first, with `neurosymbolic-system` extracted later
+from reachy-mini-cli plus this engine.
+
+What a reviewer should check instead is that the **seams stay pure**, so
+the later extraction is a move and not a rewrite: `TargetSink` and
+`SenseProviders` remain the only ways a pose leaves and a reading enters;
+`tick_seam` remains the ONE per-tick integration point (a second loop or
+a second process IS a defect); rules stay data, not code; there is one
+admission registry; liveness stays a heartbeat, not a flag file; and
+nothing under `behavior/` imports a transport, an SDK, or a CLI module
+beyond `cli/_errors`. A comment naming one of those is a **FIX**.
 
 ### Alignment-delta rule
 

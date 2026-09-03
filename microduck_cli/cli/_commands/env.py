@@ -1,0 +1,637 @@
+"""``microduck-cli env`` — noun group for the MicroDuck environment.
+
+Mirrors :mod:`microduck_cli.cli._commands.cli` — the nested subparsers are
+built with ``parser_class=type(p)`` so a parse error under this noun keeps
+the structured ``error:``/``hint:`` contract instead of argparse's default
+exit 2, and a bare ``microduck-cli env`` prints this noun's overview.
+
+Five verbs today: ``doctor`` (delegates to :mod:`microduck_cli.env.doctor`),
+``up``/``down``/``status`` (drive :mod:`microduck_cli.env.stack`, or shell out
+to ``<microduck clone>/scripts/duck-sim`` when ``--upstream-launcher`` is
+passed and the clone has it), and ``hosts`` (delegates to
+:mod:`microduck_cli.env.hosts`). Every clone path, the ONNX runtime path and
+the per-duck params file are derived — never typed by the operator.
+
+Test seams
+----------
+Every side effect this module performs is reachable through a module-level
+attribute a test can monkeypatch, mirroring the injection style
+``env/stack.py`` itself uses:
+
+* ``_stack_runner`` / ``_stack_proc_cmdline`` / ``_stack_exists`` /
+  ``_stack_kill`` / ``_stack_sleep`` / ``_stack_monotonic`` — passed straight
+  into every :class:`~microduck_cli.env.stack.SimStack` this module builds.
+* ``_default_probe`` — the ``env doctor`` probe factory
+  (default: :func:`microduck_cli.env.doctor.default_probe`).
+* ``_client_factory(socket_path) -> RobotClient`` — the one JSON-RPC client both
+  probes speak through (default: :func:`_default_client`). There is no private
+  wire implementation in this module: :mod:`microduck_cli.ipc.client` owns the
+  protocol, this module owns the waiting policy.
+* ``_wait_for_healthy(socket_path, timeout) -> bool`` — the ``env up``
+  post-bring-up health wait (default: :func:`_default_wait_for_healthy`).
+* ``_hello_probe(socket_path) -> bool`` — the single-shot ``env status``
+  handshake probe (default: :func:`_default_hello_probe`).
+* ``_port_listening(port) -> bool`` — the ``env down`` TCP knock.
+* ``_subprocess_run`` — the ``--upstream-launcher`` shell-out.
+
+Verb summaries live in :mod:`microduck_cli.explain.env` (``VERBS``), which the
+global ``overview``/``learn`` surfaces read too — so adding a verb here means
+editing this file, ``explain/env.py`` and ``tests/test_env.py``, and nothing
+else.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import socket as _socket
+import subprocess  # nosec B404 - only used with a fixed argv, never shell=True
+import time
+from collections.abc import Callable
+
+from microduck_cli.cli._commands.overview import emit_overview
+from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_SUCCESS, CliError
+from microduck_cli.cli._output import PROG, STATE_DIR_HELP, emit_diagnostic, emit_result
+from microduck_cli.duck.addressing import DEFAULT_STATE_DIR
+from microduck_cli.env import doctor as _doctor
+from microduck_cli.env import hosts as _hosts
+from microduck_cli.env.stack import (
+    ProcCmdline,
+    Runner,
+    SimStack,
+    UpReport,
+    default_proc_cmdline,
+    default_runner,
+)
+from microduck_cli.explain.env import VERBS
+from microduck_cli.ipc import proto as _proto
+from microduck_cli.ipc.client import RobotClient, RpcError
+
+_SUBJECT = "microduck-cli env"
+_PURPOSE = "Bring up and doctor the MicroDuck environment — the simulator stack or a real duck."
+
+#: The upstream doc every env remediation points at.
+_UPSTREAM_SIM_DOC = (
+    "https://github.com/pollen-robotics/microduck/blob/sim-remote-io/docs/design/simulation.md"
+)
+
+#: Timeouts for the post-bring-up `hello` + `robot.health` wait in `env up`.
+_FAKE_HEALTH_TIMEOUT_S = 60.0
+_SIM_HEALTH_TIMEOUT_S = 120.0
+_RPC_ROUNDTRIP_TIMEOUT_S = 2.0
+_HEALTH_POLL_INTERVAL_S = 0.5
+
+# ---------------------------------------------------------------------------
+# Test seams — every side effect goes through one of these module attributes.
+# ---------------------------------------------------------------------------
+
+_stack_runner: Runner = default_runner
+_stack_proc_cmdline: ProcCmdline = default_proc_cmdline
+_stack_exists: Callable[[str], bool] = os.path.exists
+_stack_kill: Callable[[int, int], None] = os.kill
+_stack_sleep: Callable[[float], None] = time.sleep
+_stack_monotonic: Callable[[], float] = time.monotonic
+_subprocess_run: Callable[..., subprocess.CompletedProcess] = subprocess.run
+
+
+def _make_stack(clone: str, rl: str, state_dir: str) -> SimStack:
+    return SimStack(
+        clone=clone,
+        rl=rl,
+        state_dir=state_dir,
+        runner=_stack_runner,
+        proc_cmdline=_stack_proc_cmdline,
+        exists=_stack_exists,
+        kill=_stack_kill,
+        sleep=_stack_sleep,
+        monotonic=_stack_monotonic,
+    )
+
+
+def _resolve_state_dir(explicit: str | None) -> str:
+    if explicit:
+        return explicit
+    raw = os.environ.get("DUCK_SIM_STATE") or DEFAULT_STATE_DIR
+    if raw.startswith("~"):
+        return os.path.expanduser(raw)
+    return raw
+
+
+# ---------------------------------------------------------------------------
+# The health probes, spoken through the one JSON-RPC client.
+#
+# `microduck_cli.ipc.client.RobotClient` owns the wire: the handshake, the
+# framing, the timeouts and the named drops. This module used to carry a private
+# socket+json stand-in (the t10 TODO) written while that client was still
+# landing; a second implementation of the same protocol is a second thing to keep
+# in step with the pinned proto, so it is gone. What stays local is the *policy*:
+# how long `env up` waits, how often it asks, and what counts as healthy.
+# ---------------------------------------------------------------------------
+
+
+def _default_client(socket_path: str) -> RobotClient:
+    """One short-lived client for one probe. Replaced wholesale in tests."""
+    return RobotClient(
+        socket_path,
+        clock=time.monotonic,
+        request_timeout_s=_RPC_ROUNDTRIP_TIMEOUT_S,
+        connect_timeout_s=_RPC_ROUNDTRIP_TIMEOUT_S,
+    )
+
+
+def _probe_once(socket_path: str, *, health: bool) -> bool:
+    """Connect (which is the ``hello`` handshake) and optionally ask ``robot.health``.
+
+    ``verify_joints=False``: a probe never indexes a joint vector, and asking for a
+    50 Hz stream just to answer "is it up?" would make the daemon do work for
+    nothing. Every failure is False — a probe reports, it never raises: `connect`
+    raises ``CliError`` for an unreachable socket and ``RobotClient`` raises
+    ``RpcError`` for a refused call, and to a poll loop both simply mean "not yet".
+    """
+    client = _client_factory(socket_path)
+    try:
+        client.connect(verify_joints=False)
+    except CliError:
+        return False
+    try:
+        if not health:
+            return True
+        result = client.request(_proto.ROBOT_HEALTH, timeout=_RPC_ROUNDTRIP_TIMEOUT_S)
+    except RpcError:
+        return False
+    finally:
+        client.close()
+    return not isinstance(result, dict) or bool(result.get("healthy", True))
+
+
+def _default_wait_for_healthy(socket_path: str, timeout: float) -> bool:
+    """Poll `hello` then `robot.health` over `socket_path` until healthy or `timeout`."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _probe_once(socket_path, health=True):
+            return True
+        time.sleep(_HEALTH_POLL_INTERVAL_S)
+    return False
+
+
+def _default_hello_probe(socket_path: str) -> bool:
+    """One-shot `hello` handshake — no retry loop (used by `env status`)."""
+    return _probe_once(socket_path, health=False)
+
+
+def _default_port_listening(port: int) -> bool:
+    try:
+        with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            return probe.connect_ex(("127.0.0.1", port)) == 0
+    except OSError:
+        return False
+
+
+_client_factory: Callable[[str], RobotClient] = _default_client
+_default_probe: Callable[[], _doctor.EnvProbe] = _doctor.default_probe
+_wait_for_healthy: Callable[[str, float], bool] = _default_wait_for_healthy
+_hello_probe: Callable[[str], bool] = _default_hello_probe
+_port_listening: Callable[[int], bool] = _default_port_listening
+
+
+# ---------------------------------------------------------------------------
+# overview
+# ---------------------------------------------------------------------------
+
+
+def env_sections() -> list[dict[str, object]]:
+    """Sections describing the ``env`` noun (used by ``env overview``)."""
+    return [
+        {"title": "Purpose", "items": [_PURPOSE]},
+        {"title": "Verbs", "items": list(VERBS)},
+    ]
+
+
+def cmd_env_overview(args: argparse.Namespace) -> int:
+    emit_overview(
+        _SUBJECT,
+        env_sections(),
+        json_mode=bool(getattr(args, "json", False)),
+    )
+    return 0
+
+
+def _no_verb(args: argparse.Namespace) -> int:
+    # `microduck-cli env` with no sub-verb prints the noun's overview.
+    return cmd_env_overview(args)
+
+
+# ---------------------------------------------------------------------------
+# doctor
+# ---------------------------------------------------------------------------
+
+
+def cmd_env_doctor(args: argparse.Namespace) -> int:
+    probe = _default_probe()
+    report = _doctor.diagnose(probe)
+    json_mode = bool(getattr(args, "json", False))
+    if json_mode:
+        emit_result(report, json_mode=True)
+    else:
+        emit_result(_doctor.render_text(report), json_mode=False)
+    return EXIT_SUCCESS if report["healthy"] else EXIT_ENV_ERROR
+
+
+# ---------------------------------------------------------------------------
+# up
+# ---------------------------------------------------------------------------
+
+#: `scripts/duck-sim`'s documented env knobs (docs/specs, s18) — set from our
+#: own flags so the operator never has to name a clone, a state dir or a port
+#: twice.
+_UPSTREAM_LAUNCHER_NAME = "duck-sim"
+
+
+def _upstream_launcher_path(microduck_clone: str) -> str:
+    return os.path.join(microduck_clone, "scripts", _UPSTREAM_LAUNCHER_NAME)
+
+
+def _run_upstream_launcher(
+    *,
+    launcher: str,
+    microduck_clone: str,
+    rl_clone: str,
+    mode: str,
+    ducks: int,
+    port: int,
+    scene: str | None,
+    state_dir: str,
+) -> subprocess.CompletedProcess:
+    env = dict(os.environ)
+    env["DUCK_SIM_STATE"] = state_dir
+    env["DUCK_SIM_RL"] = rl_clone
+    env["DUCK_SIM_PORT"] = str(port)
+    env["DUCK_SIM_DUCKS"] = str(ducks)
+    if scene:
+        env["DUCK_SIM_SCENE"] = scene
+    argv = [launcher, "up", "--fake" if mode == "fake" else "--sim"]
+    return _subprocess_run(  # nosec B603 - fixed argv, shell=False
+        argv, cwd=microduck_clone, env=env, capture_output=True, text=True, check=False
+    )
+
+
+def _stop_started(stack: SimStack, reason: str) -> None:
+    """Best effort: stop everything this bring-up started, then let the caller raise.
+
+    A failed ``env up`` used to leave the daemons it had already launched running,
+    with their pidfiles and sockets on disk — so the next ``env up`` collided with
+    a stack nobody knew was there and the operator had to clean up by hand. The
+    stack's own ``down()`` is the only thing that knows how to stop them safely
+    (by pid, with the ``/proc`` identity check, never by name).
+
+    Everything here is best effort and every outcome is reported on stderr: a
+    cleanup that fails must never replace, mask or outrank the failure that caused
+    it. That is also why nothing raises out of this function.
+    """
+    emit_diagnostic(f"{reason}: stopping what was started...")
+    try:
+        results = stack.down()
+    except Exception as exc:  # noqa: BLE001 - the original CliError is the news
+        emit_diagnostic(f"cleanup could not complete: {exc}")
+        return
+    for result in results:
+        detail = f" ({result.detail})" if result.detail else ""
+        emit_diagnostic(f"cleanup: {result.name}: {result.outcome}{detail}")
+
+
+def _resolve_clones() -> tuple[str, str]:
+    """The microduck / microduck_rl clone pair, or the one CliError that says so."""
+    microduck_clone, rl_clone = _doctor.resolve_clone_paths(os.environ)
+    if not microduck_clone or not rl_clone:
+        raise CliError(
+            code=EXIT_ENV_ERROR,
+            message="microduck and/or microduck_rl clone not found",
+            remediation=(
+                f"run `{PROG} env doctor` to see what is missing, or set "
+                "MICRODUCK_CLONE / DUCK_SIM_RL (or MICRODUCK_RL_CLONE), or clone them "
+                f"beside this repo — see {_UPSTREAM_SIM_DOC}"
+            ),
+        )
+    return microduck_clone, rl_clone
+
+
+def _up_via_upstream_launcher(
+    args: argparse.Namespace,
+    *,
+    launcher: str,
+    microduck_clone: str,
+    rl_clone: str,
+    state_dir: str,
+    json_mode: bool,
+) -> int:
+    """Shell out to ``<clone>/scripts/duck-sim up`` and report its verdict."""
+    result = _run_upstream_launcher(
+        launcher=launcher,
+        microduck_clone=microduck_clone,
+        rl_clone=rl_clone,
+        mode=args.mode,
+        ducks=args.ducks,
+        port=args.port,
+        scene=args.scene,
+        state_dir=state_dir,
+    )
+    if result.returncode != 0:
+        raise CliError(
+            code=EXIT_ENV_ERROR,
+            message=f"{launcher} up exited {result.returncode}",
+            remediation=(
+                f"run `{launcher} up` by hand in {microduck_clone} and read its output "
+                f"— see {_UPSTREAM_SIM_DOC}"
+            ),
+        )
+    emit_result(
+        (
+            {"launcher": launcher, "mode": args.mode, "state_dir": state_dir}
+            if json_mode
+            else f"{launcher} up: ok (state dir {state_dir})"
+        ),
+        json_mode=json_mode,
+    )
+    return EXIT_SUCCESS
+
+
+def _start_stack(stack: SimStack, args: argparse.Namespace) -> UpReport:
+    """``stack.up`` with the cleanup contract: a failed bring-up leaves nothing running.
+
+    ``up`` can get far enough to start something before it gives up (a socket that
+    never appeared, a daemon that died); those processes, their pidfiles and their
+    sockets are still there. Stop them, then re-raise the ORIGINAL failure — the
+    cleanup is not the news, and it already names the log.
+    """
+    try:
+        return stack.up(
+            mode=args.mode,
+            ducks=args.ducks,
+            port=args.port,
+            scene=args.scene,
+            headless=args.headless,
+            skip_build=args.skip_build,
+        )
+    except CliError:
+        _stop_started(stack, "bring-up failed")
+        raise
+
+
+def _await_all_healthy(stack: SimStack, report: UpReport, mode: str) -> list[dict[str, object]]:
+    """Block until every socketed process reports healthy; tear the stack down if one never does."""
+    timeout = _SIM_HEALTH_TIMEOUT_S if mode == "sim" else _FAKE_HEALTH_TIMEOUT_S
+    ducks_report: list[dict[str, object]] = []
+    for process in report.processes:
+        if not process.socket:
+            continue
+        emit_diagnostic(f"waiting for {process.name} to report healthy ({process.socket})...")
+        if not _wait_for_healthy(process.socket, timeout):
+            _stop_started(stack, f"{process.name} never reported healthy")
+            raise CliError(
+                code=EXIT_ENV_ERROR,
+                message=f"{process.name} did not report healthy within {timeout:g}s",
+                remediation=f"read {process.log} for why it never came up",
+            )
+        ducks_report.append({"name": process.name, "socket": process.socket, "healthy": True})
+    return ducks_report
+
+
+def _up_text(mode: str, state_dir: str, ducks_report: list[dict[str, object]]) -> str:
+    lines = [f"microduck-cli env up: healthy ({mode})", f"state dir: {state_dir}"]
+    for duck in ducks_report:
+        lines.append(f"  {duck['name']}: {duck['socket']}")
+    return "\n".join(lines)
+
+
+def cmd_env_up(args: argparse.Namespace) -> int:
+    json_mode = bool(getattr(args, "json", False))
+    mode = args.mode
+    state_dir = _resolve_state_dir(args.state)
+    microduck_clone, rl_clone = _resolve_clones()
+
+    launcher = _upstream_launcher_path(microduck_clone)
+    if getattr(args, "upstream_launcher", False) and os.path.isfile(launcher):
+        return _up_via_upstream_launcher(
+            args,
+            launcher=launcher,
+            microduck_clone=microduck_clone,
+            rl_clone=rl_clone,
+            state_dir=state_dir,
+            json_mode=json_mode,
+        )
+
+    stack = _make_stack(microduck_clone, rl_clone, state_dir)
+    report = _start_stack(stack, args)
+    ducks_report = _await_all_healthy(stack, report, mode)
+
+    payload = {
+        "mode": mode,
+        "state_dir": state_dir,
+        "ducks": ducks_report,
+        "sockets": [d["socket"] for d in ducks_report],
+        "healthy": True,
+    }
+    emit_result(
+        payload if json_mode else _up_text(mode, state_dir, ducks_report), json_mode=json_mode
+    )
+    return EXIT_SUCCESS
+
+
+# ---------------------------------------------------------------------------
+# down
+# ---------------------------------------------------------------------------
+
+
+def cmd_env_down(args: argparse.Namespace) -> int:
+    json_mode = bool(getattr(args, "json", False))
+    state_dir = _resolve_state_dir(args.state)
+    stack = _make_stack("", "", state_dir)
+    results = stack.down()
+
+    try:
+        port = int(os.environ.get("DUCK_SIM_PORT") or _doctor.DEFAULT_BODY_PORT)
+    except ValueError:
+        port = _doctor.DEFAULT_BODY_PORT
+    still_listening = _port_listening(port)
+
+    payload = {
+        "state_dir": state_dir,
+        "stopped": [r.to_dict() for r in results],
+        "body_port": port,
+        "body_port_still_listening": still_listening,
+    }
+    if json_mode:
+        emit_result(payload, json_mode=True)
+    else:
+        lines = [f"microduck-cli env down: state dir {state_dir}"]
+        if not results:
+            lines.append("  nothing tracked")
+        for r in results:
+            lines.append(f"  {r.name}: {r.outcome}" + (f" ({r.detail})" if r.detail else ""))
+        if still_listening:
+            lines.append(f"  warning: something is still listening on port {port}")
+        emit_result("\n".join(lines), json_mode=False)
+    return EXIT_SUCCESS
+
+
+# ---------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------
+
+
+def _process_state(proc: dict) -> str:
+    """One tracked process's liveness word: alive, stale (pidfile with no process), untracked."""
+    if proc["alive"]:
+        return "alive"
+    if proc["stale"]:
+        return "stale"
+    return "not tracked"
+
+
+def _status_text(state_dir: str, status: dict, socket_health: list[dict[str, object]]) -> str:
+    lines = [f"microduck-cli env status: state dir {state_dir}"]
+    for proc in status["processes"]:
+        lines.append(f"  {proc['name']}: pid={proc['pid']} {_process_state(proc)}")
+    for entry in socket_health:
+        reply = "responds to hello" if entry["responding"] else "no response"
+        lines.append(f"  socket {entry['socket']}: {reply}")
+    return "\n".join(lines)
+
+
+def cmd_env_status(args: argparse.Namespace) -> int:
+    json_mode = bool(getattr(args, "json", False))
+    state_dir = _resolve_state_dir(args.state)
+    stack = _make_stack("", "", state_dir)
+    status = stack.status()
+
+    socket_health = [
+        {"socket": sock, "responding": _hello_probe(sock)} for sock in status["sockets"]
+    ]
+    payload = {**status, "socket_health": socket_health}
+    emit_result(
+        payload if json_mode else _status_text(state_dir, status, socket_health),
+        json_mode=json_mode,
+    )
+    return EXIT_SUCCESS
+
+
+# ---------------------------------------------------------------------------
+# hosts
+# ---------------------------------------------------------------------------
+
+
+def cmd_env_hosts(args: argparse.Namespace) -> int:
+    json_mode = bool(getattr(args, "json", False))
+    info = _hosts.classify(_hosts.default_probe())
+    payload = {
+        "host_class": info.host_class,
+        "display_name": info.display_name,
+        "torch_source_applies": info.torch_source_applies,
+        "remediation": info.remediation or "",
+    }
+    if json_mode:
+        emit_result(payload, json_mode=True)
+    else:
+        lines = [
+            f"microduck-cli env hosts: {info.display_name} ({info.host_class})",
+            f"torch source applies: {info.torch_source_applies}",
+        ]
+        if info.remediation:
+            lines.append(f"  hint: {info.remediation}")
+        emit_result("\n".join(lines), json_mode=False)
+    return EXIT_SUCCESS
+
+
+# ---------------------------------------------------------------------------
+# registration
+# ---------------------------------------------------------------------------
+
+
+def _json_flag(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add ``--json`` to a verb without clobbering the noun-level flag.
+
+    ``default=argparse.SUPPRESS`` is load-bearing: argparse copies a sub-parser's
+    defaults over the namespace the noun already filled, so a plain
+    ``store_true`` here would reset ``json`` to False and make
+    ``%(prog)s --json <verb>`` silently print text. With SUPPRESS the attribute
+    exists only when the flag is actually given, and either position works.
+    """
+    p.add_argument(
+        "--json", action="store_true", default=argparse.SUPPRESS, help="Emit structured JSON."
+    )
+    return p
+
+
+def register(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "env",
+        help=f"Environment bring-up and diagnosis (see '{PROG} env overview').",
+    )
+    p.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    p.set_defaults(func=_no_verb, json=False)
+    # `p` is a _CliArgumentParser (the top-level subparsers were built with that
+    # parser_class); propagate it so `env <verb>` parse errors route through the
+    # structured error contract instead of argparse's default stderr/exit 2.
+    noun_sub = p.add_subparsers(dest="env_command", parser_class=type(p))
+
+    ov = noun_sub.add_parser("overview", help="Describe the env noun.")
+    ov.add_argument(
+        "target",
+        nargs="?",
+        help="Ignored — overview always describes this noun. Accepted so a stray "
+        "path argument never hard-fails.",
+    )
+    _json_flag(ov)
+    ov.set_defaults(func=cmd_env_overview)
+
+    doc = noun_sub.add_parser(
+        "doctor", help="Diagnose whether this box can run the sim/train lane."
+    )
+    _json_flag(doc)
+    doc.set_defaults(func=cmd_env_doctor)
+
+    up = noun_sub.add_parser(
+        "up", help="Bring up the simulator (or fake) stack and wait for it to report healthy."
+    )
+    mode_group = up.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--sim", dest="mode", action="store_const", const="sim", help="Use the MuJoCo simulator."
+    )
+    mode_group.add_argument(
+        "--fake",
+        dest="mode",
+        action="store_const",
+        const="fake",
+        help="Use robotd --fake (no simulator; the default).",
+    )
+    up.add_argument("--ducks", type=int, default=1, help="How many ducks (--sim only).")
+    up.add_argument(
+        "--port", type=int, default=_doctor.DEFAULT_BODY_PORT, help="duck-body's base TCP port."
+    )
+    up.add_argument("--scene", default=None, help="A built-in scene name, or a path.")
+    up.add_argument("--headless", action="store_true", help="Run duck-body without a viewer.")
+    up.add_argument("--state", default=None, help=STATE_DIR_HELP)
+    up.add_argument("--skip-build", action="store_true", help="Skip the cargo build step.")
+    up.add_argument(
+        "--upstream-launcher",
+        action="store_true",
+        help="Shell out to <clone>/scripts/duck-sim when it exists, instead of driving "
+        "SimStack directly.",
+    )
+    _json_flag(up)
+    up.set_defaults(mode="fake", func=cmd_env_up)
+
+    down = noun_sub.add_parser("down", help="Stop the tracked simulator stack.")
+    down.add_argument("--state", default=None, help=STATE_DIR_HELP)
+    _json_flag(down)
+    down.set_defaults(func=cmd_env_down)
+
+    status = noun_sub.add_parser("status", help="Report the tracked simulator stack's status.")
+    status.add_argument("--state", default=None, help=STATE_DIR_HELP)
+    _json_flag(status)
+    status.set_defaults(func=cmd_env_status)
+
+    hosts_p = noun_sub.add_parser("hosts", help="Classify this host for the training lane.")
+    _json_flag(hosts_p)
+    hosts_p.set_defaults(func=cmd_env_hosts)

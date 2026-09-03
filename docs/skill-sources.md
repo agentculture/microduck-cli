@@ -6,12 +6,13 @@ AgentCulture **skills supplier** after the steward → guildmaster cutover
 (`steward doctor`, the sibling-pattern baseline); only the skills-supplier role
 moved. This file tracks provenance so re-syncs stay deterministic.
 
-Seven skills — `think`, `spec-to-plan`, `assign-to-workforce`, `scope`,
-`challenge`, `deviate`, and `summarize-delivery` — originate in
-[`agentculture/devague`](https://github.com/agentculture/devague). The first
-three are **re-broadcast** through guildmaster — cite guildmaster's copy; track
-devague as the true origin. The remaining four (`scope`, `challenge`, `deviate`,
-`summarize-delivery`) are vendored **directly from devague**: guildmaster's
+Eight skills — `think`, `spec-to-plan`, `assign-to-workforce`, `scope`,
+`challenge`, `deviate`, `validate-delivery`, and `summarize-delivery` —
+originate in [`agentculture/devague`](https://github.com/agentculture/devague).
+The first three are **re-broadcast** through guildmaster — cite guildmaster's
+copy; track devague as the true origin. The remaining five (`scope`,
+`challenge`, `deviate`, `validate-delivery`, `summarize-delivery`) are vendored
+**directly from devague**: guildmaster's
 current re-broadcast copies carry an added `scripts/*.sh` wrapper (guildmaster
 `292feac`, "vendor scripts/ wrappers for 4 script-less devague skills") that the
 devague originals — and these vendored copies — do not have, so citing
@@ -31,7 +32,7 @@ is load-bearing, even where guildmaster's upstream copy omits it.
 
 | Skill | Upstream | Origin | Notes | Last synced |
 |-------|----------|--------|-------|-------------|
-| `cicd` | `../guildmaster/.claude/skills/cicd/` | guildmaster | CI/CD lane layered on `devex pr`: the 5 thin scripts (`workflow.sh`, `pr-status.sh`, `pr-reply.sh`, `_resolve-nick.sh`, `portability-lint.sh`) delegate lint/open/read/reply/delta to `devex` and add the `status` / `await` SonarCloud-gating extensions. Consumer-identifying prose (`guildmaster` → `microduck-cli`) adapted in the description + heading; upstream history (`Renamed from pr-review in steward 0.7.0; rebased on devex in 0.12.0`) and env-var literals (`STEWARD_*`) kept verbatim. The PR signature resolves at runtime from `culture.yaml` via `_resolve-nick.sh` (→ `microduck-cli`). Requires `devex` on PATH. **Prose divergence (2026-08-29):** the "Greenfield-aware steps", triage-defaults and mesh-ping paragraphs were adapted to this repo's actual stack — see [local divergence](#local-divergence--cicd-pre-pr-steps-adapted-to-this-repos-stack-2026-08-29). | 2026-05-26 (guildmaster 0.6.0) |
+| `cicd` | `../guildmaster/.claude/skills/cicd/` | guildmaster | CI/CD lane layered on `devex pr`: the 5 thin scripts (`workflow.sh`, `pr-status.sh`, `pr-reply.sh`, `_resolve-nick.sh`, `portability-lint.sh`) delegate lint/open/read/reply/delta to `devex` and add the `status` / `await` SonarCloud-gating extensions. Consumer-identifying prose (`guildmaster` → `microduck-cli`) adapted in the description + heading; upstream history (`Renamed from pr-review in steward 0.7.0; rebased on devex in 0.12.0`) and env-var literals (`STEWARD_*`) kept verbatim. The PR signature resolves at runtime from `culture.yaml` via `_resolve-nick.sh` (→ `microduck-cli`). Requires `devex` on PATH. **Prose divergence (2026-08-29, amended 2026-09-03):** the "Greenfield-aware steps", triage-defaults and mesh-ping paragraphs were adapted to this repo's actual stack, and the triage defaults were rewritten again for decision c20 (the engine lives in `microduck_cli/behavior/`) — see [local divergence](#local-divergence--cicd-pre-pr-steps-adapted-to-this-repos-stack-2026-08-29). | 2026-05-26 (guildmaster 0.6.0) |
 | `communicate` | `../guildmaster/.claude/skills/communicate/` | guildmaster | Cross-repo + mesh communication. Consumer-identifying prose adapted in the description (incl. the `- microduck-cli (Claude)` signature line). **No hard-coded signature literal in the scripts** — `post-issue.sh` is `agtag`-backed and resolves the signing nick from `culture.yaml`; requires `agtag` (>=0.1) on PATH. The supplier `scripts/templates/` (`skill-update-brief.md`, `skill-new-brief.md`) are kept verbatim — inert for a consumer (they cite guildmaster as upstream). Renamed from `coordinate` in steward 0.8.0; absorbed `gh-issues` in 0.9.1. | 2026-05-26 (guildmaster 0.6.0) |
 | `version-bump` | `../guildmaster/.claude/skills/version-bump/` | guildmaster | Pure-Python, CWD-aware (`scripts/bump.py`). Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
 | `agent-config` | `../guildmaster/.claude/skills/agent-config/` | guildmaster (origin steward) | Shows a Culture agent's full config; run `scripts/show.sh` directly (no `guild` binary required). `scripts/show.sh` + `data/backend-fingerprints.yaml` verbatim. Verbatim except added `type: command`. | 2026-05-26 (guildmaster 0.6.0) |
@@ -46,7 +47,20 @@ is load-bearing, even where guildmaster's upstream copy omits it.
 | `challenge` | `../devague/.claude/skills/challenge/` | **devague** (vendored directly — guildmaster's copy now carries an added `scripts/` wrapper; see [local divergence](#local-divergence--scope--challenge--deviate--summarize-delivery-vendored-directly-from-devague-2026-07-15)) | Runs a risk-scaled blind-spot discovery pass over a converged, exported frame BETWEEN `/think` and `/spec-to-plan` (the seventh origin skill, third leg in flow order): pressure-tests the spec through structured lenses, routes every finding back through the existing deterministic moves as proposed-only content the human adjudicates, and on a clean pass records the examined lenses/surfaces and residual uncertainty — never a claim that there are no unknown unknowns. Verbatim (carries `type: command`). | 2026-07-15 (devague#74/#75/#76) |
 | `deviate` | `../devague/.claude/skills/deviate/` | **devague** (vendored directly — guildmaster's copy now carries an added `scripts/` wrapper; see [local divergence](#local-divergence--scope--challenge--deviate--summarize-delivery-vendored-directly-from-devague-2026-07-15)) | Stops an in-flight assign-to-workforce run the moment execution must diverge from the confirmed plan, gets explicit human approval for the divergence, and records it as a first-class, append-only deviation record via `devague deviate` before resuming — never folds a deviation silently into drift after the fact. Verbatim (carries `type: command`). | 2026-07-15 (devague#74/#75/#76) |
 | `summarize-delivery` | `../devague/.claude/skills/summarize-delivery/` | **devague** (vendored directly — guildmaster's copy now carries an added `scripts/` wrapper; see [local divergence](#local-divergence--scope--challenge--deviate--summarize-delivery-vendored-directly-from-devague-2026-07-15)) | Closes the loop after an assign-to-workforce run by turning what actually happened into an accountability artifact — planned versus actual delivery, mid-work decisions, plan drift, evidence-backed delivery claims, and remaining work; runs on complete, partial, AND failed runs, reporting failure faithfully rather than smoothing it over. Verbatim (carries `type: command`). | 2026-07-15 (devague#74/#75/#76) |
+| `validate-delivery` | `https://github.com/agentculture/devague/blob/main/.claude/skills/validate-delivery/SKILL.md` | **devague** (vendored directly from the GitHub origin at devague `82a74e0` / 0.24.0 — the sibling `../devague` checkout was still on 0.23.0 at sync time and carries an older copy; see [local divergence](#local-divergence--validate-delivery-vendored-from-the-devague-origin-on-github-2026-09-03)) | The execution→evidence leg between `assign-to-workforce` and `summarize-delivery`: runs the confirmed plan's behavioral tests agent-side, files one `devague evidence` record per obligation with the verbatim pass/fail outcome and an un-inflated strength (coverage / fidelity / execution / sensitivity), and `devague delta` records for what the run added, amended, or removed; the CLI never runs a test (devague#20). Method-only — no `scripts/`. Verbatim (blob `453bb96e`; carries `type: command`). | 2026-09-03 (devague 0.24.0, `82a74e0`, direct from GitHub) |
 | `ask-colleague` | `../colleague/.claude/skills/ask-colleague/` | **colleague** (renamed from convertible; vendored directly — guildmaster re-broadcast pending) | The first-party front door to the `colleague` CLI: hand a scoped task to a *different* engine/mind via `explore` / `review` / `write`, run the spec→plan→workforce arc via `plan`, pick a cut or timed-out run back up via `resume` (`--detach` to background it), pilot a live work item with `monitor` / `guide` / `stop`, grade a finished work item via `feedback` (the ROI loop), and reap stale/corrupt `colleague/*` branches a crashed run left behind via `clean`. Thinking effort is per-seat (`--effort`, `--seat-effort S=R`, `--role`). Every verb takes `--json` (result JSON on stdout, diagnostics on stderr). `explore`/`review` run isolated in a throwaway `git worktree`; `write` **previews by default** (throwaway worktree, no side effects) and refuses a dirty tree only when applying (`--apply` / `--pr`). Vendored **byte-verbatim** as of the 1.63.0 sync — the Provenance paragraph is consumer-neutral upstream, so the localization noted for earlier syncs no longer applies; verify with `diff -r ../colleague/.claude/skills/ask-colleague .claude/skills/ask-colleague`. Already carries `type: command`. Optional runtime dep: **`colleague`** on PATH. | 2026-08-24 (colleague 1.63.0, direct) |
+| `operate-microduck` | **this repo** (`.claude/skills/operate-microduck/`) | **microduck-cli (first-party)** | Not vendored — authored here. The operator front door to the CLI: `env doctor` → `env up --sim` (MuJoCo window; `--headless` / `--fake` variants, and the display-owner `DISPLAY`/`XAUTHORITY`/`DBUS_SESSION_BUS_ADDRESS` export a headless session needs) → `duck init`/`enable` → the operating verbs (`health`, `version`, `monitor`, `look`, `do`, `move`, `quack`, `record`) and the `rules` layer (`list`, `check`, `intent`, `engine run`) → `env down`. Carries the honesty rules the verification record demands: locomotion is not achieved at the current pin (a lean, not steps), `relax` collapses the duck, a dry-run on a pipe moved nothing, and `env down` never kills by name. `microduck learn`'s "Authoring the operator skill (operate-microduck)" section (and `learn --json`'s `skills.operate-microduck`) is the recipe for recreating it in another runtime; `tests/test_learn_skill.py` keeps the two in lockstep. Carries `type: command`. | n/a (first-party) |
+
+## First-party skills
+
+Not every skill here is inbound. **First-party skills are authored in this repo**
+and have no upstream to re-sync from — `operate-microduck` is the first. For
+these the cite-don't-import arrow points *outward*: this repo holds the canonical
+copy, **guildmaster may broadcast it** to the AgentCulture mesh, and a downstream
+consumer cites this copy rather than patching its own. So the "do not hand-edit"
+rule that protects a vendored skill does **not** apply to them — fixes are made
+here, deliberately, and the `Last synced` column reads `n/a`. The rest of this
+document's re-sync procedure and divergence records concern the vendored kit only.
 
 ## Re-sync procedure
 
@@ -188,6 +202,17 @@ second runtime loop in `microduck_cli/` instead of upstream in
 `neurosymbolic-system`), and the closing mesh-ping paragraph names microduck-cli
 rather than steward.
 
+**Amended 2026-09-03 (t12, decision c20).** The triage-defaults paragraph was
+rewritten again: the tick engine landed in `microduck_cli/behavior/`
+(extraction-first — `neurosymbolic-system` is extracted later from
+reachy-mini-cli plus this engine), so "a second runtime loop belongs upstream" is
+no longer the false-positive class it names. The paragraph now says an engine
+here is *expected* and tells a reviewer to check the extraction seams instead —
+`TargetSink` / `SenseProviders` / ONE `tick_seam` / rules-as-data / one admission
+registry / heartbeat-not-flag-file / no transport or SDK import under
+`behavior/`. Same sanctioned surface, same re-apply step below; the edit count is
+three sections, with triage defaults now carrying the c20 wording.
+
 **No script bodies are edited** — the divergence is confined to `SKILL.md` prose,
 which is the sanctioned adaptation surface. On a re-sync, pull guildmaster's copy
 fresh and re-apply the three edits:
@@ -216,3 +241,25 @@ devex / agtag READMEs).
   reachable backend — a local vLLM by default, overridable via `--engine` /
   `--model` / `--base-url` or `COLLEAGUE_*` env (the legacy `CONVERTIBLE_*` names
   still work as a deprecated fallback).
+
+### Local divergence — `validate-delivery` vendored from the devague origin on GitHub (2026-09-03)
+
+`validate-delivery` is the eighth devague origin skill (devague 0.24.0,
+`82a74e0`, 2026-09-01) and, like the four above, a method-only `SKILL.md` with
+no `scripts/`. At sync time the sibling checkout `../devague` was still on
+0.23.0 (`ee5a81b`) and its copy of the file differed from the origin's `main`,
+so this one was pulled **from GitHub** rather than from the sibling path the
+four above use. The vendored file is byte-identical to the origin blob
+(`git hash-object` = `453bb96e77bd7e0f376980ecf878279ef8a8cd46`). Re-sync
+path — the same loop as above once `../devague` is at ≥ 0.24.0, otherwise:
+
+```bash
+gh api "repos/agentculture/devague/contents/.claude/skills/validate-delivery/SKILL.md" \
+  --jq '.content' | base64 -d > .claude/skills/validate-delivery/SKILL.md
+git hash-object .claude/skills/validate-delivery/SKILL.md   # compare to the origin blob sha
+```
+
+Noted at the same sync, not acted on: `scope`, `challenge` and
+`summarize-delivery` here no longer match `../devague` (0.23.0) byte-for-byte
+either — a re-sync of those three against the origin is a separate,
+deliberate pass.

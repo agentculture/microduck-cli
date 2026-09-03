@@ -1,6 +1,6 @@
 [project]
 name = "microduck-cli"
-version = "0.8.0"
+version = "0.9.0"
 description = "Agent-agnostic CLI for controlling the MicroDuck robot. Any agent, any human, one CLI. Built on the neurosymbolic-system runtime and following the reachy-mini-cli architecture."
 readme = "README.md"
 license = "Apache-2.0"
@@ -20,7 +20,10 @@ Homepage = "https://github.com/agentculture/microduck-cli"
 Issues = "https://github.com/agentculture/microduck-cli/issues"
 
 [project.scripts]
+# Both names install: `microduck` is the short one, `microduck-cli` matches the
+# distribution name and the prog name the CLI prints in its own output.
 microduck = "microduck_cli.cli:main"
+microduck-cli = "microduck_cli.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -72,4 +75,7 @@ skips = ["B101", "B404", "B603"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra -m 'not live'"
+markers = [
+    "live: operates the CLI against the real robotd built from the pinned commit (opt-in: MICRODUCK_LIVE=1; run with -n0)",
+]

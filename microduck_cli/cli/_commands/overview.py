@@ -16,6 +16,7 @@ import argparse
 
 from microduck_cli.cli._commands.whoami import report
 from microduck_cli.cli._output import emit_result
+from microduck_cli.explain.catalog import VERBS as _CATALOG_VERBS
 
 _ARTIFACTS = [
     "culture.yaml + AGENTS.colleague.md — mesh identity (suffix + backend)",
@@ -24,13 +25,15 @@ _ARTIFACTS = [
     "pyproject.toml + .github/workflows/ — buildable, deployable package baseline",
 ]
 
-_VERBS = [
-    "whoami — identity probe (nick, version, backend, model)",
-    "learn — structured self-teaching prompt",
-    "explain <path> — markdown docs for a topic",
-    "overview — this descriptive snapshot",
-    "doctor — check the agent-identity invariants",
-]
+# The canonical verb list, global verbs plus each noun's own VERBS, assembled in
+# microduck_cli.explain.catalog. A noun task adds a verb by editing its own
+# explain/<noun>.py; this list and learn's command map follow at import time.
+_VERBS = list(_CATALOG_VERBS)
+
+
+def verb_lines() -> list[str]:
+    """The canonical ``"<command path> — <one line>"`` verb list."""
+    return list(_VERBS)
 
 
 def agent_sections() -> list[dict[str, object]]:
@@ -56,7 +59,7 @@ def cli_sections() -> list[dict[str, object]]:
     return [
         {
             "title": "Verbs",
-            "items": list(_VERBS) + ["cli overview — describe the CLI surface (this command)"],
+            "items": list(_VERBS),
         },
         {
             "title": "Conventions",

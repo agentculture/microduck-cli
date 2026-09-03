@@ -13,6 +13,19 @@ from typing import Any, TextIO
 
 from microduck_cli.cli._errors import CliError
 
+#: The parser's ``prog`` — and so the ONE spelling every command line this CLI
+#: generates for a human or an agent must use: a dry-run's ``apply_command``, a
+#: remediation that says "run …", a help string naming a sibling verb. Both console
+#: scripts (``microduck`` and ``microduck-cli``) run the same parser, so a generated
+#: line is copy-pasteable either way; what a reader must never see is two different
+#: names for the same CLI in one session.
+PROG = "microduck-cli"
+
+#: The ONE help string for every noun's ``--state`` flag. ``env`` and ``rules``
+#: both resolve the same state directory, and an operator reading ``--help`` on
+#: two of them must not be told two slightly different things about one directory.
+STATE_DIR_HELP = "Override the state directory."
+
 
 def emit_result(data: Any, *, json_mode: bool, stream: TextIO | None = None) -> None:
     """Write a command result to stdout (or ``stream``)."""
