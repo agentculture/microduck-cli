@@ -226,12 +226,22 @@ class TickMetrics:
     overruns: int = 0
     max_tick_s: float = 0.0
     total_tick_s: float = 0.0
+    first_start: float | None = None
+    last_start: float | None = None
     _in_overrun: bool = field(default=False, repr=False)
 
-    def record(self, duration: float) -> bool:
-        """Record one tick's measured duration; return whether it overran."""
+    def record(self, duration: float, at: float | None = None) -> bool:
+        """Record one tick's measured duration (and, with ``at``, when it started).
+
+        ``at`` is the tick's start on the engine clock; it is what makes
+        :attr:`achieved_hz` a real cadence. Return whether the tick overran.
+        """
         self.ticks += 1
         self.total_tick_s += duration
+        if at is not None:
+            if self.first_start is None:
+                self.first_start = at
+            self.last_start = at
         self.max_tick_s = max(self.max_tick_s, duration)
         over = self.period > 0.0 and duration > self.period
         if over:
@@ -250,11 +260,33 @@ class TickMetrics:
         return over
 
     @property
-    def achieved_hz(self) -> float:
-        """Ticks per second the measured work would allow (0.0 before any tick)."""
+    def capacity_hz(self) -> float:
+        """Ticks per second the measured WORK alone would allow (0.0 before any tick).
+
+        Not the rate the loop ran at — that is :attr:`achieved_hz`. A 6 kHz
+        capacity on a 50 Hz loop just says a tick costs ~0.17 ms.
+        """
         if self.ticks == 0 or self.total_tick_s <= 0.0:
             return 0.0
         return self.ticks / self.total_tick_s
+
+    @property
+    def achieved_hz(self) -> float:
+        """The cadence the loop actually held: ticks over wall time on the engine clock.
+
+        Measured from the first tick's start to the last tick's start, so a
+        paced 50 Hz loop reports ~50 whatever its work costs. 0.0 until two
+        ticks carry a start time; this is the number the heartbeat publishes
+        (upstream's ``achieved_hz`` has the same meaning).
+        """
+        if (
+            self.first_start is None
+            or self.last_start is None
+            or self.ticks < 2
+            or self.last_start <= self.first_start
+        ):
+            return 0.0
+        return (self.ticks - 1) / (self.last_start - self.first_start)
 
     def snapshot(self) -> dict[str, float | int]:
         """A plain-dict readout, safe to publish into ``state.json`` or ``--json``."""
@@ -266,6 +298,7 @@ class TickMetrics:
             "max_tick_ms": self.max_tick_s * 1000.0,
             "mean_tick_ms": mean * 1000.0,
             "achieved_hz": self.achieved_hz,
+            "capacity_hz": self.capacity_hz,
         }
 
 
@@ -448,7 +481,7 @@ class Engine:
             self._expire(started)
             self._beat()
             work_end = self.clock()
-            self.metrics.record(work_end - started)
+            self.metrics.record(work_end - started, at=started)
             if max_ticks is not None and self.ticks >= max_ticks:
                 break
             remaining = deadline + self.period - work_end

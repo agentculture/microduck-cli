@@ -412,7 +412,17 @@ def test_metrics_snapshot_reports_the_budget_and_the_achieved_rate():
     assert snap["period_s"] == pytest.approx(0.02)
     assert snap["mean_tick_ms"] == pytest.approx(5.0)
     # What the measured WORK would allow — not the rate the loop chose to run at.
-    assert snap["achieved_hz"] == pytest.approx(200.0)
+    assert snap["capacity_hz"] == pytest.approx(200.0)
+    # The cadence the loop held is a separate number, measured start-to-start.
+    assert snap["achieved_hz"] > 0.0
+
+
+def test_achieved_hz_is_the_cadence_not_the_work_capacity():
+    metrics = TickMetrics(period=0.02)
+    for start in (0.00, 0.02, 0.04, 0.06):
+        metrics.record(0.001, at=start)  # 1 ms of work, paced at 50 Hz
+    assert metrics.achieved_hz == pytest.approx(50.0)
+    assert metrics.capacity_hz == pytest.approx(1000.0)
 
 
 def test_tick_metrics_logs_one_line_per_overrun_episode(capsys):
