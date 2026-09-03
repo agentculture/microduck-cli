@@ -151,7 +151,11 @@ def default_runner(
     outlives the CLI invocation that started it.
     """
     out = open(stdout, "ab") if stdout else None  # noqa: SIM115 - owned by the child
-    err = open(stderr, "ab") if stderr else (subprocess.STDOUT if out else None)
+    if stderr:
+        err: object = open(stderr, "ab")  # noqa: SIM115 - owned by the child
+    else:
+        # No separate stderr file: fold it into stdout when there is one, else inherit.
+        err = subprocess.STDOUT if out else None
     return subprocess.Popen(  # nosec B603 - fixed argv, shell=False
         list(argv),
         cwd=cwd,
@@ -433,19 +437,8 @@ class SimStack:
 
     # -- lifecycle -------------------------------------------------------
 
-    def up(
-        self,
-        *,
-        mode: str = "fake",
-        ducks: int = 1,
-        port: int = _DEFAULT_PORT,
-        scene: str | None = None,
-        headless: bool = False,
-        skip_build: bool = False,
-        timeout: float = _DEFAULT_SOCKET_TIMEOUT_S,
-        build_timeout: float = _DEFAULT_BUILD_TIMEOUT_S,
-    ) -> UpReport:
-        """Build, locate the ONNX Runtime, start the stack, wait for sockets."""
+    def _validate_up(self, mode: str, ducks: int, scene: str | None) -> None:
+        """The four ways `up()`'s arguments contradict each other. Messages are pinned."""
         if mode not in ("fake", "sim"):
             raise CliError(
                 code=EXIT_USER_ERROR,
@@ -473,37 +466,33 @@ class SimStack:
                 remediation="drop --scene, or use mode='sim'",
             )
 
-        Path(self.state_dir).mkdir(parents=True, exist_ok=True)
+    def _spawn_body(
+        self, *, port: int, ducks: int, headless: bool, scene: str | None
+    ) -> tuple[list[str], StartedProcess]:
+        """Start the MuJoCo body; returns its recorded command and the started process."""
+        rl_python = os.path.join(self.rl, ".venv", "bin", "python")
+        body_argv = [rl_python, "-m", BODY_MODULE, "--port", str(port)]
+        if ducks != 1:
+            body_argv += ["--ducks", str(ducks)]
+        if headless:
+            body_argv.append("--headless")
+        if scene:
+            body_argv += ["--scene", self._scene_arg(scene)]
+        started = self._start(
+            stem="body",
+            argv=body_argv,
+            cwd=self.rl,
+            env=self._body_env(),
+            marker=expected_marker("body"),
+        )
+        return list(body_argv), started
 
+    def _spawn_ducks(
+        self, *, mode: str, ducks: int, port: int, ort: str
+    ) -> tuple[list[list[str]], list[StartedProcess], list[dict[str, object]]]:
+        """Start one ``robotd`` per duck; returns its commands, processes and params reports."""
         commands: list[list[str]] = []
-        built = False
-        if not skip_build:
-            commands.append(self.build(timeout=build_timeout))
-            built = True
-
-        ort = self.find_ort()
         processes: list[StartedProcess] = []
-
-        if mode == "sim":
-            rl_python = os.path.join(self.rl, ".venv", "bin", "python")
-            body_argv = [rl_python, "-m", BODY_MODULE, "--port", str(port)]
-            if ducks != 1:
-                body_argv += ["--ducks", str(ducks)]
-            if headless:
-                body_argv.append("--headless")
-            if scene:
-                body_argv += ["--scene", self._scene_arg(scene)]
-            commands.append(list(body_argv))
-            processes.append(
-                self._start(
-                    stem="body",
-                    argv=body_argv,
-                    cwd=self.rl,
-                    env=self._body_env(),
-                    marker=expected_marker("body"),
-                )
-            )
-
         params_reports: list[dict[str, object]] = []
         robotd = os.path.join(self.clone, "target", "debug", "robotd")
         for index in range(ducks):
@@ -531,6 +520,46 @@ class SimStack:
                     socket=address.socket_path,
                 )
             )
+        return commands, processes, params_reports
+
+    def up(
+        self,
+        *,
+        mode: str = "fake",
+        ducks: int = 1,
+        port: int = _DEFAULT_PORT,
+        scene: str | None = None,
+        headless: bool = False,
+        skip_build: bool = False,
+        timeout: float = _DEFAULT_SOCKET_TIMEOUT_S,
+        build_timeout: float = _DEFAULT_BUILD_TIMEOUT_S,
+    ) -> UpReport:
+        """Build, locate the ONNX Runtime, start the stack, wait for sockets."""
+        self._validate_up(mode, ducks, scene)
+
+        Path(self.state_dir).mkdir(parents=True, exist_ok=True)
+
+        commands: list[list[str]] = []
+        built = False
+        if not skip_build:
+            commands.append(self.build(timeout=build_timeout))
+            built = True
+
+        ort = self.find_ort()
+        processes: list[StartedProcess] = []
+
+        if mode == "sim":
+            body_command, body_process = self._spawn_body(
+                port=port, ducks=ducks, headless=headless, scene=scene
+            )
+            commands.append(body_command)
+            processes.append(body_process)
+
+        duck_commands, duck_processes, params_reports = self._spawn_ducks(
+            mode=mode, ducks=ducks, port=port, ort=ort
+        )
+        commands.extend(duck_commands)
+        processes.extend(duck_processes)
 
         for process in processes:
             if process.socket:

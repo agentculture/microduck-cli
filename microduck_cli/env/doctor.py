@@ -53,7 +53,7 @@ from microduck_cli.env.hosts import default_probe as default_host_probe
 # a deliberate re-pin. See docs/upstream-pins.md for the exact commit this
 # CLI is validated against.
 _MICRODUCK_SIM_DOC_URL = (
-    "https://github.com/pollen-robotics/microduck/blob/sim-remote-io" "/docs/design/simulation.md"
+    "https://github.com/pollen-robotics/microduck/blob/sim-remote-io/docs/design/simulation.md"
 )
 _MICRODUCK_DUCK_SIM_URL = (
     "https://github.com/pollen-robotics/microduck/blob/sim-remote-io/scripts/duck-sim"
@@ -238,17 +238,62 @@ def resolve_clone_paths(env: Mapping[str, str]) -> tuple[str | None, str | None]
     return microduck_clone, rl_clone
 
 
+def _probe_environ() -> dict[str, str]:
+    try:
+        return dict(os.environ)
+    except OSError:  # pragma: no cover - os.environ access does not realistically fail
+        return {}
+
+
+def _probe_built_binaries(microduck_clone: str | None) -> dict[str, bool]:
+    """Which daemon binaries are built in the clone's ``target/debug``."""
+    built: dict[str, bool] = {}
+    if not microduck_clone:
+        return built
+    target_debug = Path(microduck_clone) / "target" / "debug"
+    for name in _DAEMON_BINARIES:
+        try:
+            built[name] = (target_debug / name).is_file()
+        except OSError:
+            built[name] = False
+    return built
+
+
+def _probe_rl_venv(rl_clone: str | None) -> tuple[bool, str | None]:
+    """``(venv present, onnxruntime path)`` for the RL clone; onnxruntime only if the venv is."""
+    if not rl_clone:
+        return False, None
+    try:
+        present = (Path(rl_clone) / ".venv").is_dir()
+    except OSError:
+        present = False
+    return present, _find_onnxruntime(rl_clone) if present else None
+
+
+def _probe_body_port_free(env: Mapping[str, str]) -> bool:
+    try:
+        body_port = int(env.get("DUCK_SIM_PORT") or DEFAULT_BODY_PORT)
+    except ValueError:
+        body_port = DEFAULT_BODY_PORT
+    return _port_free(body_port)
+
+
+def _probe_hf_auth_user() -> str | None:
+    user = _safe_run(["hf", "auth", "whoami"])
+    if not user:
+        return user
+    return user.splitlines()[0].strip() or None
+
+
 def default_probe() -> EnvProbe:
     """Gather an `EnvProbe` from the real system.
 
     Every lookup is wrapped so a missing tool, missing clone, or any other
     failure yields `None`/`False` rather than raising — this must succeed
-    even on a bare box with nothing installed.
+    even on a bare box with nothing installed. The per-fact wrapping lives in the
+    ``_probe_*`` helpers above; this function only composes them.
     """
-    try:
-        env = dict(os.environ)
-    except OSError:  # pragma: no cover - os.environ access does not realistically fail
-        env = {}
+    env = _probe_environ()
 
     pins_path = Path(__file__).resolve().parents[2] / "docs" / "upstream-pins.md"
     pins = _parse_pins(pins_path)
@@ -258,41 +303,13 @@ def default_probe() -> EnvProbe:
     rl_clone_commit = _git_head(rl_clone) if rl_clone else None
 
     cargo_version = _safe_run(["cargo", "--version"])
-
-    built_binaries: dict[str, bool] = {}
-    if microduck_clone:
-        target_debug = Path(microduck_clone) / "target" / "debug"
-        for name in _DAEMON_BINARIES:
-            try:
-                built_binaries[name] = (target_debug / name).is_file()
-            except OSError:
-                built_binaries[name] = False
-
-    rl_venv_present = False
-    rl_onnxruntime_path: str | None = None
-    if rl_clone:
-        try:
-            rl_venv_present = (Path(rl_clone) / ".venv").is_dir()
-        except OSError:
-            rl_venv_present = False
-        if rl_venv_present:
-            rl_onnxruntime_path = _find_onnxruntime(rl_clone)
-
+    built_binaries = _probe_built_binaries(microduck_clone)
+    rl_venv_present, rl_onnxruntime_path = _probe_rl_venv(rl_clone)
     state_dir = _default_state_dir(env)
-
-    try:
-        body_port = int(env.get("DUCK_SIM_PORT") or DEFAULT_BODY_PORT)
-    except ValueError:
-        body_port = DEFAULT_BODY_PORT
-    body_port_free = _port_free(body_port)
-
+    body_port_free = _probe_body_port_free(env)
     host = classify_host(default_host_probe())
-
     secrets = {name: bool(env.get(name)) for name in _SECRET_NAMES}
-
-    hf_auth_user = _safe_run(["hf", "auth", "whoami"])
-    if hf_auth_user:
-        hf_auth_user = hf_auth_user.splitlines()[0].strip() or None
+    hf_auth_user = _probe_hf_auth_user()
 
     return EnvProbe(
         microduck_clone=microduck_clone,
@@ -390,6 +407,39 @@ def _pinned_commit_check(
     )
 
 
+_DIGITS = "0123456789"
+
+
+def _trailing_digits(text: str) -> str:
+    start = len(text)
+    while start > 0 and text[start - 1] in _DIGITS:
+        start -= 1
+    return text[start:]
+
+
+def _leading_digits(text: str) -> str:
+    end = 0
+    while end < len(text) and text[end] in _DIGITS:
+        end += 1
+    return text[:end]
+
+
+def _first_major_minor(text: str) -> tuple[int, int] | None:
+    """The first ``<digits>.<digits>`` in *text*, or ``None``.
+
+    Scanned rather than matched: an unanchored ``(\\d+)\\.(\\d+)`` retries from
+    every position and backtracks super-linearly on digit-heavy input, whereas
+    splitting once on ``.`` and reading the digits either side of each split is a
+    single linear pass.
+    """
+    parts = text.split(".")
+    for left, right in zip(parts, parts[1:]):
+        major, minor = _trailing_digits(left), _leading_digits(right)
+        if major and minor:
+            return int(major), int(minor)
+    return None
+
+
 def _cargo_version_check(cargo_version: str | None) -> dict:
     if not cargo_version:
         return _check(
@@ -400,8 +450,8 @@ def _cargo_version_check(cargo_version: str | None) -> dict:
             f"install a rust toolchain (rustup) with cargo >= "
             f"{_MIN_CARGO_VERSION[0]}.{_MIN_CARGO_VERSION[1]} — see {_MICRODUCK_DUCK_SIM_URL}",
         )
-    match = re.search(r"(\d+)\.(\d+)", cargo_version)
-    if not match:
+    found = _first_major_minor(cargo_version)
+    if found is None:
         return _check(
             "cargo_version",
             False,
@@ -410,7 +460,6 @@ def _cargo_version_check(cargo_version: str | None) -> dict:
             f"install a rust toolchain (rustup) with cargo >= "
             f"{_MIN_CARGO_VERSION[0]}.{_MIN_CARGO_VERSION[1]} — see {_MICRODUCK_DUCK_SIM_URL}",
         )
-    found = (int(match.group(1)), int(match.group(2)))
     passed = found >= _MIN_CARGO_VERSION
     required = f"{_MIN_CARGO_VERSION[0]}.{_MIN_CARGO_VERSION[1]}"
     message = f"cargo {found[0]}.{found[1]} ({'>=' if passed else '<'} {required} required)"

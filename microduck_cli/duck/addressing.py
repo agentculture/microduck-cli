@@ -152,7 +152,7 @@ def _no_such_duck(name: str, state_dir: str, sockets: list[str] | None) -> CliEr
     )
 
 
-def _check_length(path: str, state_dir: str) -> None:
+def _check_length(path: str) -> None:
     length = len(path.encode("utf-8"))
     if length > SOCKET_PATH_BYTE_LIMIT:
         raise CliError(
@@ -164,6 +164,45 @@ def _check_length(path: str, state_dir: str) -> None:
             ),
             remediation="set DUCK_SIM_STATE to a shorter state directory",
         )
+
+
+def _explicit_socket_address(socket: str, name: str | None, state_dir: str) -> DuckAddress:
+    """The address for an explicit ``--socket`` path, which wins over every other input."""
+    resolved_name = _duck_name_from_sock(os.path.basename(socket)) or (name or "")
+    tof_path = os.path.join(state_dir, f"{resolved_name}{_TOF_SUFFIX}") if resolved_name else socket
+    address = DuckAddress(
+        name=resolved_name,
+        socket_path=socket,
+        tof_socket_path=tof_path,
+        state_dir=state_dir,
+        source="--socket",
+    )
+    _check_length(address.socket_path)
+    _check_length(address.tof_socket_path)
+    return address
+
+
+def _duck_from_state_dir(sockets: list[str] | None, state_dir: str) -> tuple[str, str]:
+    """``(name, source)`` for the duck to use when nothing named one.
+
+    The alphabetically first robot socket in the state directory wins, and
+    *source* records whether it was the only candidate.
+    """
+    robot_names = sorted(
+        {
+            _duck_name_from_sock(s)
+            for s in (sockets or [])
+            if s.endswith(_SOCK_SUFFIX) and not s.endswith(_TOF_SUFFIX)
+        }
+    )
+    if not robot_names:
+        raise _no_such_duck("<unspecified>", state_dir, sockets)
+    source = (
+        "state-dir-single"
+        if len(robot_names) == 1
+        else f"state-dir-first-of-{len(robot_names)}-alphabetical"
+    )
+    return str(robot_names[0]), source
 
 
 def resolve(
@@ -190,53 +229,20 @@ def resolve(
     state_dir = _state_dir(env)
 
     if socket:
-        resolved_name = _duck_name_from_sock(os.path.basename(socket)) or (name or "")
-        tof_path = (
-            os.path.join(state_dir, f"{resolved_name}{_TOF_SUFFIX}") if resolved_name else socket
-        )
-        address = DuckAddress(
-            name=resolved_name,
-            socket_path=socket,
-            tof_socket_path=tof_path,
-            state_dir=state_dir,
-            source="--socket",
-        )
-        _check_length(address.socket_path, state_dir)
-        _check_length(address.tof_socket_path, state_dir)
-        return address
+        return _explicit_socket_address(socket, name, state_dir)
 
-    chosen_name = name
-    source = "--duck"
-    if not chosen_name:
-        chosen_name = env.get("DUCK_SIM_DUCK")
-        source = "DUCK_SIM_DUCK"
-
+    chosen_name = name or env.get("DUCK_SIM_DUCK")
+    source = "--duck" if name else "DUCK_SIM_DUCK"
     sockets = _all_sockets_present(state_dir, listdir)
 
     if not chosen_name:
-        robot_names = sorted(
-            {
-                _duck_name_from_sock(s)
-                for s in (sockets or [])
-                if s.endswith(_SOCK_SUFFIX) and not s.endswith(_TOF_SUFFIX)
-            }
-        )
-        if not robot_names:
-            raise _no_such_duck("<unspecified>", state_dir, sockets)
-        chosen_name = robot_names[0]
-        source = (
-            "state-dir-single"
-            if len(robot_names) == 1
-            else f"state-dir-first-of-{len(robot_names)}-alphabetical"
-        )
-    else:
-        robot_sock = f"{chosen_name}{_SOCK_SUFFIX}"
-        if not sockets or robot_sock not in sockets:
-            raise _no_such_duck(chosen_name, state_dir, sockets)
+        chosen_name, source = _duck_from_state_dir(sockets, state_dir)
+    elif not sockets or f"{chosen_name}{_SOCK_SUFFIX}" not in sockets:
+        raise _no_such_duck(chosen_name, state_dir, sockets)
 
     socket_path, tof_socket_path = _sock_paths(state_dir, chosen_name)
-    _check_length(socket_path, state_dir)
-    _check_length(tof_socket_path, state_dir)
+    _check_length(socket_path)
+    _check_length(tof_socket_path)
 
     return DuckAddress(
         name=chosen_name,

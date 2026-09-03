@@ -214,6 +214,15 @@ class Heartbeat:
             pass
 
 
+def _reading(now: Callable[[], float] | float | None) -> float:
+    """Resolve the injected *now* — a callable, a literal reading, or ``None`` — to a float."""
+    if callable(now):
+        return now()
+    if now is None:
+        return time.monotonic()
+    return float(now)
+
+
 def engine_is_live(
     state_dir: str | os.PathLike[str],
     *,
@@ -231,7 +240,7 @@ def engine_is_live(
     state = read_state(state_dir, report=report)
     if state is None:
         return None
-    reading = now() if callable(now) else (time.monotonic() if now is None else float(now))
+    reading = _reading(now)
     if state.last_beat is None:
         if report:
             senselog.drop(STAGE, str(state_path(state_dir)), "corrupt-heartbeat", "no last_beat")
