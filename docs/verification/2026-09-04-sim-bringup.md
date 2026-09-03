@@ -156,11 +156,17 @@ the intent payload named the yaw axis `wz` where the wire and the upstream docs 
 
 ## What was NOT verified
 
-- **The pytest suite ran only against the in-process Python fake.** The verbs
-  above were exercised by hand against the real daemon; there is no switch that
-  points the suite at a real socket. The optional `real-daemon` CI job
-  (`.github/workflows/tests.yml`, gated on the `MICRODUCK_REAL_DAEMON` variable)
-  runs the same walkthrough, not the suite.
+- **The unit suite (998 tests) runs against the in-process Python fake, not a
+  real socket.** What runs against the real daemon is the opt-in live suite,
+  `tests/live/test_live_cli.py` (`MICRODUCK_LIVE=1 uv run pytest -m live -n0`,
+  plus `MICRODUCK_LIVE_SIM=1` for the MuJoCo body): 12 checks operating the CLI as
+  subprocesses — doctor, version, health at 50 Hz, init dry-run then apply, enable
+  and a skill, move and stop, `rules check` via `robot.subscribe`, the verbatim
+  over-limit refusal, the six-step engine start at 50 Hz, pure-JSONL record,
+  status/down, and the sim body standing the duck up. **12 passed, 0 failed** on
+  this box at commit `25114a2` (2026-09-04 00:48 local). The optional
+  `real-daemon` CI job (`.github/workflows/tests.yml`, gated on the
+  `MICRODUCK_REAL_DAEMON` variable) runs that suite.
 - **No physical duck.** Everything here is the `--fake` and MuJoCo bodies.
 - **Multi-duck, the ether, cameras and ToF** in sim — upstream marks them
   "designed and measured but not built" on this branch; not attempted.
