@@ -14,11 +14,14 @@ chassis — an agent-first introspection CLI (`whoami`, `learn`, `explain`,
 kit, and a build/CI/deploy baseline. **The duck layer has started landing on top
 of it**: `ipc/` (the pinned JSON-RPC wire table), `duck/` (socket addressing, the
 motion gate), `env/` (train-host detection), `explain/` (per-noun catalogs), and
-`behavior/` — the pure model, the sense snapshot, the rules schema, and now the
-tick engine itself (`engine.py`, `liveness.py`, `senselog.py`). A `train/`
-package for the policy lane is planned, not present. Nothing here drives real
-hardware yet: there is no transport client wired to a socket, so every module
-below the composition root is exercised through injected seams.
+`behavior/` — the pure model, the sense snapshot, the rules schema, the rule
+engine with its single admission registry, and the tick engine itself
+(`engine.py`, `liveness.py`, `senselog.py`) — and `train/` (argv builders for
+the microduck_rl lane, the smoke gate, the artifact ledger). `env/` also carries
+`doctor.py`, `params.py` and `stack.py` (the sim stack lifecycle). Nothing here
+drives real hardware yet: the socket client is landing in its own task, so every
+module below the composition root is exercised through injected seams and the
+in-process fake daemon in `tests/fake_robotd.py`.
 
 Two things to internalize before touching anything:
 
@@ -105,12 +108,14 @@ wiring (reachy-mini-cli's split). What is on disk today:
 |---|---|
 | `microduck_cli/ipc/` | `proto.py` — the duck-ipc-proto wire table, transcribed from the pinned commit in `docs/upstream-pins.md`. No client yet. |
 | `microduck_cli/duck/` | `addressing.py` (name → sockets, pure: env and `listdir` injected), `gate.py` (the TTY / dry-run / `--apply` motion gate). |
-| `microduck_cli/env/` | `hosts.py` — train-host detection (GB10 / Thor / AGX Orin). |
+| `microduck_cli/env/` | `hosts.py` (train-host detection), `doctor.py` (rubric-shaped environment report), `params.py` (generated robotd params for a laptop run), `stack.py` (sim stack up/down/status, pid-by-cmdline). |
 | `microduck_cli/behavior/` | The engine and everything it composes — see the next section. |
 | `microduck_cli/explain/` | `catalog.py` plus one module per noun (`duck`, `env`, `policy`, `rules`). |
 
-`microduck_cli/train/` (the policy train → export → publish lane) is planned and
-not present; don't cite it as if it exists.
+`microduck_cli/train/` — `lane.py` (pure argv builders for `list-envs`, the
+64-env smoke test, `train`, `play`, `export`, `publish`, `infer`, plus the
+smoke-gate record that refuses a long run without a passed smoke) and
+`artifacts.py` (append-only JSONL ledger). It never imports the RL package.
 
 ### The agent-first rubric (why some code looks odd)
 
