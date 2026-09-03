@@ -176,9 +176,18 @@ _client_factory: Callable[[str], RobotClient] = _default_client_factory
 
 
 def _default_runner(argv: list[str], *, cwd: str | None, env: dict[str, str]) -> Any:
-    return subprocess.run(  # nosec B603 - fixed argv from lane.py builders, never shell=True
-        argv, cwd=cwd, env=env, capture_output=True, text=True, check=False
-    )
+    try:
+        return subprocess.run(  # nosec B603 - fixed argv from lane.py builders, never shell=True
+            argv, cwd=cwd, env=env, capture_output=True, text=True, check=False
+        )
+    except FileNotFoundError as err:
+        # A missing cwd (the RL clone) or a missing `uv` both land here; name it.
+        raise CliError(
+            code=EXIT_ENV_ERROR,
+            message=f"cannot run {argv[0]!r} in {cwd!r}: {err.strerror}: {err.filename}",
+            remediation="check DUCK_SIM_RL points at a synced microduck_rl clone and `uv` is "
+            "on PATH — see https://github.com/pollen-robotics/microduck_rl#quickstart",
+        ) from err
 
 
 #: Module-level seam: tests monkeypatch this rather than spawning `uv run ...`.

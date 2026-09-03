@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from microduck_cli.cli._errors import EXIT_USER_ERROR, CliError
+from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_USER_ERROR, CliError
 
 # Environment variable used to locate the `microduck_rl` clone when a caller
 # does not pass `rl_clone` explicitly. `microduck_cli/env/doctor.py` (t15)
@@ -66,7 +66,25 @@ def _resolve_rl_clone(
     if rl_clone is not None:
         return str(rl_clone)
     env = env if env is not None else os.environ
-    return env.get(RL_CLONE_ENV_VAR) or _DEFAULT_RL_CLONE
+    # Upstream's own knob first (scripts/duck-sim uses DUCK_SIM_RL), then this
+    # CLI's, then the sibling checkout beside this repo — the same lookup
+    # `env doctor` reports, so the lane and the doctor never disagree.
+    from microduck_cli.env.doctor import resolve_clone_paths
+
+    _, resolved = resolve_clone_paths(env)
+    if resolved is not None:
+        return resolved
+    explicit = env.get(RL_CLONE_ENV_VAR) or env.get("DUCK_SIM_RL")
+    if explicit:
+        return explicit  # named but absent: the runner reports the missing directory
+    raise CliError(
+        code=EXIT_ENV_ERROR,
+        message="no microduck_rl clone found (DUCK_SIM_RL / MICRODUCK_RL_CLONE unset and "
+        f"no ../{_DEFAULT_RL_CLONE} beside this repo)",
+        remediation="clone https://github.com/pollen-robotics/microduck_rl at the pinned "
+        "commit (docs/upstream-pins.md), run `uv sync` there, then set DUCK_SIM_RL to it — "
+        "see https://github.com/pollen-robotics/microduck_rl#quickstart",
+    )
 
 
 def _now_iso() -> str:
