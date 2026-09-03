@@ -1,0 +1,117 @@
+# microduck-cli — SHIPPED default behavior rules (read-only package resource).
+#
+# This file is the LOWER of two rule layers, loaded via
+# `microduck_cli.behavior.defaults.load_shipped_rules()` through
+# `importlib.resources` — it ships INSIDE the wheel and is never written to on
+# a box. The UPPER layer is a box-local overlay TOML an operator owns; the two
+# combine per rule `id` via `microduck_cli.behavior.rules.merge_rules` (see
+# that module's docstring for the exact precedence rules: an overlay entry of
+# the same id replaces this one wholesale, an overlay-only id is appended, a
+# shipped-only id is carried through untouched, and an overlay tombstone
+# (`enabled = false`) removes the shipped rule of that id).
+#
+# Editing THIS file on a robot has no lasting effect — the next microduck-cli
+# upgrade replaces it. Put every box-local change in the overlay instead.
+#
+# ===========================================================================
+# What ships here, and why it is only three rules
+# ===========================================================================
+#
+# These rules run on EVERY duck with no operator-authored config at all, so
+# the bar is "obviously correct in an arbitrary room" — never "obviously
+# useful", which is a much lower bar and the wrong one for a default that
+# nobody reviewed for the specific room it lands in. A duck that reacts to
+# more than it is certain about is worse than one that reacts to less, so the
+# shipped set stays small on purpose: it protects a fallen duck's stand-up
+# from being fought, it backs off before the battery cuts power, and it stops
+# driving the instant it can no longer hold itself up. Anything more
+# speculative belongs in an operator's overlay, where the person who has to
+# live with it can tune or tombstone it.
+#
+# THE RULE IDS BELOW ARE A PUBLIC INTERFACE: an operator overrides or disables
+# a shipped rule *by id*, so renaming one silently orphans every box-local
+# override of it. `tests/test_default_rules.py` pins the id list and every
+# field of every rule for exactly that reason — a rename must be a
+# deliberate, visible edit.
+
+schema_version = 1
+
+# --------------------------------------------------------------------------- #
+# fallen-inhibit — a fallen duck must not be fought by anything but its own   #
+# recovery                                                                    #
+# --------------------------------------------------------------------------- #
+#
+# `state.safety.fallen` (see `microduck_cli/behavior/sense.py`) is the
+# daemon's own report that the duck is down. Recovering from that is the
+# daemon's job (and, on a policy-equipped robot, a stand-up skill's) — NOT
+# this layer's. So while fallen holds, every action this layer could inject
+# is disabled EXCEPT `stop`, which only ever asks for zero twist and never
+# fights a recovery in progress.
+#
+# Why this is obviously correct in any room: a fallen duck gains nothing from
+# a `do`/`look`/`move`/`mode`/`sound`/`idle` layered on top of it — at best
+# they no-op against a duck that cannot execute them, at worst a `do` (an
+# UNSTOPPABLE canned skill) or a `move` fights whatever the robot is doing to
+# get back up. There is no room where injecting motion onto a fallen duck is
+# the right call, so this is a blanket disable rather than a per-room tuning
+# knob.
+[[inhibit]]
+id = "fallen-inhibit"
+when = { field = "fallen", op = "is_true" }
+disable = ["do", "idle", "look", "mode", "move", "sound"]
+
+# --------------------------------------------------------------------------- #
+# low-battery-inhibit — back off before the pack cuts power under load        #
+# --------------------------------------------------------------------------- #
+#
+# `battery_frac` is the pack charge fraction from `robot.health` (absent, and
+# therefore never firing, on a box with no battery telemetry — see
+# `sense.py`'s field docs). The 0.15 threshold is upstream's OWN critical
+# line, not a number picked here: `robotctl monitor`'s
+# `BATTERY_CRITICAL_PCT = 15.0` (`robotctl/src/monitor.rs` at the commit
+# pinned in `docs/upstream-pins.md`) is the percentage upstream's own status
+# display treats as critical, on a countdown to the voltage at which `robotd`
+# sits the robot down and cuts power (`BATTERY_EMPTY_V`). Reusing upstream's
+# own line keeps this rule from inventing a threshold nobody has validated.
+#
+# `do`, `move` and `mode` are exactly the draw-heavy, motion-committing
+# actions — a canned skill, driving, or a mode switch that expects to hold a
+# stance — and `idle` is disabled too because the resting layer's own gentle
+# motion is still motion this pack can no longer promise to finish. `look`
+# and `sound` are left enabled: aiming the head and playing a sound draw
+# little enough that refusing them buys nothing, and an operator watching a
+# critically low duck still wants it to be able to say so.
+#
+# Why this is obviously correct in any room: no room makes it correct to keep
+# committing a pack to motion once it has crossed the threshold upstream
+# itself calls critical — the alternative is a duck that brownouts mid-skill,
+# which is worse everywhere.
+[[inhibit]]
+id = "low-battery-inhibit"
+when = { field = "battery_frac", op = "lt", value = 0.15 }
+disable = ["do", "idle", "mode", "move"]
+
+# --------------------------------------------------------------------------- #
+# stop-when-limp — a duck that cannot hold itself up must not keep driving    #
+# --------------------------------------------------------------------------- #
+#
+# `limp` (`state.safety.limp`) is distinct from `fallen`: a limp duck is not
+# holding itself up but may still be upright on a stand (see `sense.py`).
+# `stop` only ever claims `twist`/`pose` and asks for zero twist
+# (`intents._contribute_stop`) — it never touches the `skill` channel, so it
+# cannot interrupt an UNSTOPPABLE canned skill (a stand-up, say) that is
+# already running; it only halts commanded driving.
+#
+# Why this survives "would this be wrong in any room?": there is no room
+# where continuing to drive a duck that has just reported it cannot hold
+# itself up is the right call, and halting the twist costs nothing a
+# recovery needs — `stop` does not touch `skill`, so it cannot fight one.
+# `cooldown_s = 5.0` (the schema default) keeps a flickering `limp` reading
+# from resubmitting `stop` every tick; each admission still goes through the
+# one registry (`intents.KindRegistry.admit`), so it is refused exactly like
+# any other over-limit or blocked `stop` would be.
+[[react]]
+id = "stop-when-limp"
+when = { field = "limp", op = "is_true" }
+run = "stop"
+cooldown_s = 5.0
