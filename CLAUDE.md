@@ -194,15 +194,22 @@ that is on disk; nothing here is a roadmap entry.
 
 The `rules` noun (`cli/_commands/rules.py`) drives `compose.py` through its
 `engine` sub-noun's four verbs — `run` (foreground, gated: connect → hello →
-health → init → enable → armed, each step logged), `start` (a detached `engine
-run --apply`, liveness is the heartbeat alone — no pidfile), `stop` (SIGTERM
-after a `/proc/<pid>/cmdline` identity check), `status` (heartbeat freshness +
-pid liveness + tick rate + daemon reachability) — plus `rules intent <kind>`,
-which submits one intent through the same `KindRegistry`: with an engine live it
-is appended to `<state>/intents.jsonl` (the spool the engine drains on its next
-tick) and the verb waits up to 2s for the engine's acknowledgement in
-`<state>/intents.log`; with no engine live it is validated and the would-be
-admission is printed, sending nothing.
+health → init → enable → armed, each step logged), `start` (gated like `run`;
+claims `<state>/engine.lock` with `O_EXCL` so two starts cannot race, spawns a
+detached `engine run --apply` whose output lands in `<state>/engine.log`, and
+waits up to `--wait-s` for the child's own fresh heartbeat — a child that dies
+first is reported with its log path, never "started"; liveness afterwards is the
+heartbeat alone, no pidfile), `stop` (SIGTERM after a `/proc/<pid>/cmdline`
+identity check; releases the lock), `status` (heartbeat freshness, pid liveness,
+tick rate, daemon reachability and the log path) — plus `rules intent <kind>`,
+which submits one intent through the same `KindRegistry`: with an engine live the
+spooling is gated (`--apply` on a pipe, a prompt on a TTY; a dry run prints the
+registry's verdict and spools nothing), then the record is appended to
+`<state>/intents.jsonl` (the spool the engine drains on its next tick — only
+complete lines are consumed, so a half-written record waits) and the verb waits
+up to 2s for the engine's acknowledgement in `<state>/intents.log`; with no
+engine live it is validated and the would-be admission is printed, sending
+nothing.
 
 Four rules the code enforces and a change must keep:
 
