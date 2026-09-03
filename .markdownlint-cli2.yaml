@@ -25,3 +25,5 @@ ignores:
   # prose, which markdownlint's MD033 (no inline HTML) misreads as HTML tags.
   - "docs/specs/**"
   - "docs/plans/**"
+  # devague working state (review artifacts, frames) — generated, not authored here.
+  - ".devague/**"
