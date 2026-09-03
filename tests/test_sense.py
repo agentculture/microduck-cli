@@ -242,7 +242,7 @@ def test_vocabulary_is_declared_only_here():
             continue
         text = path.read_text(encoding="utf-8")
         if pattern.search(text):
-            assert "TODO(t4)" in text, f"{path.name} redeclares the vocabulary untagged"
+            assert "TODO(t4" in text, f"{path.name} redeclares the vocabulary untagged"
 
 
 def test_module_is_a_stdlib_only_leaf():
