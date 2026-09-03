@@ -1,0 +1,267 @@
+"""Generate the ``robotd`` params file for a laptop (simulated) run.
+
+On a robot every policy resolves out of ``/opt/robot/daemon/current`` — the
+release directory ``PolicyParams::resolved`` falls back to. On a laptop that
+directory does not exist, and the ``.onnx`` files live in the ``microduck``
+clone instead, so **every policy has to be named explicitly**. That is the
+first of the three things upstream's ``scripts/duck-sim`` says nobody can be
+expected to guess (``pollen-robotics/microduck`` at the pinned commit in
+``docs/upstream-pins.md``; nothing from that script is copied here, only its
+documented behaviour is reproduced).
+
+The file this module renders follows upstream's rule that a params file is a
+*list of decisions*: only the keys we actually decide are live, and every
+other key stays commented with the value it would take, so the generated file
+reads as documentation of what was chosen and what was left to ``robotd``'s
+own defaults. Concretely:
+
+* ``[bus] port`` — a placeholder. ``robotd --fake`` and ``robotd --sim``
+  replace ``DynamixelIo`` with ``FakeIo`` / ``RemoteIo`` before the serial
+  port is ever opened, so the value is unused; it is written anyway because
+  ``Params`` deserialises with ``deny_unknown_fields`` and a reader of the
+  file should see that the real bus was deliberately not selected.
+* ``[policy]`` — ``enabled`` plus one key per slot, naming **only** the
+  ``.onnx`` files that are actually present in the clone. A slot whose file
+  is missing is emitted as a comment, never as a path that would fail to
+  load (a policy that was wanted and could not be loaded makes ``robotd``
+  *unhealthy*, which is a worse failure than not asking for it).
+* If the clone ships **no** policy files at all, the file sets
+  ``[policy] enabled = false`` — the params-file equivalent of running
+  ``robotd --no-policy`` — and the returned report says so, rather than
+  producing a daemon that comes up unhealthy.
+
+Everything here is pure: the filesystem probe is injected (``exists``), and
+:func:`write_params` writes exactly one file, under the caller-supplied state
+directory, named ``<duck name>.toml``.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from microduck_cli.cli._errors import EXIT_ENV_ERROR, CliError
+
+#: The upstream page every remediation in this module points at.
+UPSTREAM_SIMULATION_DOC = (
+    "https://github.com/pollen-robotics/microduck/blob/"
+    "0cd676d6fbb6e90a762c84aa63abe7a02dbc9495/docs/design/simulation.md"
+)
+UPSTREAM_DUCK_SIM = (
+    "https://github.com/pollen-robotics/microduck/blob/"
+    "0cd676d6fbb6e90a762c84aa63abe7a02dbc9495/scripts/duck-sim"
+)
+
+#: Where the clone keeps its ``.onnx`` files — the directory ``duck-sim`` names.
+POLICY_DIRNAME = "policies"
+
+#: ``PolicyParams`` slot -> the file ``scripts/duck-sim`` names for it, in the
+#: order upstream writes them. Slot names are ``robotd``'s own
+#: (``robotd-params/src/lib.rs``); the filenames are the clone's.
+POLICY_SLOTS: tuple[tuple[str, str], ...] = (
+    ("walk", "alpha_walking.onnx"),
+    ("stand", "alpha_stand.onnx"),
+    ("sitstand", "alpha_sitstand.onnx"),
+    ("ground_pick", "alpha_ground_pick.onnx"),
+    ("kick_left", "ball_kick_left.onnx"),
+    ("kick_right", "ball_kick_right.onnx"),
+    ("roulade", "roulade.onnx"),
+)
+
+#: ``[bus] port`` placeholder. Not a servo bus and not meant to be one: with
+#: ``--fake``/``--sim`` the serial port is never opened, and naming a real
+#: ``/dev/tty*`` here would read like a hardware claim this CLI does not make.
+BUS_PORT_PLACEHOLDER = "/dev/null"
+
+Exists = Callable[[str], bool]
+
+
+@dataclass(frozen=True)
+class ParamsReport:
+    """What the generated params file decided, and why."""
+
+    duck: str
+    params_path: str
+    policy_dir: str
+    #: slot -> absolute ``.onnx`` path, for the slots whose file exists.
+    policies: dict[str, str] = field(default_factory=dict)
+    #: slot names whose file is not in the clone (emitted commented out).
+    missing: list[str] = field(default_factory=list)
+    #: False when the clone ships no policy at all: ``--no-policy`` in a file.
+    policy_enabled: bool = True
+    notes: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "duck": self.duck,
+            "params_path": self.params_path,
+            "policy_dir": self.policy_dir,
+            "policies": dict(self.policies),
+            "missing": list(self.missing),
+            "policy_enabled": self.policy_enabled,
+            "notes": list(self.notes),
+        }
+
+
+def _toml_string(value: str) -> str:
+    """Quote a value as a TOML basic string (paths only — no control chars)."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _header(duck: str, clone: str, state_dir: str, policy_enabled: bool) -> list[str]:
+    lines = [
+        f"# robotd params for '{duck}', generated by microduck-cli.",
+        "#",
+        "# A params file is a list of decisions: only the keys decided here are",
+        "# live, everything else is left to robotd's own defaults and shown",
+        "# commented so this file records what was *not* chosen too.",
+        "#",
+        f"#   microduck clone: {clone}",
+        f"#   state directory: {state_dir}",
+        f"#   upstream:        {UPSTREAM_SIMULATION_DOC}",
+        "#",
+    ]
+    if policy_enabled:
+        lines += [
+            "# Every policy is named explicitly because RELEASE_DIR",
+            "# (/opt/robot/daemon/current) exists on a robot and not on a laptop,",
+            "# so PolicyParams::resolved has nothing to fall back to here.",
+        ]
+    else:
+        lines += [
+            "# No .onnx policy was found in the clone, so the policy is disabled:",
+            "# this is the params-file equivalent of `robotd --no-policy`. The loop",
+            "# runs and the daemon stays healthy; the duck will not stand up.",
+        ]
+    return lines
+
+
+def render_params(
+    clone: str | os.PathLike[str],
+    *,
+    duck: str,
+    state_dir: str | os.PathLike[str],
+    exists: Exists = os.path.exists,
+) -> tuple[str, ParamsReport]:
+    """Render the params TOML for one duck, plus a report of what it decided.
+
+    ``clone`` is the ``pollen-robotics/microduck`` checkout; its
+    ``policies/`` directory is probed through the injected ``exists`` so this
+    stays testable without a clone on disk. Nothing is written.
+    """
+    clone_path = os.path.abspath(str(clone))
+    state_path = os.path.abspath(str(state_dir))
+    policy_dir = os.path.join(clone_path, POLICY_DIRNAME)
+    params_path = os.path.join(state_path, f"{duck}.toml")
+
+    present: dict[str, str] = {}
+    missing: list[str] = []
+    for slot, filename in POLICY_SLOTS:
+        candidate = os.path.join(policy_dir, filename)
+        if exists(candidate):
+            present[slot] = candidate
+        else:
+            missing.append(slot)
+
+    policy_enabled = bool(present)
+    notes: list[str] = []
+    if not policy_enabled:
+        notes.append(
+            f"no .onnx policy found under {policy_dir} — wrote `[policy] enabled = false`, "
+            "the params-file equivalent of `robotd --no-policy`"
+        )
+    elif missing:
+        notes.append("policy slots left unset (no such file in the clone): " + ", ".join(missing))
+    notes.append(
+        f"[bus] port is the placeholder {BUS_PORT_PLACEHOLDER!r}; --fake and --sim never "
+        "open the servo bus"
+    )
+    notes.append(
+        "[audio], [theremin] and [chorale] are written commented out: this CLI starts "
+        "neither `sounds` nor `tofd`, so the per-duck bank and depth socket would name "
+        "things that do not exist"
+    )
+
+    lines = _header(duck, clone_path, state_path, policy_enabled)
+    lines += [
+        "",
+        "# The servo bus. Placeholder: --fake swaps in FakeIo and --sim swaps in",
+        "# RemoteIo before this is ever opened.",
+        "[bus]",
+        f"port = {_toml_string(BUS_PORT_PLACEHOLDER)}",
+        "",
+        "[policy]",
+        f"enabled = {'true' if policy_enabled else 'false'}",
+    ]
+    for slot, _filename in POLICY_SLOTS:
+        if slot in present:
+            lines.append(f"{slot} = {_toml_string(present[slot])}")
+    for slot in missing:
+        filename = dict(POLICY_SLOTS)[slot]
+        lines.append(f"# {slot} = <no {filename} in {POLICY_DIRNAME}/>")
+    lines += [
+        "",
+        "# Left to robotd's defaults. Uncomment a line to decide it here instead.",
+        "#",
+        "# [control]",
+        "# hz = 50                    # the wall-clock control loop rate",
+        "#",
+        "# [safety]",
+        "# deadman_ms = 500           # how long an intent outlives its sender",
+        "#",
+        "# [audio]",
+        f"# bank = {_toml_string(os.path.join(state_path, 'sounds', duck))}",
+        '# device = "default"         # plughw:aic3104 is the board codec, not a laptop',
+        "#",
+        "# [theremin]",
+        f"# socket = {_toml_string(os.path.join(state_path, f'{duck}-tof.sock'))}",
+        "#",
+        "# [chorale]",
+        "# accept = true              # one voice bank per duck, or they share an id",
+        "",
+    ]
+
+    report = ParamsReport(
+        duck=duck,
+        params_path=params_path,
+        policy_dir=policy_dir,
+        policies=present,
+        missing=missing,
+        policy_enabled=policy_enabled,
+        notes=notes,
+    )
+    return "\n".join(lines), report
+
+
+def write_params(
+    clone: str | os.PathLike[str],
+    *,
+    duck: str,
+    state_dir: str | os.PathLike[str],
+    exists: Exists = os.path.exists,
+) -> tuple[str, ParamsReport]:
+    """Render and write ``<state_dir>/<duck>.toml``; return its path and report.
+
+    The only file this module ever writes, and only under the caller-supplied
+    state directory. Never ``robotd.toml``: that name belongs to the daemon's
+    own live config, which this CLI does not touch.
+    """
+    text, report = render_params(clone, duck=duck, state_dir=state_dir, exists=exists)
+    target = Path(report.params_path)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        raise CliError(
+            code=EXIT_ENV_ERROR,
+            message=f"could not write params file {report.params_path}: {exc}",
+            remediation=(
+                "point DUCK_SIM_STATE at a short, writable directory — see "
+                f"{UPSTREAM_DUCK_SIM} (the state directory must also stay under the "
+                "~108-byte unix socket path limit)"
+            ),
+        ) from exc
+    return report.params_path, report
