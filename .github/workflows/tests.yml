@@ -106,20 +106,12 @@ jobs:
           git -C ../microduck fetch -q origin sim-remote-io && git -C ../microduck checkout -q "$PIN"
           (cd ../microduck && cargo build --quiet -p robotd -p robotctl -p tof -p sounds)
 
-      - name: env up --fake, the operate walkthrough, env down
+      - name: Live CLI suite against the real daemon (tests/live, opt-in marker)
         if: steps.toolchain.outputs.ok == 'true'
         env:
           MICRODUCK_CLONE: ${{ github.workspace }}/../microduck
-          DUCK_SIM_STATE: /tmp/ds
-        run: |
-          uv run microduck env doctor || true
-          uv run microduck env up --fake --skip-build
-          uv run microduck duck health --json
-          uv run microduck duck init --apply --json
-          uv run microduck duck enable --apply --json
-          uv run microduck rules check --duck duck-a
-          uv run microduck rules engine run --duck duck-a --apply --max-ticks 100 --json
-          uv run microduck env down
+          MICRODUCK_LIVE: "1"
+        run: uv run pytest -m live -n0 -v tests/live
 
   version-check:
     # Only run on PR events. On push to main after a merged PR, the comparison

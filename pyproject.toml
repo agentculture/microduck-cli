@@ -75,4 +75,7 @@ skips = ["B101", "B404", "B603"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra -m 'not live'"
+markers = [
+    "live: operates the CLI against the real robotd built from the pinned commit (opt-in: MICRODUCK_LIVE=1; run with -n0)",
+]
