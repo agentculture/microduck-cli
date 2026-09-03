@@ -264,7 +264,7 @@ def test_hf_auth_wandb_duck_pin_are_set_unset_only():
 # --- secrets never leak ----------------------------------------------------
 
 
-def test_output_never_contains_secret_values_text_and_json():
+def test_output_never_contains_secret_values_text_and_json(monkeypatch):
     sentinels = {
         "HF_TOKEN": "hf-sentinel-should-not-leak",
         "WANDB_API_KEY": "wandb-sentinel-should-not-leak",
@@ -275,19 +275,9 @@ def test_output_never_contains_secret_values_text_and_json():
     # that by driving default_probe() with an environment carrying the
     # sentinel values, and asserting the resulting probe (and everything
     # rendered from it) never contains them.
-    import os as _os
-
-    env_backup = {name: _os.environ.get(name) for name in sentinels}
-    try:
-        for name, value in sentinels.items():
-            _os.environ[name] = value
-        probe = default_probe()
-    finally:
-        for name, original in env_backup.items():
-            if original is None:
-                _os.environ.pop(name, None)
-            else:
-                _os.environ[name] = original
+    for name, value in sentinels.items():
+        monkeypatch.setenv(name, value)
+    probe = default_probe()
 
     # secrets is boolean-only.
     for name in sentinels:

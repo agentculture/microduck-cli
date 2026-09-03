@@ -94,7 +94,8 @@ def fake_duck(duck_env):
     body = (["--sim", "--headless"] if headless else ["--sim"]) if BODY == "sim" else ["--fake"]
     up = _cli("env", "up", *body, "--skip-build", "--json", env=duck_env, timeout=180)
     payload = _json(up)
-    assert payload["healthy"] is True and payload["sockets"], up.stderr
+    assert payload["healthy"] is True, up.stderr
+    assert payload["sockets"], up.stderr
     yield payload
     down = _cli("env", "down", "--json", env=duck_env, timeout=60)
     assert down.returncode == 0, down.stderr
@@ -120,17 +121,20 @@ def test_health_is_healthy_at_50_hz(fake_duck, duck_env):
     payload = _json(_cli("duck", "health", "--json", env=duck_env))
     assert payload["healthy"] is True
     loop = payload["health"]["control_loop"]
-    assert loop["target_hz"] == 50.0 and loop["missed"] == 0
+    assert loop["target_hz"] == 50.0
+    assert loop["missed"] == 0
     assert loop["achieved_hz"] is None or abs(loop["achieved_hz"] - 50.0) < 1.0
 
 
 @skip_unless_live
 def test_init_dry_runs_on_a_pipe_then_applies(fake_duck, duck_env):
     dry = _cli("duck", "init", env=duck_env)
-    assert dry.returncode == 0 and "Dry-run plan: init" in dry.stdout
+    assert dry.returncode == 0
+    assert "Dry-run plan: init" in dry.stdout
     assert "robot.init" in dry.stdout
     applied = _json(_cli("duck", "init", "--apply", "--json", env=duck_env))
-    assert applied["sent"] is True and applied["result"]["accepted"] is True
+    assert applied["sent"] is True
+    assert applied["result"]["accepted"] is True
 
 
 @skip_unless_live
@@ -138,7 +142,8 @@ def test_enable_then_a_skill_is_accepted(fake_duck, duck_env):
     enabled = _json(_cli("duck", "enable", "--apply", "--json", env=duck_env))
     assert enabled["result"]["accepted"] is True
     done = _json(_cli("duck", "do", "roulade", "--apply", "--json", env=duck_env))
-    assert done["sent"] is True and done["result"]["accepted"] is True
+    assert done["sent"] is True
+    assert done["result"]["accepted"] is True
 
 
 @skip_unless_live
@@ -170,7 +175,8 @@ def test_rules_check_reads_skills_from_subscribe_on_api16(fake_duck, duck_env):
     proc = _cli("rules", "check", "--duck", "duck-a", "--json", env=duck_env)
     payload = _json(proc)
     assert payload["ok"] is True, payload
-    assert payload["issues"] == [] and payload["problems"] == []
+    assert payload["issues"] == []
+    assert payload["problems"] == []
     assert "subscribe" in payload["skills_source"]  # API 16: skills come from robot.subscribe
 
 
@@ -223,7 +229,8 @@ def test_record_writes_pure_jsonl(fake_duck, duck_env):
 @skip_unless_live
 def test_env_status_and_down_leave_nothing_tracked(fake_duck, duck_env):
     status = _json(_cli("env", "status", "--json", env=duck_env))
-    assert status["processes"] and all(p["alive"] for p in status["processes"])
+    assert status["processes"]
+    assert all(p["alive"] for p in status["processes"])
     assert all(s["responding"] for s in status["socket_health"])
 
 

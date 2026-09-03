@@ -71,13 +71,13 @@ class _Recording:
         self.writes.append(dict(pose))
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake() -> Iterator[FakeRobotd]:
     with FakeRobotd() as running:
         yield running
 
 
-@pytest.fixture()
+@pytest.fixture
 def sense_log() -> Iterator[_Records]:
     handler = _Records()
     logger = logging.getLogger("microduck.sense")
@@ -276,7 +276,8 @@ def test_a_live_pad_stream_silences_every_motion_channel_for_200_ticks(
         assert MOTION_METHODS.isdisjoint(set(fake.methods_called()))
         assert len(_calls(fake, proto.ROBOT_MOUTH)) == 200
         assert gate.withheld[DROP_HUMAN_DRIVING] == 200
-        assert gate.withheld["twist"] == 200 and gate.withheld["skill"] == 200
+        assert gate.withheld["twist"] == 200
+        assert gate.withheld["skill"] == 200
         assert any(f"event={EVENT_START}" in line for line in sense_log.lines)
         assert sink.drops == {}
     finally:
