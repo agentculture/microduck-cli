@@ -37,13 +37,13 @@ RUN_S = 0.5
 _SideLinks = Callable[[FakeRobotd], tuple[RobotClient, RobotClient]]
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake() -> Iterator[FakeRobotd]:
     with FakeRobotd() as running:
         yield running
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(fake: FakeRobotd) -> Iterator[RobotClient]:
     connected = RobotClient(fake.socket_path, clock=time.monotonic).connect(verify_joints=False)
     try:
@@ -52,7 +52,7 @@ def client(fake: FakeRobotd) -> Iterator[RobotClient]:
         connected.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def side_links() -> Iterator[_SideLinks]:
     """Build the pad and ToF links (separate clients) against a running fake."""
     opened: list[RobotClient] = []
@@ -81,7 +81,7 @@ class _Records(logging.Handler):
         self.lines.append(record.getMessage())
 
 
-@pytest.fixture()
+@pytest.fixture
 def sense_log() -> Iterator[_Records]:
     handler = _Records()
     logger = logging.getLogger("microduck.sense")
@@ -198,7 +198,8 @@ def test_pad_and_tof_frames_are_recorded_when_they_arrive(
 
     records = _parse(stream.getvalue())
     by_source = {record["source"] for record in records}
-    assert "pad" in by_source and "tof" in by_source
+    assert "pad" in by_source
+    assert "tof" in by_source
     tof = [r for r in records if r["source"] == "tof"][0]
     assert tof["params"]["nearest_m"] == 0.42, "params are recorded verbatim"
 
@@ -263,7 +264,8 @@ def test_the_engine_still_gets_its_peek_slots(client: RobotClient) -> None:
     peeked = client.peek(proto.ROBOT_STATE)
     assert peeked is not None
     params, stamp = peeked
-    assert isinstance(params, dict) and stamp is not None
+    assert isinstance(params, dict)
+    assert stamp is not None
 
 
 def test_ctrl_c_closes_the_recording_and_still_leaves_a_valid_file(

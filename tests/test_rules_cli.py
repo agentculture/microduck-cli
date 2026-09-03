@@ -64,7 +64,7 @@ class FakeClock:
         return value
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake() -> Iterator[FakeRobotd]:
     server = FakeRobotd()
     try:
@@ -73,7 +73,7 @@ def fake() -> Iterator[FakeRobotd]:
         server.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def seams(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
     """Inject a fake clock and a no-op sleep into the rules command module."""
     clock = FakeClock()
@@ -82,7 +82,7 @@ def seams(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
     return clock
 
 
-@pytest.fixture()
+@pytest.fixture
 def client_factory(monkeypatch: pytest.MonkeyPatch, seams: FakeClock):
     """Point the CLI's client factory at real clients over the fake's socket."""
     made: list[RobotClient] = []
@@ -713,7 +713,8 @@ def test_engine_start_spawns_a_detached_run_with_apply(
     argv = spawned[0]
     assert rules_cmd.ENGINE_MARKER in " ".join(argv)
     assert argv[-1] == "--apply"
-    assert "--socket" in argv and fake.socket_path in argv
+    assert "--socket" in argv
+    assert fake.socket_path in argv
     # The child's output goes to <state>/engine.log, never /dev/null, and both
     # the payload and the status verb name that path.
     assert logs == [os.path.join(state_dir, rules_cmd.ENGINE_LOG_NAME)]
@@ -764,7 +765,8 @@ def test_engine_start_on_a_tty_confirms_and_a_refusal_spawns_nothing(
     rc = main(["rules", "engine", "start", "--socket", fake.socket_path, "--state", state_dir])
     assert rc == EXIT_USER_ERROR
     assert "rules engine start cancelled" in capsys.readouterr().err
-    assert asked and "Start the engine and drive this duck?" in asked[0]
+    assert asked
+    assert "Start the engine and drive this duck?" in asked[0]
     assert spawned == []
 
 

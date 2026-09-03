@@ -60,13 +60,13 @@ class _Records(logging.Handler):
         self.lines.append(record.getMessage())
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake() -> Iterator[FakeRobotd]:
     with FakeRobotd() as running:
         yield running
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(fake: FakeRobotd) -> Iterator[RobotClient]:
     connected = RobotClient(fake.socket_path, clock=time.monotonic)
     connected.connect()
@@ -76,7 +76,7 @@ def client(fake: FakeRobotd) -> Iterator[RobotClient]:
         connected.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def sink(client: RobotClient) -> Iterator[RobotSink]:
     made = RobotSink(client)
     try:
@@ -85,7 +85,7 @@ def sink(client: RobotClient) -> Iterator[RobotSink]:
         made.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def sense_log() -> Iterator[_Records]:
     handler = _Records()
     logger = logging.getLogger("microduck.sense")
@@ -316,7 +316,8 @@ def test_a_mode_intent_firing_sends_exactly_one_set_mode(fake: FakeRobotd, sink:
     ``robot.setMode`` call carrying the requested mode.
     """
     admission = default_registry().admit(Intent("mode", {"mode": "roller"}))
-    assert admission.admitted and admission.behavior is not None
+    assert admission.admitted
+    assert admission.behavior is not None
     pose = admission.behavior.contribute(0.0, EMPTY_SENSE)
     assert pose["mode"] == "roller"
 

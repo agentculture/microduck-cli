@@ -106,7 +106,9 @@ def test_read_state_ignores_bool_and_non_numeric_fields(tmp_path):
     )
     state = read_state(tmp_path)
     assert isinstance(state, EngineState)
-    assert state.pid is None and state.last_beat is None and state.tick == 4
+    assert state.pid is None
+    assert state.last_beat is None
+    assert state.tick == 4
 
 
 # --- the liveness decision ------------------------------------------------
@@ -115,7 +117,9 @@ def test_read_state_ignores_bool_and_non_numeric_fields(tmp_path):
 def test_fresh_heartbeat_with_a_live_pid_is_live(tmp_path):
     make_heartbeat(tmp_path).beat(tick=9)
     state = engine_is_live(tmp_path, now=100.5, pid_alive=lambda pid: True)
-    assert state is not None and state.pid == 4242 and state.tick == 9
+    assert state is not None
+    assert state.pid == 4242
+    assert state.tick == 9
 
 
 def test_stale_heartbeat_is_not_live_even_with_a_live_pid(tmp_path):

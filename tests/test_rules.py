@@ -131,14 +131,16 @@ def test_refuses_unknown_schema_version():
 
 
 def test_refuses_unknown_top_level_field():
+    data = {**_base(), "bogus": 1}
     with pytest.raises(CliError) as exc:
-        RulesConfig.from_dict({**_base(), "bogus": 1})
+        RulesConfig.from_dict(data)
     assert "bogus" in exc.value.message
 
 
 def test_refuses_non_json_safe_value():
+    data = {**_base(), "react": [_react(params={"fn": lambda: 1})]}
     with pytest.raises(CliError) as exc:
-        RulesConfig.from_dict({**_base(), "react": [_react(params={"fn": lambda: 1})]})
+        RulesConfig.from_dict(data)
     assert "not declarative JSON data" in exc.value.message
 
 

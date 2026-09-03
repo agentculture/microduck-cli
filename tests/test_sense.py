@@ -64,8 +64,9 @@ def test_no_providers_reads_empty():
 
 
 def test_sense_is_frozen():
+    snap = Sense()
     with pytest.raises(dataclasses.FrozenInstanceError):
-        EMPTY_SENSE.fallen = True  # type: ignore[misc]
+        snap.fallen = True  # type: ignore[misc]
 
 
 @pytest.mark.parametrize("field,provider,value", VALUE_FIELDS)
@@ -119,8 +120,9 @@ def test_keyboard_interrupt_is_not_swallowed():
     def interrupt():
         raise KeyboardInterrupt
 
+    providers = SenseProviders(fallen=interrupt)
     with pytest.raises(KeyboardInterrupt):
-        read_sense(SenseProviders(fallen=interrupt), 0.0)
+        read_sense(providers, 0.0)
 
 
 # --- coercion: a malformed reading is a non-reading, never a raise --------

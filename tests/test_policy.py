@@ -45,7 +45,7 @@ def _rl_clone_at_commit(tmp_path, sha: str) -> str:
     return str(clone)
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake():
     with FakeRobotd() as running:
         yield running

@@ -46,13 +46,13 @@ class _Records(logging.Handler):
         self.lines.append(record.getMessage())
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake() -> Iterator[FakeRobotd]:
     with FakeRobotd() as running:
         yield running
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(fake: FakeRobotd) -> Iterator[RobotClient]:
     connected = RobotClient(fake.socket_path, clock=time.monotonic)
     connected.connect()
@@ -63,7 +63,7 @@ def client(fake: FakeRobotd) -> Iterator[RobotClient]:
         connected.close()
 
 
-@pytest.fixture()
+@pytest.fixture
 def sense_log() -> Iterator[_Records]:
     handler = _Records()
     logger = logging.getLogger("microduck.sense")
@@ -96,11 +96,12 @@ def _released(fake: FakeRobotd) -> bool:
 def test_a_keyboard_interrupt_mid_behaviour_releases_exactly_four_sends(
     fake: FakeRobotd, client: RobotClient
 ) -> None:
+    ctx = owning(client)
+    client.notify(proto.ROBOT_MOVE, {"vx": 0.2, "vy": 0.0, "vyaw": 0.0})
+    assert _wait_for(lambda: proto.ROBOT_MOVE in fake.methods_called())
+    fake.clear_log()
     with pytest.raises(KeyboardInterrupt):
-        with owning(client) as owner:
-            client.notify(proto.ROBOT_MOVE, {"vx": 0.2, "vy": 0.0, "vyaw": 0.0})
-            assert _wait_for(lambda: proto.ROBOT_MOVE in fake.methods_called())
-            fake.clear_log()
+        with ctx as owner:
             raise KeyboardInterrupt
 
     assert _wait_for(lambda: _released(fake)), fake.methods_called()
@@ -118,8 +119,9 @@ def test_a_keyboard_interrupt_mid_behaviour_releases_exactly_four_sends(
 
 def test_release_never_sends_robot_relax(fake: FakeRobotd, client: RobotClient) -> None:
     """A duck on two legs FALLS when it goes limp — relax is the arm's answer, not this one."""
+    ctx = owning(client)
     with pytest.raises(RuntimeError):
-        with owning(client):
+        with ctx:
             raise RuntimeError("a rule blew up")
     assert _wait_for(lambda: _released(fake))
     assert proto.ROBOT_RELAX not in fake.methods_called()
@@ -210,14 +212,20 @@ def test_sigterm_inside_the_context_releases_and_propagates(
     own handler) is unaffected.
     """
     before = signal.getsignal(signal.SIGTERM)
+    ctx = owning(client)
+
+    def _raise_sigterm() -> None:
+        assert signal.getsignal(signal.SIGTERM) is not before
+        os.kill(os.getpid(), signal.SIGTERM)
+        time.sleep(0.5)  # pragma: no cover - the signal lands first
+
     with pytest.raises(SignalExit):
-        with owning(client) as owner:
-            assert signal.getsignal(signal.SIGTERM) is not before
-            os.kill(os.getpid(), signal.SIGTERM)
-            time.sleep(0.5)  # pragma: no cover - the signal lands first
+        with ctx as owner:
+            _raise_sigterm()
     assert signal.getsignal(signal.SIGTERM) is before
     assert _wait_for(lambda: _released(fake))
-    assert owner.report is not None and owner.report.complete
+    assert owner.report is not None
+    assert owner.report.complete
 
 
 @pytest.mark.skipif(
@@ -228,10 +236,15 @@ def test_sigint_inside_the_context_raises_keyboard_interrupt(
     fake: FakeRobotd, client: RobotClient
 ) -> None:
     before = signal.getsignal(signal.SIGINT)
+    ctx = owning(client)
+
+    def _raise_sigint() -> None:
+        os.kill(os.getpid(), signal.SIGINT)
+        time.sleep(0.5)  # pragma: no cover - the signal lands first
+
     with pytest.raises(KeyboardInterrupt):
-        with owning(client):
-            os.kill(os.getpid(), signal.SIGINT)
-            time.sleep(0.5)  # pragma: no cover - the signal lands first
+        with ctx:
+            _raise_sigint()
     assert signal.getsignal(signal.SIGINT) is before
     assert _wait_for(lambda: _released(fake))
 
@@ -245,7 +258,8 @@ def test_a_broken_on_release_hook_never_replaces_the_real_failure(
     with pytest.raises(ZeroDivisionError):
         with owning(client, on_release=_boom) as owner:
             _ = 1 / 0
-    assert owner.report is not None and owner.report.complete
+    assert owner.report is not None
+    assert owner.report.complete
 
 
 def test_the_report_is_json_serialisable(fake: FakeRobotd, client: RobotClient) -> None:
