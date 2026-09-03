@@ -297,54 +297,78 @@ def _no_verb(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _policies_via_method(client: RobotClient) -> tuple[dict[str, object], list[object]] | None:
+    """``robot.policies`` on a daemon new enough to have it.
+
+    ``None`` means "this daemon has no such method" — the caller falls back to
+    reading the slots off ``robot.subscribe``. Any other RPC failure is the
+    caller's to surface, so it is re-raised untouched.
+    """
+    try:
+        result = client.request("robot.policies")
+    except RpcError as exc:
+        if exc.code == METHOD_NOT_FOUND:
+            return None
+        raise
+    if not isinstance(result, dict):
+        return ({}, [])
+    return (result.get("slots", {}) or {}, result.get("skills", []) or [])
+
+
+def _policies_via_subscribe(client: RobotClient) -> tuple[dict[str, object], list[object]]:
+    """The D1 fallback: the same three slots, read off the ``robot.subscribe`` reply."""
+    sub = client.subscribe()
+    slots: dict[str, object] = {
+        "walk": sub.walk,
+        "stand": sub.stand,
+        "unavailable": sub.unavailable,
+    }
+    skills: list[object] = [{"name": name, "file": file} for name, file in sub.files.items()]
+    return slots, skills
+
+
+def _read_policies(client: RobotClient) -> tuple[str, dict[str, object], list[object]]:
+    """``(source, slots, skills)`` — ``robot.policies`` where available, else subscribe."""
+    api = client.daemon.api_version
+    if api is None or api >= POLICY_API_VERSION:
+        found = _policies_via_method(client)
+        if found is not None:
+            return ("robot.policies", found[0], found[1])
+    slots, skills = _policies_via_subscribe(client)
+    return ("robot.subscribe", slots, skills)
+
+
+def _skill_line(skill: object) -> str:
+    if isinstance(skill, dict):
+        return f"- {skill.get('name')}: {skill.get('file')}"
+    return f"- {skill}"
+
+
+def _policy_list_text(
+    name: str, source: str, slots: dict[str, object], skills: list[object]
+) -> str:
+    lines = [f"# policy list ({source})", f"duck: {name}", "", "## slots"]
+    for slot in ("walk", "stand", "unavailable"):
+        lines.append(f"- {slot}: {slots.get(slot)}")
+    lines.append("")
+    lines.append("## skills")
+    lines.extend([_skill_line(skill) for skill in skills] or ["- (none)"])
+    return "\n".join(lines)
+
+
 def cmd_policy_list(args: argparse.Namespace) -> int:
     json_mode = bool(getattr(args, "json", False))
     client, address = _build_client(args)
     try:
-        api = client.daemon.api_version
-        source = "robot.policies"
-        slots: dict[str, object] = {}
-        skills: list[object] = []
-        use_fallback = api is not None and api < POLICY_API_VERSION
-        if not use_fallback:
-            try:
-                result = client.request("robot.policies")
-            except RpcError as exc:
-                if exc.code == METHOD_NOT_FOUND:
-                    use_fallback = True
-                else:
-                    raise
-            else:
-                if isinstance(result, dict):
-                    slots = result.get("slots", {}) or {}
-                    skills = result.get("skills", []) or []
-        if use_fallback:
-            source = "robot.subscribe"
-            sub = client.subscribe()
-            slots = {"walk": sub.walk, "stand": sub.stand, "unavailable": sub.unavailable}
-            skills = [{"name": name, "file": file} for name, file in sub.files.items()]
+        source, slots, skills = _read_policies(client)
     finally:
         client.close()
 
     payload = {"duck": address.name, "source": source, "slots": slots, "skills": skills}
-    if json_mode:
-        emit_result(payload, json_mode=True)
-        return 0
-
-    lines = [f"# policy list ({source})", f"duck: {address.name}", "", "## slots"]
-    for name in ("walk", "stand", "unavailable"):
-        lines.append(f"- {name}: {slots.get(name)}")
-    lines.append("")
-    lines.append("## skills")
-    if skills:
-        for skill in skills:
-            if isinstance(skill, dict):
-                lines.append(f"- {skill.get('name')}: {skill.get('file')}")
-            else:
-                lines.append(f"- {skill}")
-    else:
-        lines.append("- (none)")
-    emit_result("\n".join(lines), json_mode=False)
+    emit_result(
+        payload if json_mode else _policy_list_text(address.name, source, slots, skills),
+        json_mode=json_mode,
+    )
     return 0
 
 
@@ -384,6 +408,62 @@ def _positional_for(args: argparse.Namespace, verb: str) -> list[str]:
     return []
 
 
+def _emit_policy_dry_run(
+    args: argparse.Namespace,
+    *,
+    verb: str,
+    address: addressing.DuckAddress,
+    call_desc: str,
+    call_params: dict[str, object],
+    trusted_source: bool,
+    json_mode: bool,
+) -> int:
+    """The zero-side-effect plan a non-TTY run without ``--apply`` prints instead of calling."""
+    plan = {
+        "verb": verb if trusted_source else "policy-install",
+        "target": address.name,
+        "socket": address.socket_path,
+        "calls": [call_desc],
+        # lane adds one to cli/_output.py — see CLAUDE.md's noun-internals note.
+        "apply_command": (f"{PROG} policy {verb} {' '.join(_positional_for(args, verb))} --apply"),
+    }
+    body = render_dry_run(plan) + "\n\n" + _DURABILITY_NOTE
+    emit_result(
+        (
+            {"mode": "dry_run", "call": call_desc, "params": call_params, "text": body}
+            if json_mode
+            else body
+        ),
+        json_mode=json_mode,
+    )
+    return 0
+
+
+def _confirm_policy_call(*, verb: str, call_desc: str, trusted_source: bool) -> None:
+    """Ask on the TTY; a "no" is a user-input error, not a silent no-op."""
+    question = f"Send {call_desc}. Proceed? [y/N]"
+    if not trusted_source:
+        question = f"{SAFETY_COMMUNITY_POLICY}\n{question}"
+    if not confirm_on_tty(question):
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"policy {verb} cancelled",
+            remediation="re-run and confirm, or pass --apply for non-interactive mode",
+        )
+
+
+def _request_policy_call(
+    client: RobotClient, method: str, call_params: dict[str, object]
+) -> object:
+    """Send the call, translating "no such method" into the D1 no-policy-channel error."""
+    try:
+        return client.request(method, call_params)
+    except RpcError as exc:
+        if exc.code == METHOD_NOT_FOUND:
+            raise _d1_from_method_not_found(client, exc) from exc
+        raise
+
+
 def _do_gated_policy_call(
     args: argparse.Namespace,
     *,
@@ -394,69 +474,44 @@ def _do_gated_policy_call(
     trusted_source: bool,
 ) -> int:
     json_mode = bool(getattr(args, "json", False))
-    apply_flag = bool(getattr(args, "apply", False))
     client, address = _build_client(args)
     try:
         _require_policy_channel(client)
         call_desc = f"{method} {call_params!r}"
-        gate_state = consent(apply_flag)
+        gate_state = consent(bool(getattr(args, "apply", False)))
 
         if gate_state is Consent.DRY_RUN:
-            plan = {
-                "verb": "policy-install" if not trusted_source else verb,
-                "target": address.name,
-                "socket": address.socket_path,
-                "calls": [call_desc],
-                # lane adds one to cli/_output.py — see CLAUDE.md's noun-internals note.
-                "apply_command": (
-                    f"{PROG} policy {verb} {' '.join(_positional_for(args, verb))} --apply"
-                ),
-            }
-            body = render_dry_run(plan) + "\n\n" + _DURABILITY_NOTE
-            if json_mode:
-                emit_result(
-                    {"mode": "dry_run", "call": call_desc, "params": call_params, "text": body},
-                    json_mode=True,
-                )
-            else:
-                emit_result(body, json_mode=False)
-            return 0
-
+            return _emit_policy_dry_run(
+                args,
+                verb=verb,
+                address=address,
+                call_desc=call_desc,
+                call_params=call_params,
+                trusted_source=trusted_source,
+                json_mode=json_mode,
+            )
         if gate_state is Consent.PROMPT:
-            question = f"Send {call_desc}. Proceed? [y/N]"
-            if not trusted_source:
-                question = f"{SAFETY_COMMUNITY_POLICY}\n{question}"
-            if not confirm_on_tty(question):
-                raise CliError(
-                    EXIT_USER_ERROR,
-                    f"policy {verb} cancelled",
-                    remediation="re-run and confirm, or pass --apply for non-interactive mode",
-                )
-
-        try:
-            result = client.request(method, call_params)
-        except RpcError as exc:
-            if exc.code == METHOD_NOT_FOUND:
-                raise _d1_from_method_not_found(client, exc) from exc
-            raise
+            _confirm_policy_call(verb=verb, call_desc=call_desc, trusted_source=trusted_source)
+        result = _request_policy_call(client, method, call_params)
     finally:
         client.close()
 
     accepted = bool(result.get("accepted", True)) if isinstance(result, dict) else True
     body = _load_policy_result_text(verb, detail, accepted)
-    if json_mode:
-        emit_result(
+    emit_result(
+        (
             {
                 "mode": "apply",
                 "call": method,
                 "params": call_params,
                 "result": result,
                 "text": body,
-            },
-            json_mode=True,
-        )
-    else:
-        emit_result(body, json_mode=False)
+            }
+            if json_mode
+            else body
+        ),
+        json_mode=json_mode,
+    )
     return 0
 
 

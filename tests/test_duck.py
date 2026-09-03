@@ -421,6 +421,35 @@ def test_quack_sends_the_chirp_tag_as_a_notification(
     assert sounds[0].params == {"tag": "chirp"}
 
 
+def test_quack_in_text_mode_reports_the_tag_and_never_raises(
+    fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: the text branch called ``emit_result(text, False)`` positionally.
+
+    ``json_mode`` is keyword-only, so a plain ``duck quack`` raised ``TypeError``
+    inside the handler, which ``_dispatch`` wrapped as ``error: unexpected:`` and
+    exit 1 — every ``--json`` quack test passed straight over it.
+    """
+    rc = main(_sock(fake, "quack"))
+    captured = capsys.readouterr()
+    assert rc == 0, captured.err
+    assert captured.out.startswith("quack: ")
+    assert duck_cmd.QUACK_TAG in captured.out
+    assert "unexpected" not in captured.err
+    assert captured.err == ""
+
+
+def test_version_in_text_mode_reports_both_api_versions(
+    fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main(_sock(fake, "version"))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "- api_version" in out
+    assert "- daemon_version" in out
+    assert str(proto.API_VERSION) in out
+
+
 def test_mode_read_is_ungated(fake: FakeRobotd, capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(_sock(fake, "mode", "--json"))
     payload = json.loads(capsys.readouterr().out)
