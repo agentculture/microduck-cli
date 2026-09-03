@@ -4,8 +4,10 @@ Every side effect the CLI verbs perform is reachable through a module-level
 seam on ``microduck_cli.cli._commands.env`` (mirroring ``env/stack.py``'s own
 injection style), so these tests never build cargo, start a real process, or
 open a real network socket except against the in-process
-``tests.fake_robotd.FakeRobotd`` (a real unix-socket JSON-RPC server) used to
-exercise the private ``hello``/``robot.health`` client helper end to end.
+``tests.fake_robotd.FakeRobotd`` (a real unix-socket JSON-RPC server), against
+which the ``hello``/``robot.health`` probes — now spoken through
+``microduck_cli.ipc.client.RobotClient``, not a private wire helper — are
+exercised end to end.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_SUCCESS, EXIT_USER_ER
 from microduck_cli.env import doctor as env_doctor
 from microduck_cli.env.doctor import EnvProbe
 from microduck_cli.env.hosts import HostInfo
+from microduck_cli.ipc.client import RobotClient
 from tests.fake_robotd import FakeRobotd
 from tests.test_no_secrets_in_output import assert_no_secrets
 from tests.test_stack import FakeRunner, ProcTable, _clone_with_policies, _rl_with_ort
@@ -54,6 +57,18 @@ _COMPLETE_PROBE = EnvProbe(
 )
 
 _EMPTY_PROBE = EnvProbe()
+
+
+class _Ticks:
+    """A monotonic clock that runs away, so a wait loop times out at once."""
+
+    def __init__(self, step: float = 30.0) -> None:
+        self.now = 0.0
+        self.step = step
+
+    def __call__(self) -> float:
+        self.now += self.step
+        return self.now
 
 
 def _env(tmp_path: Path, **overrides) -> tuple[Path, Path]:
@@ -167,6 +182,92 @@ def test_env_up_times_out_naming_the_daemon_log_in_the_remediation(
     err = capsys.readouterr().err
     assert rc == EXIT_ENV_ERROR
     assert "duck-a.log" in err
+
+
+def test_env_up_stops_what_it_started_when_the_daemon_never_answers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A failed bring-up must not leave the processes it launched behind.
+
+    The injected runner starts a "daemon" that never reports healthy. The verb
+    still fails with the log path in the remediation — but first it stops the pid
+    it wrote, by SIGTERM through the stack's own identity-checked ``down()``, and
+    the pidfile is gone. Anything less and the next ``env up`` collides with a
+    stack nobody knows is running.
+    """
+    clone, rl = _env(tmp_path)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    table = ProcTable({1000: "target/debug/robotd --fake"})
+
+    monkeypatch.setattr(env_cmd._doctor, "resolve_clone_paths", lambda env: (str(clone), str(rl)))
+    monkeypatch.setattr(env_cmd, "_stack_runner", FakeRunner(first_pid=1000))
+    monkeypatch.setattr(env_cmd, "_stack_exists", lambda _p: True)
+    monkeypatch.setattr(env_cmd, "_stack_proc_cmdline", table.cmdline)
+    monkeypatch.setattr(env_cmd, "_stack_kill", table.kill)
+    monkeypatch.setattr(env_cmd, "_wait_for_healthy", lambda _sock, _timeout: False)
+
+    rc = main(["env", "up", "--fake", "--state", str(state_dir), "--skip-build"])
+    err = capsys.readouterr().err
+
+    assert rc == EXIT_ENV_ERROR
+    assert "duck-a.log" in err, "the original failure still names the daemon log"
+    assert [pid for pid, _sig in table.sent] == [1000], "the started daemon was signalled"
+    assert list(state_dir.glob("*.pid")) == [], "no pidfile is left behind"
+    assert "cleanup" in err
+
+
+def test_env_up_stops_what_it_started_when_a_socket_never_appears(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The same obligation when ``SimStack.up()`` itself gives up mid-bring-up."""
+    clone, rl = _env(tmp_path)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    table = ProcTable({1000: "target/debug/robotd --fake"})
+    ticking = _Ticks()
+
+    monkeypatch.setattr(env_cmd._doctor, "resolve_clone_paths", lambda env: (str(clone), str(rl)))
+    monkeypatch.setattr(env_cmd, "_stack_runner", FakeRunner(first_pid=1000))
+    monkeypatch.setattr(env_cmd, "_stack_exists", lambda _p: False)  # the socket never lands
+    monkeypatch.setattr(env_cmd, "_stack_proc_cmdline", table.cmdline)
+    monkeypatch.setattr(env_cmd, "_stack_kill", table.kill)
+    monkeypatch.setattr(env_cmd, "_stack_sleep", lambda _s: None)
+    monkeypatch.setattr(env_cmd, "_stack_monotonic", ticking)
+
+    rc = main(["env", "up", "--fake", "--state", str(state_dir), "--skip-build"])
+    err = capsys.readouterr().err
+
+    assert rc == EXIT_ENV_ERROR
+    assert "did not appear" in err
+    assert [pid for pid, _sig in table.sent] == [1000]
+    assert list(state_dir.glob("*.pid")) == []
+
+
+def test_env_up_cleanup_failure_never_masks_the_original_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Cleanup is best effort: when it fails, the bring-up failure still surfaces."""
+    clone, rl = _env(tmp_path)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+
+    def explode(_pid: int, _sig: int) -> None:
+        raise OSError("not permitted to signal that pid")
+
+    monkeypatch.setattr(env_cmd._doctor, "resolve_clone_paths", lambda env: (str(clone), str(rl)))
+    monkeypatch.setattr(env_cmd, "_stack_runner", FakeRunner(first_pid=1000))
+    monkeypatch.setattr(env_cmd, "_stack_exists", lambda _p: True)
+    monkeypatch.setattr(env_cmd, "_stack_proc_cmdline", lambda _pid: "target/debug/robotd --fake")
+    monkeypatch.setattr(env_cmd, "_stack_kill", explode)
+    monkeypatch.setattr(env_cmd, "_wait_for_healthy", lambda _sock, _timeout: False)
+
+    rc = main(["env", "up", "--fake", "--state", str(state_dir), "--skip-build"])
+    err = capsys.readouterr().err
+
+    assert rc == EXIT_ENV_ERROR
+    assert "did not report healthy" in err, "the original failure is the news"
+    assert "cleanup could not complete" in err
 
 
 def test_env_up_without_a_resolvable_clone_is_an_env_error(
@@ -396,7 +497,64 @@ def test_bare_env_prints_overview(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# the private JSON-RPC health/hello helpers, against a real fake robotd
+# the noun-level --json flag reaches the verb
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("argv", [["env", "--json", "status"], ["env", "status", "--json"]])
+def test_env_json_before_or_after_the_verb_both_emit_json(
+    argv: list[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+) -> None:
+    """``env --json status`` must not be silently downgraded to text.
+
+    A verb's own ``--json`` used to default to False and overwrite the noun-level
+    flag argparse had already recorded, so the JSON an agent asked for came back
+    as prose. Both positions mean the same thing.
+    """
+    monkeypatch.setattr(env_cmd, "_hello_probe", lambda _sock: True)
+    rc = main([*argv, "--state", str(tmp_path)])
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == EXIT_SUCCESS
+    assert payload["state_dir"] == str(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# the health/hello probes, spoken through the one JSON-RPC client
+# ---------------------------------------------------------------------------
+
+
+def test_the_probes_go_through_the_ipc_client_seam(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No private wire implementation lives here any more (the t10 TODO is gone).
+
+    Both probes build their client through ``_client_factory``; swapping it is the
+    only interception point, and ``RobotClient`` is what it hands back.
+    """
+    assert not hasattr(env_cmd, "_rpc_roundtrip"), "the private JSON-RPC helper must be gone"
+    built: list[str] = []
+
+    def factory(socket_path: str) -> RobotClient:
+        built.append(socket_path)
+        return env_cmd._default_client(socket_path)
+
+    monkeypatch.setattr(env_cmd, "_client_factory", factory)
+    with FakeRobotd() as fake:
+        assert env_cmd._default_hello_probe(fake.socket_path) is True
+        assert env_cmd._default_wait_for_healthy(fake.socket_path, 5.0) is True
+    assert built == [fake.socket_path, fake.socket_path]
+
+
+def test_the_health_probe_says_hello_then_asks_robot_health() -> None:
+    """The wait is a handshake plus ``robot.health`` — in that order, on one link."""
+    with FakeRobotd() as fake:
+        assert env_cmd._default_wait_for_healthy(fake.socket_path, 5.0) is True
+        called = [record.method for record in fake.call_log]
+    assert called[0] == "hello"
+    assert "robot.health" in called
+    assert "robot.subscribe" not in called, "a probe must not ask for a 50 Hz stream"
+
+
+# ---------------------------------------------------------------------------
+# those probes, against a real fake robotd
 # ---------------------------------------------------------------------------
 
 

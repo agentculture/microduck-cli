@@ -23,6 +23,10 @@ attribute a test can monkeypatch, mirroring the injection style
   into every :class:`~microduck_cli.env.stack.SimStack` this module builds.
 * ``_default_probe`` — the ``env doctor`` probe factory
   (default: :func:`microduck_cli.env.doctor.default_probe`).
+* ``_client_factory(socket_path) -> RobotClient`` — the one JSON-RPC client both
+  probes speak through (default: :func:`_default_client`). There is no private
+  wire implementation in this module: :mod:`microduck_cli.ipc.client` owns the
+  protocol, this module owns the waiting policy.
 * ``_wait_for_healthy(socket_path, timeout) -> bool`` — the ``env up``
   post-bring-up health wait (default: :func:`_default_wait_for_healthy`).
 * ``_hello_probe(socket_path) -> bool`` — the single-shot ``env status``
@@ -39,7 +43,6 @@ else.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import socket as _socket
 import subprocess  # nosec B404 - only used with a fixed argv, never shell=True
@@ -48,7 +51,7 @@ from collections.abc import Callable
 
 from microduck_cli.cli._commands.overview import emit_overview
 from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_SUCCESS, CliError
-from microduck_cli.cli._output import emit_diagnostic, emit_result
+from microduck_cli.cli._output import PROG, emit_diagnostic, emit_result
 from microduck_cli.duck.addressing import DEFAULT_STATE_DIR
 from microduck_cli.env import doctor as _doctor
 from microduck_cli.env import hosts as _hosts
@@ -61,6 +64,7 @@ from microduck_cli.env.stack import (
 )
 from microduck_cli.explain.env import VERBS
 from microduck_cli.ipc import proto as _proto
+from microduck_cli.ipc.client import RobotClient, RpcError
 
 _SUBJECT = "microduck-cli env"
 _PURPOSE = "Bring up and doctor the MicroDuck environment — the simulator stack or a real duck."
@@ -113,86 +117,65 @@ def _resolve_state_dir(explicit: str | None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# A tiny private JSON-RPC roundtrip over a unix control socket.
+# The health probes, spoken through the one JSON-RPC client.
 #
-# TODO(t10): swap this for microduck_cli.ipc.client once that JSON-RPC client
-# lands — this is a minimal, private stand-in (stdlib socket + json only) so
-# `env up`/`env status` don't have to wait on it.
+# `microduck_cli.ipc.client.RobotClient` owns the wire: the handshake, the
+# framing, the timeouts and the named drops. This module used to carry a private
+# socket+json stand-in (the t10 TODO) written while that client was still
+# landing; a second implementation of the same protocol is a second thing to keep
+# in step with the pinned proto, so it is gone. What stays local is the *policy*:
+# how long `env up` waits, how often it asks, and what counts as healthy.
 # ---------------------------------------------------------------------------
 
 
-def _rpc_roundtrip(
-    socket_path: str,
-    method: str,
-    params: dict[str, object] | None,
-    *,
-    request_id: int,
-    timeout: float,
-) -> dict[str, object]:
-    with _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        sock.connect(socket_path)
-        payload: dict[str, object] = {
-            "jsonrpc": _proto.JSONRPC_VERSION,
-            "id": request_id,
-            "method": method,
-        }
-        if params is not None:
-            payload["params"] = params
-        sock.sendall((json.dumps(payload) + "\n").encode("utf-8"))
-        buf = b""
-        while b"\n" not in buf:
-            chunk = sock.recv(4096)
-            if not chunk:
-                break
-            buf += chunk
-    line = buf.split(b"\n", 1)[0]
-    return json.loads(line.decode("utf-8"))
+def _default_client(socket_path: str) -> RobotClient:
+    """One short-lived client for one probe. Replaced wholesale in tests."""
+    return RobotClient(
+        socket_path,
+        clock=time.monotonic,
+        request_timeout_s=_RPC_ROUNDTRIP_TIMEOUT_S,
+        connect_timeout_s=_RPC_ROUNDTRIP_TIMEOUT_S,
+    )
+
+
+def _probe_once(socket_path: str, *, health: bool) -> bool:
+    """Connect (which is the ``hello`` handshake) and optionally ask ``robot.health``.
+
+    ``verify_joints=False``: a probe never indexes a joint vector, and asking for a
+    50 Hz stream just to answer "is it up?" would make the daemon do work for
+    nothing. Every failure is False — a probe reports, it never raises: `connect`
+    raises ``CliError`` for an unreachable socket and ``RobotClient`` raises
+    ``RpcError`` for a refused call, and to a poll loop both simply mean "not yet".
+    """
+    client = _client_factory(socket_path)
+    try:
+        client.connect(verify_joints=False)
+    except CliError:
+        return False
+    try:
+        if not health:
+            return True
+        result = client.request(_proto.ROBOT_HEALTH, timeout=_RPC_ROUNDTRIP_TIMEOUT_S)
+    except RpcError:
+        return False
+    finally:
+        client.close()
+    return not isinstance(result, dict) or bool(result.get("healthy", True))
 
 
 def _default_wait_for_healthy(socket_path: str, timeout: float) -> bool:
     """Poll `hello` then `robot.health` over `socket_path` until healthy or `timeout`."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        try:
-            hello = _rpc_roundtrip(
-                socket_path,
-                _proto.HELLO,
-                {"api_version": _proto.API_VERSION},
-                request_id=1,
-                timeout=_RPC_ROUNDTRIP_TIMEOUT_S,
-            )
-            if "error" not in hello:
-                health = _rpc_roundtrip(
-                    socket_path,
-                    _proto.ROBOT_HEALTH,
-                    None,
-                    request_id=2,
-                    timeout=_RPC_ROUNDTRIP_TIMEOUT_S,
-                )
-                if "error" not in health:
-                    result = health.get("result")
-                    if not isinstance(result, dict) or result.get("healthy", True):
-                        return True
-        except (OSError, ValueError):
-            pass
+        if _probe_once(socket_path, health=True):
+            return True
         time.sleep(_HEALTH_POLL_INTERVAL_S)
     return False
 
 
 def _default_hello_probe(socket_path: str) -> bool:
     """One-shot `hello` handshake — no retry loop (used by `env status`)."""
-    try:
-        response = _rpc_roundtrip(
-            socket_path,
-            _proto.HELLO,
-            {"api_version": _proto.API_VERSION},
-            request_id=1,
-            timeout=1.0,
-        )
-    except (OSError, ValueError):
-        return False
-    return "error" not in response
+    return _probe_once(socket_path, health=False)
 
 
 def _default_port_listening(port: int) -> bool:
@@ -204,6 +187,7 @@ def _default_port_listening(port: int) -> bool:
         return False
 
 
+_client_factory: Callable[[str], RobotClient] = _default_client
 _default_probe: Callable[[], _doctor.EnvProbe] = _doctor.default_probe
 _wait_for_healthy: Callable[[str, float], bool] = _default_wait_for_healthy
 _hello_probe: Callable[[str], bool] = _default_hello_probe
@@ -291,6 +275,30 @@ def _run_upstream_launcher(
     )
 
 
+def _stop_started(stack: SimStack, reason: str) -> None:
+    """Best effort: stop everything this bring-up started, then let the caller raise.
+
+    A failed ``env up`` used to leave the daemons it had already launched running,
+    with their pidfiles and sockets on disk — so the next ``env up`` collided with
+    a stack nobody knew was there and the operator had to clean up by hand. The
+    stack's own ``down()`` is the only thing that knows how to stop them safely
+    (by pid, with the ``/proc`` identity check, never by name).
+
+    Everything here is best effort and every outcome is reported on stderr: a
+    cleanup that fails must never replace, mask or outrank the failure that caused
+    it. That is also why nothing raises out of this function.
+    """
+    emit_diagnostic(f"{reason}: stopping what was started...")
+    try:
+        results = stack.down()
+    except Exception as exc:  # noqa: BLE001 - the original CliError is the news
+        emit_diagnostic(f"cleanup could not complete: {exc}")
+        return
+    for result in results:
+        detail = f" ({result.detail})" if result.detail else ""
+        emit_diagnostic(f"cleanup: {result.name}: {result.outcome}{detail}")
+
+
 def cmd_env_up(args: argparse.Namespace) -> int:
     json_mode = bool(getattr(args, "json", False))
     mode = args.mode
@@ -302,7 +310,7 @@ def cmd_env_up(args: argparse.Namespace) -> int:
             code=EXIT_ENV_ERROR,
             message="microduck and/or microduck_rl clone not found",
             remediation=(
-                "run `microduck-cli env doctor` to see what is missing, or set "
+                f"run `{PROG} env doctor` to see what is missing, or set "
                 "MICRODUCK_CLONE / DUCK_SIM_RL (or MICRODUCK_RL_CLONE), or clone them "
                 f"beside this repo — see {_UPSTREAM_SIM_DOC}"
             ),
@@ -340,14 +348,22 @@ def cmd_env_up(args: argparse.Namespace) -> int:
         return EXIT_SUCCESS
 
     stack = _make_stack(microduck_clone, rl_clone, state_dir)
-    report = stack.up(
-        mode=mode,
-        ducks=args.ducks,
-        port=args.port,
-        scene=args.scene,
-        headless=args.headless,
-        skip_build=args.skip_build,
-    )
+    try:
+        report = stack.up(
+            mode=mode,
+            ducks=args.ducks,
+            port=args.port,
+            scene=args.scene,
+            headless=args.headless,
+            skip_build=args.skip_build,
+        )
+    except CliError:
+        # `up` got far enough to start something before it gave up (a socket that
+        # never appeared, a daemon that died); those processes, their pidfiles and
+        # their sockets are still there. Stop them, then re-raise the ORIGINAL
+        # failure — the cleanup is not the news, and it already names the log.
+        _stop_started(stack, "bring-up failed")
+        raise
 
     timeout = _SIM_HEALTH_TIMEOUT_S if mode == "sim" else _FAKE_HEALTH_TIMEOUT_S
     ducks_report: list[dict[str, object]] = []
@@ -357,6 +373,7 @@ def cmd_env_up(args: argparse.Namespace) -> int:
         emit_diagnostic(f"waiting for {process.name} to report healthy ({process.socket})...")
         healthy = _wait_for_healthy(process.socket, timeout)
         if not healthy:
+            _stop_started(stack, f"{process.name} never reported healthy")
             raise CliError(
                 code=EXIT_ENV_ERROR,
                 message=f"{process.name} did not report healthy within {timeout:g}s",
@@ -480,10 +497,25 @@ def cmd_env_hosts(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _json_flag(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add ``--json`` to a verb without clobbering the noun-level flag.
+
+    ``default=argparse.SUPPRESS`` is load-bearing: argparse copies a sub-parser's
+    defaults over the namespace the noun already filled, so a plain
+    ``store_true`` here would reset ``json`` to False and make
+    ``%(prog)s --json <verb>`` silently print text. With SUPPRESS the attribute
+    exists only when the flag is actually given, and either position works.
+    """
+    p.add_argument(
+        "--json", action="store_true", default=argparse.SUPPRESS, help="Emit structured JSON."
+    )
+    return p
+
+
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "env",
-        help="Environment bring-up and diagnosis (see 'microduck-cli env overview').",
+        help=f"Environment bring-up and diagnosis (see '{PROG} env overview').",
     )
     p.add_argument("--json", action="store_true", help="Emit structured JSON.")
     p.set_defaults(func=_no_verb, json=False)
@@ -499,13 +531,13 @@ def register(sub: argparse._SubParsersAction) -> None:
         help="Ignored — overview always describes this noun. Accepted so a stray "
         "path argument never hard-fails.",
     )
-    ov.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _json_flag(ov)
     ov.set_defaults(func=cmd_env_overview)
 
     doc = noun_sub.add_parser(
         "doctor", help="Diagnose whether this box can run the sim/train lane."
     )
-    doc.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _json_flag(doc)
     doc.set_defaults(func=cmd_env_doctor)
 
     up = noun_sub.add_parser(
@@ -536,19 +568,19 @@ def register(sub: argparse._SubParsersAction) -> None:
         help="Shell out to <clone>/scripts/duck-sim when it exists, instead of driving "
         "SimStack directly.",
     )
-    up.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _json_flag(up)
     up.set_defaults(mode="fake", func=cmd_env_up)
 
     down = noun_sub.add_parser("down", help="Stop the tracked simulator stack.")
     down.add_argument("--state", default=None, help="Override the state directory.")
-    down.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _json_flag(down)
     down.set_defaults(func=cmd_env_down)
 
     status = noun_sub.add_parser("status", help="Report the tracked simulator stack's status.")
     status.add_argument("--state", default=None, help="Override the state directory.")
-    status.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _json_flag(status)
     status.set_defaults(func=cmd_env_status)
 
     hosts_p = noun_sub.add_parser("hosts", help="Classify this host for the training lane.")
-    hosts_p.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    _json_flag(hosts_p)
     hosts_p.set_defaults(func=cmd_env_hosts)
