@@ -75,6 +75,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import pathlib
 import subprocess  # nosec B404 - only used with fixed argv, never shell=True
 import time
 from typing import Any, Callable
@@ -229,6 +230,34 @@ def _resolve_duck(args: argparse.Namespace) -> addressing.DuckAddress:
         env=_env_with_state(args),
         listdir=os.listdir,
     )
+
+
+def _git_head(repo: str | None) -> str:
+    """The checked-out commit of *repo*, read from .git without spawning git.
+
+    Falls back to "unknown" — the smoke record still proves a pass happened;
+    only its provenance is weaker, and it says so.
+    """
+    if not repo:
+        return "unknown"
+    try:
+        git = pathlib.Path(repo) / ".git"
+        if git.is_file():  # a worktree: "gitdir: <path>"
+            git = pathlib.Path(git.read_text().split(":", 1)[1].strip())
+        head = (git / "HEAD").read_text().strip()
+        if head.startswith("ref: "):
+            ref = git / head[5:]
+            if ref.is_file():
+                return ref.read_text().strip()
+            packed = git / "packed-refs"
+            if packed.is_file():
+                for line in packed.read_text().splitlines():
+                    if line.endswith(" " + head[5:]):
+                        return line.split()[0]
+            return "unknown"
+        return head
+    except OSError:
+        return "unknown"
 
 
 def _state_dir(args: argparse.Namespace) -> str:
@@ -634,7 +663,7 @@ def cmd_policy_smoke(args: argparse.Namespace) -> int:
     result = lane.run(argv, os.environ, _runner, cwd=cwd)
     ok = _runner_ok(result)
     if ok:
-        lane.record_smoke_pass(state_dir, args.task, commit=args.task)
+        lane.record_smoke_pass(state_dir, args.task, commit=_git_head(cwd))
     payload = {"argv": argv, "cwd": cwd, "ok": ok, **_run_result_payload(result)}
     if json_mode:
         emit_result(payload, json_mode=True)
