@@ -26,6 +26,25 @@ from tests.test_no_secrets_in_output import assert_no_secrets
 TASK = "Mjlab-Velocity-Flat-MicroDuck"
 
 
+def _rl_clone_at_commit(tmp_path, sha: str) -> str:
+    """A real (detached-HEAD) ``.git`` under *tmp_path* whose HEAD is *sha*.
+
+    Train-lane tests must resolve an RL clone that actually exists — never by
+    depending on a ``../microduck_rl`` sibling checkout, which is present on
+    a dev box but not in CI (see PR #3 review). Passing ``--rl-clone`` at
+    this path makes them hermetic. A plain sha in ``.git/HEAD`` is enough for
+    :func:`microduck_cli.train.lane.git_head` to read — no ``ref:``
+    indirection needed for a detached head — and using the same sha for a
+    ``smoke`` and a following ``train`` call satisfies the commit-match gate
+    (finding 2) since both resolve the same clone.
+    """
+    clone = tmp_path / "rl_clone"
+    git = clone / ".git"
+    git.mkdir(parents=True, exist_ok=True)
+    (git / "HEAD").write_text(f"{sha}\n", encoding="utf-8")
+    return str(clone)
+
+
 @pytest.fixture()
 def fake():
     with FakeRobotd() as running:
@@ -188,6 +207,42 @@ def test_policy_load_dry_run_sends_nothing(
     assert "survives a reboot" in out
 
 
+def test_policy_load_dry_run_apply_command_names_the_literal_prog(
+    fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Finding 4: the generated `apply_command` line names the literal
+    installed-script prog, `microduck-cli`, matching every other generated
+    command line and the internal prog name — not the bare `microduck` used
+    for the installed console script itself (see CLAUDE.md's half-rename
+    note)."""
+    fake.set_state(api_version=18)
+    rc = main(
+        [
+            "policy",
+            "load",
+            "walk",
+            LOCAL_UNTRUSTED_POLICY,
+            "--socket",
+            fake.socket_path,
+            "--json",
+        ]
+    )
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    apply_command = payload["text"]
+    assert f"microduck-cli policy load walk {LOCAL_UNTRUSTED_POLICY} --apply" in apply_command
+
+
+def test_policy_reset_all_dry_run_apply_command_names_the_literal_prog(
+    fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake.set_state(api_version=18)
+    rc = main(["policy", "reset", "--socket", fake.socket_path, "--json"])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "microduck-cli policy reset --apply" in payload["text"]
+
+
 def test_policy_load_prompt_confirmed_sends_the_call(
     monkeypatch: pytest.MonkeyPatch, fake: FakeRobotd
 ) -> None:
@@ -321,6 +376,38 @@ def test_policy_list_uses_robot_policies_on_api18(fake: FakeRobotd) -> None:
     assert "robot.policies" in _non_hello(fake)
 
 
+# ---------------------------------------------------------------------------
+# finding 3: a noun-level `--json` (before the verb) must not be discarded by
+# the verb's own `--json` default
+# ---------------------------------------------------------------------------
+
+
+def test_noun_level_json_flag_is_not_discarded_by_the_verb(
+    fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`microduck-cli policy --json list` must emit JSON: the noun's own
+    `--json`, parsed before the verb, used to get clobbered by the verb
+    subparser's own `--json` action re-applying its `False` default."""
+    fake.set_state(api_version=18, walk_policy="alpha_walking.onnx", skills=("kick_left",))
+    rc = main(["policy", "--json", "list", "--socket", fake.socket_path])
+    assert rc == 0
+    out = capsys.readouterr().out
+    payload = json.loads(out)  # raises if text mode (non-JSON) leaked through
+    assert payload["source"] == "robot.policies"
+
+
+def test_verb_level_json_flag_still_wins_over_no_noun_flag(
+    fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The existing, already-working direction: `--json` typed on the verb
+    itself still emits JSON with no noun-level flag at all."""
+    fake.set_state(api_version=18, walk_policy="alpha_walking.onnx", skills=("kick_left",))
+    rc = main(["policy", "list", "--socket", fake.socket_path, "--json"])
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["source"] == "robot.policies"
+
+
 def test_policy_list_falls_back_to_subscribe_on_api16(
     fake: FakeRobotd, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -383,11 +470,34 @@ def test_policy_train_without_smoke_record_exits_1_naming_smoke_command(
 ) -> None:
     runner = _RecordingRunner()
     monkeypatch.setattr(policy_mod, "_runner", runner)
-    rc = main(["policy", "train", TASK, "--state", str(tmp_path), "--json"])
+    rl_clone = _rl_clone_at_commit(tmp_path, "abc1234")
+    rc = main(["policy", "train", TASK, "--state", str(tmp_path), "--rl-clone", rl_clone, "--json"])
     assert rc == EXIT_USER_ERROR
     payload = json.loads(capsys.readouterr().err)
-    smoke_argv, _ = lane.smoke(TASK)
+    smoke_argv, _ = lane.smoke(TASK, rl_clone=rl_clone)
     assert " ".join(smoke_argv) in payload["message"]
+    assert runner.calls == []
+
+
+def test_policy_train_without_a_resolvable_rl_clone_exits_2(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No ``--rl-clone``, no env knob, and no ``../microduck_rl`` sibling: the
+    train verb exits 2 with the 'no microduck_rl clone found' remediation —
+    this failure mode is correct and must stay, only the *other* tests here
+    (which want a resolvable clone) needed to stop depending on it by luck.
+    """
+    monkeypatch.setattr("microduck_cli.env.doctor.resolve_clone_paths", lambda env: (None, None))
+    monkeypatch.delenv("DUCK_SIM_RL", raising=False)
+    monkeypatch.delenv("MICRODUCK_RL_CLONE", raising=False)
+    runner = _RecordingRunner()
+    monkeypatch.setattr(policy_mod, "_runner", runner)
+
+    rc = main(["policy", "train", TASK, "--state", str(tmp_path), "--json"])
+
+    assert rc == EXIT_ENV_ERROR
+    payload = json.loads(capsys.readouterr().err)
+    assert "no microduck_rl clone found" in payload["message"]
     assert runner.calls == []
 
 
@@ -396,8 +506,9 @@ def test_policy_smoke_then_train_records_and_unblocks(
 ) -> None:
     runner = _RecordingRunner(returncode=0)
     monkeypatch.setattr(policy_mod, "_runner", runner)
+    rl_clone = _rl_clone_at_commit(tmp_path, "abc1234")
 
-    rc = main(["policy", "smoke", TASK, "--state", str(tmp_path), "--json"])
+    rc = main(["policy", "smoke", TASK, "--state", str(tmp_path), "--rl-clone", rl_clone, "--json"])
     assert rc == 0
     assert runner.calls[0]["argv"] == [
         "uv",
@@ -411,7 +522,7 @@ def test_policy_smoke_then_train_records_and_unblocks(
     ]
     capsys.readouterr()
 
-    rc = main(["policy", "train", TASK, "--state", str(tmp_path), "--json"])
+    rc = main(["policy", "train", TASK, "--state", str(tmp_path), "--rl-clone", rl_clone, "--json"])
     assert rc == 0
     capsys.readouterr()
 
@@ -421,7 +532,8 @@ def test_policy_train_hf_jobs_argv_matches_scripts_hf_readme_table(
 ) -> None:
     runner = _RecordingRunner(returncode=0)
     monkeypatch.setattr(policy_mod, "_runner", runner)
-    main(["policy", "smoke", TASK, "--state", str(tmp_path)])
+    rl_clone = _rl_clone_at_commit(tmp_path, "abc1234")
+    main(["policy", "smoke", TASK, "--state", str(tmp_path), "--rl-clone", rl_clone])
     capsys.readouterr()
 
     rc = main(
@@ -431,6 +543,8 @@ def test_policy_train_hf_jobs_argv_matches_scripts_hf_readme_table(
             TASK,
             "--state",
             str(tmp_path),
+            "--rl-clone",
+            rl_clone,
             "--num-envs",
             "4096",
             "--flavor",
@@ -478,8 +592,9 @@ def test_train_lane_never_leaks_secrets_into_argv_or_output(
         return _Result(returncode=0)
 
     monkeypatch.setattr(policy_mod, "_runner", _capturing_runner)
+    rl_clone = _rl_clone_at_commit(tmp_path, "abc1234")
 
-    main(["policy", "smoke", TASK, "--state", str(tmp_path), "--json"])
+    main(["policy", "smoke", TASK, "--state", str(tmp_path), "--rl-clone", rl_clone, "--json"])
     smoke_out = capsys.readouterr()
     main(
         [
@@ -488,6 +603,8 @@ def test_train_lane_never_leaks_secrets_into_argv_or_output(
             TASK,
             "--state",
             str(tmp_path),
+            "--rl-clone",
+            rl_clone,
             "--hf-jobs",
             "--flavor",
             "a100-large",
@@ -500,9 +617,15 @@ def test_train_lane_never_leaks_secrets_into_argv_or_output(
     assert seen_env.get("HF_TOKEN") == hf_sentinel
     assert seen_env.get("WANDB_API_KEY") == wandb_sentinel
 
-    smoke_argv, _ = lane.smoke(TASK)
+    smoke_argv, _ = lane.smoke(TASK, rl_clone=rl_clone)
     train_argv, _ = lane.train(
-        TASK, hf_jobs=True, flavor="a100-large", state_dir=str(tmp_path), force=True, reason="x"
+        TASK,
+        hf_jobs=True,
+        flavor="a100-large",
+        state_dir=str(tmp_path),
+        rl_clone=rl_clone,
+        force=True,
+        reason="x",
     )
     sentinels = {"hf_token": hf_sentinel, "wandb_api_key": wandb_sentinel}
     assert_no_secrets(
@@ -517,6 +640,10 @@ def test_policy_publish_records_an_artifact_and_never_writes_config(
 ) -> None:
     runner = _RecordingRunner(returncode=0)
     monkeypatch.setattr(policy_mod, "_runner", runner)
+    # publish() has no smoke gate — it just needs an rl_clone that resolves,
+    # never a real checkout, so a bare directory is enough.
+    rl_clone = str(tmp_path / "rl_clone")
+    (tmp_path / "rl_clone").mkdir()
     rc = main(
         [
             "policy",
@@ -529,6 +656,8 @@ def test_policy_publish_records_an_artifact_and_never_writes_config(
             "perpetual",
             "--state",
             str(tmp_path),
+            "--rl-clone",
+            rl_clone,
             "--json",
         ]
     )
