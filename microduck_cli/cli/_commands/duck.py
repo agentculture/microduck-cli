@@ -63,7 +63,7 @@ from microduck_cli.duck.gate import (
     safety_sentence,
 )
 from microduck_cli.duck.record import Recorder
-from microduck_cli.explain.duck import VERBS
+from microduck_cli.explain.duck import CHEATSHEET, VERBS
 from microduck_cli.ipc import proto
 from microduck_cli.ipc.client import RobotClient, RpcError
 
@@ -385,7 +385,7 @@ def cmd_health(args: argparse.Namespace) -> int:
             f"{health.get('reason') or 'no reason given'}",
             remediation=(
                 "Read the report above, then check the daemon's own logs "
-                "(journalctl -u robotd) for the failing subsystem."
+                f"(journalctl -u robotd) for the failing subsystem — see {CHEATSHEET}"
             ),
         )
     return 0
@@ -573,7 +573,8 @@ def cmd_configure(args: argparse.Namespace) -> int:
             "duck configure supports only --list on this CLI",
             remediation=(
                 "run 'microduck-cli duck configure --list'; editing the robot's own "
-                "/etc/robot/robotd.toml is robotctl configure's job, not this CLI's"
+                "/etc/robot/robotd.toml is robotctl configure's job, not this CLI's — see "
+                f"{CHEATSHEET}"
             ),
         )
     address = _address(args)

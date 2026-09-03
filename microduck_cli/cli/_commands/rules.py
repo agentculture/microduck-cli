@@ -74,7 +74,7 @@ from microduck_cli.cli._errors import EXIT_ENV_ERROR, EXIT_SUCCESS, EXIT_USER_ER
 from microduck_cli.cli._output import emit_diagnostic, emit_result
 from microduck_cli.duck import addressing
 from microduck_cli.duck.gate import Consent, confirm_on_tty, consent, render_dry_run
-from microduck_cli.explain.rules import VERBS
+from microduck_cli.explain.rules import _DUCKCTL_URL, VERBS
 from microduck_cli.ipc.client import RobotClient, RpcError
 
 _SUBJECT = "microduck-cli rules"
@@ -613,7 +613,7 @@ def _interrupted_error(exc: BaseException, report: Any) -> CliError:
         f"rules engine run interrupted ({type(exc).__name__}): {detail}",
         remediation=(
             "robotd's own deadman expires the velocity command only — check the duck "
-            "before starting another engine"
+            f"before starting another engine — see {_DUCKCTL_URL}"
         ),
     )
 

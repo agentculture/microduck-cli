@@ -65,7 +65,7 @@ hand-injected refusal are byte-identical.
 - Upstream control surface: {_DUCKCTL_URL}
 """
 
-_RULES_OVERVIEW = """\
+_RULES_OVERVIEW = f"""\
 # microduck-cli rules overview
 
 Read-only description of the `rules` noun: what it holds (the data-only rules
@@ -77,6 +77,10 @@ accepted and ignored.
 
     microduck-cli rules overview
     microduck-cli rules overview --json
+
+## See also
+
+- {_DUCKCTL_URL}
 """
 
 _RULES_LIST = f"""\
@@ -167,7 +171,7 @@ pid-cmdline identity check), `status` (freshness, tick rate, daemon reach).
 - Power and driving upstream: {_CHEATSHEET_URL}
 """
 
-_RULES_ENGINE_OVERVIEW = """\
+_RULES_ENGINE_OVERVIEW = f"""\
 # microduck-cli rules engine overview
 
 Read-only description of the `rules engine` sub-noun: its purpose, its four
@@ -179,6 +183,10 @@ argument is accepted and ignored.
 
     microduck-cli rules engine overview
     microduck-cli rules engine overview --json
+
+## See also
+
+- {_CHEATSHEET_URL}
 """
 
 _RULES_ENGINE_RUN = f"""\
@@ -220,7 +228,7 @@ rate; `--no-idle` leaves the resting layer unregistered.
 - `init` powers the joints and ramps to the home pose: {_CHEATSHEET_URL}
 """
 
-_RULES_ENGINE_START = """\
+_RULES_ENGINE_START = f"""\
 # microduck-cli rules engine start
 
 Spawns `rules engine run ... --apply` as a detached child with the same
@@ -237,9 +245,13 @@ foreground when you want to watch the sense log.
 
     microduck-cli rules engine start --duck duck-a
     microduck-cli rules engine start --json
+
+## See also
+
+- {_CHEATSHEET_URL}
 """
 
-_RULES_ENGINE_STOP = """\
+_RULES_ENGINE_STOP = f"""\
 # microduck-cli rules engine stop
 
 Reads the heartbeat, and signals the pid it names **only after**
@@ -255,9 +267,13 @@ was nothing to stop" is an answer, not a failure.
 
     microduck-cli rules engine stop
     microduck-cli rules engine stop --state ~/.cache/duck-sim --json
+
+## See also
+
+- {_CHEATSHEET_URL}
 """
 
-_RULES_ENGINE_STATUS = """\
+_RULES_ENGINE_STATUS = f"""\
 # microduck-cli rules engine status
 
 Reports whether an engine is driving this duck, from two INDEPENDENT facts that
@@ -273,9 +289,13 @@ and whether the duck's daemon answers a `hello` probe at all.
 
     microduck-cli rules engine status
     microduck-cli rules engine status --duck duck-a --json
+
+## See also
+
+- {_CHEATSHEET_URL}
 """
 
-_RULES_INTENT = """\
+_RULES_INTENT = f"""\
 # microduck-cli rules intent <kind>
 
 Submits ONE intent — `do`, `look`, `move`, `sound`, `stop`, `mode`, `idle` —
@@ -297,8 +317,12 @@ A refusal prints the registry's text VERBATIM and exits 1.
 ## Usage
 
     microduck-cli rules intent stop
-    microduck-cli rules intent move --payload '{"vx": 0.1, "duration_s": 2}'
-    microduck-cli rules intent do --payload '{"skill": "kick_left"}' --json
+    microduck-cli rules intent move --payload '{{"vx": 0.1, "duration_s": 2}}'
+    microduck-cli rules intent do --payload '{{"skill": "kick_left"}}' --json
+
+## See also
+
+- {_DUCKCTL_URL}
 """
 
 ENTRIES: dict[tuple[str, ...], str] = {

@@ -76,8 +76,20 @@ _ROOT = f"""\
 runtime package has no third-party dependencies; every command supports
 `--json`, results go to stdout and errors/diagnostics to stderr, never mixed.
 
-The domain nouns (`env`, `duck`, `policy`, `rules`) are registered scaffolds
-today — each answers `overview` and grows its action verbs in its own task.
+The four domain nouns are simulation-first, sim-first meaning no physical
+MicroDuck has been driven from this CLI yet — every verb below is exercised
+against `robotd --fake`/`--sim` and the in-process fake daemon
+(`tests/fake_robotd.py`), never a real duck:
+
+- `env` — bring up / doctor / tear down the simulator or a real duck's socket
+  stack (`env up`, `env down`, `env status`, `env doctor`, `env hosts`).
+- `duck` — operate one duck directly, in `robotctl`'s own words
+  (`health`, `init`, `enable`, `do`, `move`, `record`, …).
+- `policy` — the policy lifecycle: list/load/reset slots and skills, and the
+  `microduck_rl` train/smoke/export/publish/infer lane.
+- `rules` — the data-only rules layer and its 50 Hz tick engine
+  (`rules list`, `rules check`, `rules engine run|start|stop|status`,
+  `rules intent`).
 
 ## Verbs
 
@@ -95,6 +107,10 @@ today — each answers `overview` and grows its action verbs in its own task.
 - `microduck-cli explain whoami`
 - `microduck-cli explain doctor`
 - `microduck-cli explain env`
+- `microduck-cli explain duck`
+- `microduck-cli explain policy`
+- `microduck-cli explain rules`
+- https://github.com/pollen-robotics/microduck/blob/sim-remote-io/docs/robot/cheatsheet.md
 """
 
 _WHOAMI = """\

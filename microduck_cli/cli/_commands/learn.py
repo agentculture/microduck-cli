@@ -20,9 +20,9 @@ from microduck_cli.explain.catalog import TAGLINE, VERBS, split_verb, verb_path
 _PURPOSE = (
     "Agent-agnostic control surface for the MicroDuck robot: bring up the sim or real\n"
     "environment (`env`), operate the duck in robotctl's words (`duck`), train/export/\n"
-    "publish/install policies (`policy`), and run the data-only rules layer (`rules`).\n"
-    "The domain nouns are registered scaffolds today — each answers `overview` while its\n"
-    "action verbs land."
+    "publish/install policies (`policy`), and run the data-only rules layer and its 50 Hz\n"
+    "tick engine (`rules`). Sim-first: every verb is exercised against `robotd --fake`/\n"
+    "`--sim` and the in-process fake daemon — no physical MicroDuck has been driven yet."
 )
 
 

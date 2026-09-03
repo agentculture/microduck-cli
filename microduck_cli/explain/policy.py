@@ -97,7 +97,7 @@ Two channels this noun reaches, and two it prints instead of reaching:
 - {_RL_README_URL}
 """
 
-_POLICY_OVERVIEW = """\
+_POLICY_OVERVIEW = f"""\
 # microduck-cli policy overview
 
 Read-only description of the `policy` noun: slots/skills, the lifecycle
@@ -108,6 +108,10 @@ positional argument is accepted and ignored.
 
     microduck-cli policy overview
     microduck-cli policy overview --json
+
+## See also
+
+- {_CHEATSHEET_URL}
 """
 
 _POLICY_LIST = f"""\
