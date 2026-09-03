@@ -51,6 +51,7 @@ import logging
 import queue
 import socket
 import threading
+import time
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -354,6 +355,21 @@ class RobotClient:
         if verify_joints:
             self._verify_joint_table()
         return self
+
+    def flush(self, timeout_s: float = 1.0) -> bool:
+        """Wait (real time, bounded) until every queued frame has left the queue.
+
+        For the shutdown path only — the tick loop never waits on I/O. Returns
+        True when the queue drained within ``timeout_s``; False when frames are
+        still pending (a wedged or dead daemon), so the caller can name what it
+        could not deliver instead of assuming it went out.
+        """
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        while not self._queue.empty():
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.005)
+        return True
 
     def close(self) -> None:
         """Shut the link down and join both threads. Idempotent; never hangs.

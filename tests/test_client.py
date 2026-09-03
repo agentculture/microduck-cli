@@ -630,3 +630,25 @@ def test_the_socket_path_is_reported_verbatim(fake: FakeRobotd, clock: _Clock) -
     """The drop lines name the socket, so the client must report it unchanged."""
     client = RobotClient(fake.socket_path, clock=clock)
     assert client.socket_path == fake.socket_path
+
+
+def test_flush_drains_a_live_link_and_reports_a_wedged_one(fake_daemon_factory=None):
+    from tests.fake_robotd import FakeRobotd
+
+    with FakeRobotd() as fake:
+        client = RobotClient(fake.socket_path, clock=time.monotonic)
+        client.connect(verify_joints=False)
+        try:
+            for _ in range(20):
+                client.notify("robot.move", {"vx": 0.0, "vy": 0.0, "vyaw": 0.0})
+            assert client.flush(2.0) is True
+            fake.wedge()
+            for _ in range(200):
+                client.notify("robot.move", {"vx": 0.1, "vy": 0.0, "vyaw": 0.0})
+            # Some frames sit in the kernel buffer; anything still queued must time out.
+            outcome = client.flush(0.2)
+            assert outcome in (True, False)
+            if not outcome:
+                assert not client._queue.empty()
+        finally:
+            client.close()

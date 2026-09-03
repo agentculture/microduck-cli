@@ -466,12 +466,17 @@ class Runtime:
                 senselog.drop(STAGE, name, "close-failed", f"{type(exc).__name__}: {exc}")
 
     def _drain_writes(self) -> None:
-        pending = getattr(self.client, "_queue", None)
-        if pending is None:  # pragma: no cover - a client without a write queue
+        flush = getattr(self.client, "flush", None)
+        if flush is None:  # pragma: no cover - a client without a write queue
             return
-        deadline = time.monotonic() + DRAIN_TIMEOUT_S
-        while time.monotonic() < deadline and not pending.empty():
-            time.sleep(_DRAIN_POLL_S)
+        if not flush(DRAIN_TIMEOUT_S):
+            senselog.drop(
+                STAGE,
+                "client",
+                "flush-timeout",
+                f"queued frames still pending after {DRAIN_TIMEOUT_S:.1f}s; "
+                "a wedged or dead daemon did not take them",
+            )
 
 
 def build_runtime(
