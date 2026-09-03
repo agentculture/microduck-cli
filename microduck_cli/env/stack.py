@@ -16,11 +16,18 @@ pinned commit (``docs/upstream-pins.md``):
    and exports it to the child as **``ORT_DYLIB_PATH``** — the environment
    variable the ``ort`` crate reads to decide which shared object to load.
    Without it every policy fails to load and the duck will not stand.
-3. **Start the body, then the daemons.** In ``sim`` mode ``duck-body`` (the
-   ``mjlab_microduck.sim.body_server`` console script) serves one TCP body per
-   duck from ``port + i``, and each ``robotd --sim 127.0.0.1:<port+i>`` drives
-   one. In ``fake`` mode there is no body at all: ``robotd --fake`` swaps in
-   ``FakeIo`` and ``--sim`` is refused alongside it.
+3. **Start the body, then the daemons.** In ``sim`` mode the body serves one TCP
+   body per duck from ``port + i``, and each ``robotd --sim 127.0.0.1:<port+i>``
+   drives one. It is launched as ``<rl>/.venv/bin/python -m
+   mjlab_microduck.sim.body_server`` — the RL venv's own interpreter running the
+   module directly, the way upstream's launcher does — rather than ``uv run
+   duck-body``: a ``uv run`` wrapper's pid is the wrapper, not the simulator it
+   execs, so the pidfile this module writes would name the wrong process and
+   :meth:`SimStack.down`'s ``/proc/<pid>/cmdline`` marker check would never see
+   ``duck-body`` in it. Invoking the venv's interpreter directly means the pid
+   this module records IS the simulator process. In ``fake`` mode there is no
+   body at all: ``robotd --fake`` swaps in ``FakeIo`` and ``--sim`` is refused
+   alongside it.
 4. **One pidfile per process**, under the state directory.
 5. **Wait for each control socket to appear**, with a timeout, rather than
    assuming the daemon came up.
@@ -79,11 +86,16 @@ _DEFAULT_BUILD_TIMEOUT_S = 900.0
 _TERM_GRACE_S = 5.0
 _POLL_INTERVAL_S = 0.2
 
+#: The body server's console module, run as ``python -m <this>`` directly (not
+#: ``uv run duck-body``) so the pid this module records IS the simulator process
+#: — see the module docstring's step 3.
+BODY_MODULE = "mjlab_microduck.sim.body_server"
+
 #: Pidfile stem -> the string ``/proc/<pid>/cmdline`` must contain before that
 #: pid is signalled. Anything not listed is a ``robotd`` (``<duck>.pid``),
 #: which is how upstream's own pidfiles are named.
 _MARKER_BY_STEM: dict[str, str] = {
-    "body": "duck-body",
+    "body": BODY_MODULE,
     "ether": "duck-ether",
 }
 _MARKER_BY_SUFFIX: tuple[tuple[str, str], ...] = (
@@ -470,7 +482,8 @@ class SimStack:
         processes: list[StartedProcess] = []
 
         if mode == "sim":
-            body_argv = ["uv", "run", "duck-body", "--port", str(port)]
+            rl_python = os.path.join(self.rl, ".venv", "bin", "python")
+            body_argv = [rl_python, "-m", BODY_MODULE, "--port", str(port)]
             if ducks != 1:
                 body_argv += ["--ducks", str(ducks)]
             if headless:

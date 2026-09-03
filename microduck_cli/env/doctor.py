@@ -65,11 +65,10 @@ _MICRODUCK_RL_HF_README_URL = (
 
 _MIN_CARGO_VERSION = (1, 89)
 
-# Placeholder default port for duck-body until t13 lands the canonical
-# default; override with DUCK_SIM_BODY_PORT (mirrors the DUCK_SIM_* env
-# family t6/t20 use) or by injecting `body_port_free` directly on an
-# EnvProbe.
-DEFAULT_BODY_PORT = 8765
+# duck-body's default port, matching upstream's DUCK_SIM_PORT (env/stack.py's
+# _DEFAULT_PORT) — overridden by DUCK_SIM_PORT itself, or by injecting
+# `body_port_free` directly on an EnvProbe.
+DEFAULT_BODY_PORT = 7801
 
 _DAEMON_BINARIES = ("robotd", "robotctl", "tofd", "sounds")
 
@@ -203,6 +202,40 @@ def _port_free(port: int) -> bool | None:
     return result != 0
 
 
+def _repo_root() -> Path:
+    """This checkout's root, from this module's own location (env/doctor.py -> repo)."""
+    return Path(__file__).resolve().parents[2]
+
+
+def resolve_clone_paths(env: Mapping[str, str]) -> tuple[str | None, str | None]:
+    """Resolve the microduck and microduck_rl clone directories.
+
+    Precedence, one lookup shared by `default_probe` and `env up`/`env doctor` (the
+    ``cli/_commands/env.py`` verb) so neither operator ever has to name a clone by
+    hand:
+
+    * microduck clone: ``MICRODUCK_CLONE``, else ``../microduck`` beside this repo.
+    * microduck_rl clone: ``DUCK_SIM_RL`` (upstream's own env knob for the RL clone),
+      else ``MICRODUCK_RL_CLONE``, else ``../microduck_rl`` beside this repo.
+
+    A candidate that is not an existing directory is skipped in favour of the next
+    one; the result is `None` when nothing resolves.
+    """
+    sibling = _repo_root().parent
+
+    def _first_existing_dir(candidates: list[str | None]) -> str | None:
+        for candidate in candidates:
+            if candidate and Path(candidate).is_dir():
+                return candidate
+        return None
+
+    microduck_clone = _first_existing_dir([env.get("MICRODUCK_CLONE"), str(sibling / "microduck")])
+    rl_clone = _first_existing_dir(
+        [env.get("DUCK_SIM_RL"), env.get("MICRODUCK_RL_CLONE"), str(sibling / "microduck_rl")]
+    )
+    return microduck_clone, rl_clone
+
+
 def default_probe() -> EnvProbe:
     """Gather an `EnvProbe` from the real system.
 
@@ -218,14 +251,8 @@ def default_probe() -> EnvProbe:
     pins_path = Path(__file__).resolve().parents[2] / "docs" / "upstream-pins.md"
     pins = _parse_pins(pins_path)
 
-    microduck_clone = env.get("MICRODUCK_CLONE") or None
-    if microduck_clone and not Path(microduck_clone).is_dir():
-        microduck_clone = None
+    microduck_clone, rl_clone = resolve_clone_paths(env)
     microduck_clone_commit = _git_head(microduck_clone) if microduck_clone else None
-
-    rl_clone = env.get("MICRODUCK_RL_CLONE") or None
-    if rl_clone and not Path(rl_clone).is_dir():
-        rl_clone = None
     rl_clone_commit = _git_head(rl_clone) if rl_clone else None
 
     cargo_version = _safe_run(["cargo", "--version"])
@@ -252,7 +279,7 @@ def default_probe() -> EnvProbe:
     state_dir = _default_state_dir(env)
 
     try:
-        body_port = int(env.get("DUCK_SIM_BODY_PORT") or DEFAULT_BODY_PORT)
+        body_port = int(env.get("DUCK_SIM_PORT") or DEFAULT_BODY_PORT)
     except ValueError:
         body_port = DEFAULT_BODY_PORT
     body_port_free = _port_free(body_port)
