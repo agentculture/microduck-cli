@@ -479,3 +479,21 @@ def test_compose_pose_passes_a_channel_owners_stop_and_mode_through():
     assert pose["stop"] is True
     # An unowned extra never leaks: a contribution from a non-owner is ignored.
     assert compose_pose({}, contribs) == {}
+
+
+def test_a_termination_signal_inside_a_driver_unwinds_the_loop():
+    """SignalExit is control flow, not a driver fault: it must escape TickBus isolation."""
+    from microduck_cli.behavior.release import SignalExit
+
+    seen: list[int] = []
+
+    def driver(ctx):
+        seen.append(ctx.tick)
+        if ctx.tick == 3:
+            raise SignalExit(15)
+
+    bus = TickBus(drivers=[driver])
+    with pytest.raises(SignalExit):
+        run_engine(seam=bus, max_ticks=10)
+    assert seen == [1, 2, 3]
+    assert not bus.faults, "a signal must not be recorded as a driver fault"

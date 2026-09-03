@@ -45,6 +45,7 @@ from microduck_cli.behavior import senselog
 from microduck_cli.behavior.model import CHANNELS, AdmitResult, Behavior, Contribution
 from microduck_cli.behavior.model import admit as admit_model
 from microduck_cli.behavior.model import arbitrate
+from microduck_cli.behavior.release import SignalExit
 from microduck_cli.behavior.sense import (
     EMPTY_SENSE,
     NO_PROVIDERS,
@@ -198,6 +199,8 @@ class TickBus:
         for driver in self._drivers:
             try:
                 driver(ctx)
+            except SignalExit:  # a termination signal is not a rider fault
+                raise
             except Exception as exc:  # one rider never breaks the loop
                 self._record(driver, exc, "driver")
 
@@ -206,6 +209,8 @@ class TickBus:
         for consumer in self._consumers:
             try:
                 consumer(event)
+            except SignalExit:  # a termination signal is not a consumer fault
+                raise
             except Exception as exc:  # one consumer never breaks the fan-out
                 self._record(consumer, exc, "consumer")
 
