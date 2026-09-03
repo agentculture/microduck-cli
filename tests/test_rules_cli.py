@@ -481,7 +481,7 @@ def test_an_over_limit_intent_with_no_engine_prints_the_registry_refusal(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The shared expectation with tests/test_intents.py: ONE refusal text."""
-    payload = {"vx": 0.0, "vy": 0.0, "wz": 9.0}
+    payload = {"vx": 0.0, "vy": 0.0, "vyaw": 9.0}
     expected = default_registry().inject("move", dict(payload)).reason
 
     rc = main(

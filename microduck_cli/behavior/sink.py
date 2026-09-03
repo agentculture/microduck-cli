@@ -82,7 +82,7 @@ CONTINUOUS_CHANNELS: dict[str, str] = {
 DISCRETE_CHANNELS: tuple[str, ...] = ("skill", "stop", "mode")
 
 #: ``robot.move``'s param fields. The third axis is ``vyaw`` on the wire while the
-#: intent layer calls it ``wz``; this rename happens HERE and only here.
+#: intent layer uses the same wire name, so nothing is renamed on the way out.
 TWIST_FIELDS: tuple[str, str, str] = ("vx", "vy", "vyaw")
 
 #: ``robot.head``'s param fields (``HeadParams``).
@@ -148,14 +148,14 @@ def _pick(value: Mapping, fields: Iterable[str]) -> dict[str, Any]:
 
 
 def encode_twist(value: Any) -> _Encoding:
-    """``(vx, vy, wz)`` -> ``robot.move {vx, vy, vyaw}``.
+    """``(vx, vy, vyaw)`` -> ``robot.move {vx, vy, vyaw}``.
 
-    Also accepts a mapping naming the axes (``wz`` or ``vyaw``), which is what a
+    Also accepts a mapping naming the axes (``vx``, ``vy``, ``vyaw``), which is what a
     hand-written pose dict tends to look like.
     """
     if isinstance(value, Mapping):
         params: dict[str, Any] = {}
-        for wire, names in (("vx", ("vx",)), ("vy", ("vy",)), ("vyaw", ("vyaw", "wz"))):
+        for wire, names in (("vx", ("vx",)), ("vy", ("vy",)), ("vyaw", ("vyaw",))):
             for name in names:
                 if name in value:
                     params[wire] = value[name]
@@ -165,7 +165,7 @@ def encode_twist(value: Any) -> _Encoding:
         return _Encoding(proto.ROBOT_MOVE, params)
     triple = _numbers(value, 3)
     if triple is None:
-        return _Encoding(error=f"twist must be three numbers (vx, vy, wz), got {value!r}")
+        return _Encoding(error=f"twist must be three numbers (vx, vy, vyaw), got {value!r}")
     return _Encoding(proto.ROBOT_MOVE, dict(zip(TWIST_FIELDS, triple)))
 
 

@@ -9,7 +9,7 @@ it reached us changes how it is judged.
 
 Why one registry
 ----------------
-A rule firing and a human typing ``microduck rules intent move '{"wz": 9}'`` are
+A rule firing and a human typing ``microduck rules intent move '{"vyaw": 9}'`` are
 the same act: an under-specified request to move the robot. If the rule path had
 its own validator, the two would drift, and the drift would be discovered by the
 duck. So :class:`KindRegistry` owns **exactly one** :meth:`KindRegistry.validate`
@@ -103,7 +103,7 @@ DEFAULT_SOUND_DURATION_S = 2.0
 DEFAULT_STOP_DURATION_S = 0.5
 DEFAULT_MODE_DURATION_S = 0.5
 
-#: The planar twist ceiling ``(vx, vy, wz)`` in m/s, m/s and rad/s. These are the
+#: The planar twist ceiling ``(vx, vy, vyaw)`` in m/s, m/s and rad/s. These are the
 #: gamepad's own limits, quoted from upstream ``docs/robot/duckctl.md``: the pad
 #: and the keys W/A/S/D and Q/E drive "at a gamepad's 0.3 m/s and 1.5 rad/s".
 #: A human at the pad is the established precedent for how fast this duck is
@@ -111,11 +111,11 @@ DEFAULT_MODE_DURATION_S = 0.5
 MAX_TWIST: tuple[float, float, float] = (0.3, 0.3, 1.5)
 
 #: The twist axes, in :data:`MAX_TWIST` order, with the unit each error names.
-TWIST_AXES: tuple[str, ...] = ("vx", "vy", "wz")
+TWIST_AXES: tuple[str, ...] = ("vx", "vy", "vyaw")
 _TWIST_LIMITS: dict[str, tuple[float, str]] = {
     "vx": (MAX_TWIST[0], "m/s"),
     "vy": (MAX_TWIST[1], "m/s"),
-    "wz": (MAX_TWIST[2], "rad/s"),
+    "vyaw": (MAX_TWIST[2], "rad/s"),
 }
 
 #: The fields ``robot.look`` takes (``LookParams`` in the pinned

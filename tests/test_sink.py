@@ -122,7 +122,7 @@ def test_twist_encodes_to_move_with_the_vyaw_rename() -> None:
 
 
 def test_twist_accepts_a_mapping_naming_wz_or_vyaw() -> None:
-    assert encode_twist({"vx": 0.1, "wz": 0.5}).params == {"vx": 0.1, "vyaw": 0.5}
+    assert encode_twist({"vx": 0.1, "vyaw": 0.5}).params == {"vx": 0.1, "vyaw": 0.5}
     assert encode_twist({"vyaw": 0.5}).params == {"vyaw": 0.5}
 
 
@@ -185,7 +185,7 @@ def _rules_config() -> RulesConfig:
                     "id": "creep-when-close",
                     "when": {"field": "tof_nearest_m", "op": "lt", "value": 0.4},
                     "run": "move",
-                    "params": {"vx": 0.3, "wz": -1.5},
+                    "params": {"vx": 0.3, "vyaw": -1.5},
                     "duration_s": 2.0,
                 }
             ],
@@ -198,7 +198,7 @@ def test_a_rules_move_reaches_the_daemon_byte_for_byte(
 ) -> None:
     """Acceptance 3. No EMA, no rate limit, no clamp between the rule and the socket.
 
-    The rule asks for ``vx = 0.3`` and ``wz = -1.5`` — both exactly at the intent
+    The rule asks for ``vx = 0.3`` and ``vyaw = -1.5`` — both exactly at the intent
     layer's admitted ceiling, which is where a helpful client-side clamp would be
     most tempted to shave a value. The daemon must receive those numbers, and the
     untouched ``vy = 0.0`` the validator filled in, with nothing in between.

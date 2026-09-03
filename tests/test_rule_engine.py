@@ -321,7 +321,7 @@ def test_an_inhibit_rule_does_not_touch_actions_it_does_not_name():
 @pytest.mark.parametrize(
     "run,params,extra",
     [
-        ("move", {"vx": 0.0, "vy": 0.0, "wz": 9.0}, {}),
+        ("move", {"vx": 0.0, "vy": 0.0, "vyaw": 9.0}, {}),
         ("do", {"skill": "standup"}, {"duration_s": 60.0}),
     ],
 )

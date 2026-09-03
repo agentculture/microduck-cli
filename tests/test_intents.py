@@ -68,7 +68,7 @@ def test_register_replaces_and_returns_self():
 def test_validate_accepts_a_well_formed_payload_per_kind():
     registry = default_registry()
     assert registry.validate("do", {"skill": "standup"})["skill"] == "standup"
-    assert registry.validate("move", {"vx": 0.1, "wz": -1.0})["vy"] == 0.0
+    assert registry.validate("move", {"vx": 0.1, "vyaw": -1.0})["vy"] == 0.0
     assert registry.validate("look", {"x": 0.5, "neck_pitch": 0.1})["y"] == 0.0
     assert registry.validate("sound", {"name": "chirp"})["name"] == "chirp"
     assert registry.validate("mode", {"mode": "roller"})["mode"] == "roller"
@@ -88,7 +88,7 @@ def test_validate_refuses_an_unknown_kind_naming_the_known_ones():
     [
         ("move", {"vx": 0.0, "wobble": 1.0}, "unknown field"),
         ("do", {"skill": "standup", "fn": "lambda: 1"}, "unknown field"),
-        ("move", {"wz": 9.0}, "out of range"),
+        ("move", {"vyaw": 9.0}, "out of range"),
         ("move", {"vx": MAX_TWIST[0] + 0.01}, "out of range"),
         ("move", {"vx": "fast"}, "must be a number"),
         ("move", {"vx": True}, "must be a number"),
@@ -120,9 +120,9 @@ def test_validate_is_fail_closed(kind, payload, needle):
 def test_validate_never_clamps_an_out_of_range_value():
     registry = default_registry()
     with pytest.raises(CliError):
-        registry.validate("move", {"wz": MAX_TWIST[2] * 2})
+        registry.validate("move", {"vyaw": MAX_TWIST[2] * 2})
     # ... and the legal neighbour still passes untouched.
-    assert registry.validate("move", {"wz": MAX_TWIST[2]})["wz"] == MAX_TWIST[2]
+    assert registry.validate("move", {"vyaw": MAX_TWIST[2]})["vyaw"] == MAX_TWIST[2]
 
 
 def test_validate_refuses_a_non_object_payload():
@@ -210,7 +210,7 @@ def test_admit_refuses_behind_a_blocking_incumbent_with_a_named_reason():
 
 
 def test_admit_returns_a_refusal_rather_than_raising():
-    admission = default_registry().admit(Intent("move", {"wz": 9.0}))
+    admission = default_registry().admit(Intent("move", {"vyaw": 9.0}))
     assert isinstance(admission, Admission)
     assert not admission.admitted
     assert admission.code == REASON_INVALID
@@ -266,7 +266,7 @@ def test_inject_refuses_an_unknown_origin():
 @pytest.mark.parametrize(
     "kind,payload",
     [
-        ("move", {"vx": 0.0, "vy": 0.0, "wz": 9.0}),
+        ("move", {"vx": 0.0, "vy": 0.0, "vyaw": 9.0}),
         ("do", {"skill": "standup", "duration_s": 60.0}),
     ],
 )
@@ -336,7 +336,7 @@ def test_module_is_a_leaf_with_no_cli_or_transport_imports():
             {"x": 0.4, "y": -0.1, "z": 0.2, "neck_pitch": 0.3},
             {"head": {"x": 0.4, "y": -0.1, "z": 0.2, "neck_pitch": 0.3}},
         ),
-        ("move", {"vx": 0.1, "vy": -0.1, "wz": 0.5}, {"twist": (0.1, -0.1, 0.5)}),
+        ("move", {"vx": 0.1, "vy": -0.1, "vyaw": 0.5}, {"twist": (0.1, -0.1, 0.5)}),
         ("sound", {"name": "chirp"}, {"sound": {"name": "chirp", "hold": None}}),
         (
             "sound",
