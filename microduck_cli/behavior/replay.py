@@ -84,9 +84,13 @@ RECORD_SCHEMA: dict[str, tuple[str, ...]] = {
     # `robot.remoteSessionActive` and `robot.mode`. Recorded under one source
     # since neither is part of the ~50 Hz state stream.
     "remote": (
-        "remote_session",  # -> remote_session
+        "active",  # raw `robot.remoteSessionActive` result, as `duck record` writes it
+        "remote_session",  # -> remote_session (already-mapped form)
         "mode",  # -> mode
     ),
+    # The handshake record `duck record` writes first (daemon api_version etc.).
+    # Carries no sense field; a replay skips it.
+    "hello": (),
 }
 
 #: The valid record ``source`` values — the keys of :data:`RECORD_SCHEMA`.
@@ -200,6 +204,8 @@ def _apply_tof(kwargs: dict, params: Mapping) -> None:
 def _apply_remote(kwargs: dict, params: Mapping) -> None:
     if "remote_session" in params:
         kwargs["remote_session"] = _as_bool(params.get("remote_session"))
+    elif "active" in params:  # the raw `robot.remoteSessionActive` answer
+        kwargs["remote_session"] = _as_bool(params.get("active"))
     if "mode" in params:
         kwargs["mode"] = _as_str(params.get("mode"))
 

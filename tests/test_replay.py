@@ -38,7 +38,7 @@ def _kick_on_ball_overlay() -> RulesConfig:
 
 
 def test_record_schema_names_the_documented_sources():
-    assert RECORD_SOURCES == {"state", "health", "pad", "tof", "remote"}
+    assert RECORD_SOURCES == {"state", "health", "pad", "tof", "remote", "hello"}
     assert set(RECORD_SCHEMA) == RECORD_SOURCES
 
 

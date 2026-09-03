@@ -96,10 +96,21 @@ _STAGE = "record"
 def _schema_from_replay() -> Mapping[str, Any] | None:
     """The replay reader's schema, when that module exists (it owns the shape)."""
     try:
-        from microduck_cli.behavior.replay import RECORD_SCHEMA as _replay_schema
+        from microduck_cli.behavior.replay import RECORD_SCHEMA as _replay_params
     except ImportError:
         return None
-    return _replay_schema
+    # The replay reader publishes the per-source PARAM paths it reads; the record
+    # contract wraps that map under the line-level keys so both halves agree.
+    return MappingProxyType(
+        {
+            "format": "jsonl",
+            "keys": RECORD_KEYS,
+            "sources": RECORD_SOURCES,
+            "ts": "monotonic seconds (float), read when the record is written",
+            "order": "arrival",
+            "params": _replay_params,
+        }
+    )
 
 
 #: The recording contract, as data — for tests, for ``explain``, and for the
