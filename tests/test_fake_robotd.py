@@ -1,8 +1,12 @@
 """Tests for the in-process fake robotd (``tests/fake_robotd.py``).
 
-These cover the fake's own contract — the wire shape, the call log, and the three
-fault levers (refuse / wedge / delay) — so a later client test that fails can be
-read as a client bug rather than a fake bug.
+These cover the fake's own contract — the wire shapes it was built to match, the
+call log, and the three fault levers (refuse / wedge / delay) — so a later client
+test that fails can be read as a client bug rather than a fake bug.
+
+The payloads asserted here are the ones captured from the real ``robotd`` 0.10.0
+built from the pinned ``sim-remote-io`` commit and run with ``--fake``. When the
+pin moves, re-probe and update these first.
 """
 
 from __future__ import annotations
@@ -17,13 +21,18 @@ import pytest
 
 from tests.fake_robotd import (
     API_VERSION,
+    DAEMON_VERSION,
+    INVALID_PARAMS,
     JOINT_NAMES,
     METHOD_NOT_FOUND,
-    ROBOT_MODEL,
+    POLICY_API_VERSION,
+    POLICY_METHODS,
+    SKILLS,
     FakeRobotd,
 )
 
 _TIMEOUT = 2.0
+_HELLO = {"api_version": API_VERSION}
 
 
 class _Client:
@@ -67,6 +76,16 @@ class _Client:
             if message.get("id") == request_id:
                 return message
 
+    def result(self, method: str, params: Any = None) -> Any:
+        answer = self.call(method, params)
+        assert "error" not in answer, answer["error"]
+        return answer["result"]
+
+    def error(self, method: str, params: Any = None) -> dict[str, Any]:
+        answer = self.call(method, params)
+        assert "result" not in answer, answer["result"]
+        return answer["error"]
+
     def close(self) -> None:
         self.sock.close()
 
@@ -106,39 +125,131 @@ def test_close_removes_the_socket_directory() -> None:
     fake.close()  # idempotent
 
 
-# -- handshake and unknown methods -------------------------------------------
+# -- handshake ---------------------------------------------------------------
 
 
-def test_hello_returns_the_api_version_model_and_joints(client: _Client) -> None:
-    answer = client.call("hello", {"api_version": API_VERSION})
-    result = answer["result"]
-    assert result["api_version"] == API_VERSION
-    assert result["model"] == ROBOT_MODEL
-    assert result["joint_names"] == list(JOINT_NAMES)
-    assert len(result["joint_names"]) == 15
+def test_hello_returns_the_probed_daemon_shape(client: _Client) -> None:
+    assert client.result("hello", _HELLO) == {
+        "api_version": API_VERSION,
+        "daemon_version": DAEMON_VERSION,
+        "revision": None,
+    }
 
 
-def test_unknown_method_is_method_not_found_naming_the_method(client: _Client) -> None:
-    answer = client.call("robot.doesNotExist")
-    assert "result" not in answer
-    assert answer["error"]["code"] == METHOD_NOT_FOUND
-    assert "robot.doesNotExist" in answer["error"]["message"]
+def test_hello_without_api_version_is_a_missing_field_error(client: _Client) -> None:
+    error = client.error("hello")
+    assert error["code"] == INVALID_PARAMS
+    assert error["message"] == "missing field `api_version`"
+
+
+def test_any_client_api_version_is_accepted(client: _Client) -> None:
+    """Skew is reported by the answer, never refused at the door."""
+    for sent in (1, 99):
+        assert client.result("hello", {"api_version": sent})["api_version"] == API_VERSION
+
+
+# -- unknown methods and bad params ------------------------------------------
+
+
+def test_unknown_method_is_method_not_found_quoting_the_method(client: _Client) -> None:
+    error = client.error("robot.nope")
+    assert error["code"] == METHOD_NOT_FOUND
+    assert error["message"] == 'unknown method "robot.nope"'
+
+
+@pytest.mark.parametrize(
+    ("method", "params", "message"),
+    [
+        ("robot.enable", {"enabled": True}, "unknown field `enabled`, expected `on` or `toggle`"),
+        ("robot.do", {"name": "roulade"}, "unknown field `name`, expected `skill`"),
+        (
+            "robot.look",
+            {"point": [0.5, 0, 0.1]},
+            "unknown field `point`, expected one of `x`, `y`, `z`, `neck_pitch`",
+        ),
+    ],
+)
+def test_serde_style_invalid_params(
+    client: _Client, method: str, params: dict[str, Any], message: str
+) -> None:
+    error = client.error(method, params)
+    assert error["code"] == INVALID_PARAMS
+    assert error["message"] == message
+
+
+def test_an_unknown_skill_is_an_unknown_variant(client: _Client) -> None:
+    error = client.error("robot.do", {"skill": "backflip"})
+    assert error["code"] == INVALID_PARAMS
+    assert error["message"].startswith("unknown variant `backflip`, expected one of `ground_pick`")
+
+
+def test_a_malformed_line_is_a_parse_error(client: _Client) -> None:
+    client.sock.sendall(b"{not json\n")
+    assert client.read()["error"]["code"] == -32700
 
 
 def test_an_unknown_notification_is_recorded_but_never_answered(
     fake: FakeRobotd, client: _Client
 ) -> None:
-    client.send("robot.doesNotExist", {"a": 1}, notify=True)
-    client.send("hello", {"api_version": API_VERSION}, notify=True)
-    answer = client.call("robot.health")
-    assert "result" in answer
-    assert fake.methods_called() == ["robot.doesNotExist", "hello", "robot.health"]
+    client.send("robot.nope", {"a": 1}, notify=True)
+    # Bad params on a notification are silent too — the probed daemon sent
+    # nothing back for any of them.
+    client.send("robot.move", {"bogus": 1}, notify=True)
+    assert "result" in client.call("robot.health")
+    assert fake.methods_called() == ["robot.nope", "robot.move", "robot.health"]
 
 
-def test_a_malformed_line_is_a_parse_error(client: _Client) -> None:
-    client.sock.sendall(b"{not json\n")
-    answer = client.read()
-    assert answer["error"]["code"] == -32700
+# -- the answered verbs, as the probed daemon answers them -------------------
+
+
+def test_the_bare_fake_daemon_answers(client: _Client) -> None:
+    assert client.result("robot.modelApi") == {"model_api": 1}
+    assert client.result("robot.mode") == {"mode": "walk"}
+    assert client.result("robot.safeToRestart") == {"safe": True}
+    assert client.result("robot.remoteSessionActive") == {"active": False}
+    assert client.result("robot.init") == {"accepted": True}
+    assert client.result("robot.relax") == {"accepted": True}
+    assert client.result("robot.stop") == {"accepted": True}
+
+
+def test_enable_reports_the_state_it_ended_in(client: _Client) -> None:
+    assert client.result("robot.enable", {"on": True}) == {
+        "accepted": True,
+        "reason": "enabled — driving",
+    }
+    assert client.result("robot.enable", {"on": False})["accepted"] is True
+    # `toggle` flips whatever the robot currently believes.
+    assert client.result("robot.enable", {"on": False, "toggle": True})["reason"].startswith(
+        "enabled"
+    )
+
+
+def test_a_bare_fake_has_no_policy_behind_any_skill(client: _Client) -> None:
+    assert client.result("robot.do", {"skill": "roulade"}) == {
+        "accepted": False,
+        "reason": "no policy configured for that skill",
+    }
+    assert client.result("robot.setMode", {"mode": "walk"}) == {
+        "accepted": False,
+        "reason": "no policy on this robot, so there is nothing to switch between",
+    }
+
+
+def test_health_on_a_bare_fake_has_no_battery_or_temperature(client: _Client) -> None:
+    health = client.result("robot.health")
+    assert health["healthy"] is True
+    assert health["control_loop"] == {
+        "target_hz": 50.0,
+        "achieved_hz": None,
+        "ticks": 1000,
+        "missed": 0,
+        "last_tick_age_ms": 4,
+    }
+    assert health["bus"] == {"consecutive_errors": 0, "startup_failures": 0}
+    assert health["imu"] == {"ready": False, "stale_blocks": 0, "consecutive_stale_blocks": 0}
+    assert "battery" not in health
+    assert "motors" not in health
+    assert "degraded" not in health
 
 
 # -- the call log (obligation o2) --------------------------------------------
@@ -147,11 +258,11 @@ def test_a_malformed_line_is_a_parse_error(client: _Client) -> None:
 def test_call_log_preserves_order_and_separates_notifications_from_requests(
     fake: FakeRobotd, client: _Client
 ) -> None:
-    client.call("hello", {"api_version": API_VERSION})
+    client.call("hello", _HELLO)
     client.send("robot.move", {"vx": 0.1, "vy": 0.0, "vyaw": 0.0}, notify=True)
     client.send("robot.mouth", {"open": 0.5}, notify=True)
     client.call("robot.enable", {"on": True})
-    client.send("robot.head", {"pitch": 0.0}, notify=True)
+    client.send("robot.head", {"head_yaw": 0.2}, notify=True)
     client.call("robot.stop")
 
     log = fake.call_log
@@ -176,13 +287,14 @@ def test_call_log_preserves_order_and_separates_notifications_from_requests(
         assert rec.is_notification == (rec.kind == "notification")
         assert (rec.id is None) == rec.is_notification
     assert log[1].params == {"vx": 0.1, "vy": 0.0, "vyaw": 0.0}
+    assert log[0].params == _HELLO
 
 
 def test_call_log_sequence_is_monotonic_across_connections(fake: FakeRobotd) -> None:
     first = _Client(fake.socket_path)
     second = _Client(fake.socket_path)
     try:
-        first.call("hello")
+        first.call("hello", _HELLO)
         second.call("robot.health")
         first.call("robot.mode")
     finally:
@@ -194,7 +306,7 @@ def test_call_log_sequence_is_monotonic_across_connections(fake: FakeRobotd) -> 
 
 
 def test_clear_log_empties_it(fake: FakeRobotd, client: _Client) -> None:
-    client.call("hello")
+    client.call("hello", _HELLO)
     assert fake.call_log
     fake.clear_log()
     assert fake.call_log == []
@@ -207,48 +319,75 @@ def test_refuse_makes_a_method_answer_an_error_until_cleared(
     fake: FakeRobotd, client: _Client
 ) -> None:
     fake.refuse("robot.init", code=7, message="servo bus is down")
-    answer = client.call("robot.init")
-    assert answer["error"]["code"] == 7
-    assert answer["error"]["message"] == "servo bus is down"
+    error = client.error("robot.init")
+    assert error == {"code": 7, "message": "servo bus is down"}
 
     fake.allow("robot.init")
-    assert client.call("robot.init")["result"]["accepted"] is True
+    assert client.result("robot.init") == {"accepted": True}
 
 
 def test_allow_with_no_argument_clears_every_refusal(fake: FakeRobotd, client: _Client) -> None:
     fake.refuse("robot.init")
     fake.refuse("robot.stop")
     fake.allow()
-    assert "result" in client.call("robot.init")
-    assert "result" in client.call("robot.stop")
+    assert client.result("robot.init")["accepted"] is True
+    assert client.result("robot.stop")["accepted"] is True
+
+
+def test_a_refusal_outranks_param_validation(fake: FakeRobotd, client: _Client) -> None:
+    fake.refuse("robot.do", code=1, message="busy")
+    assert client.error("robot.do", {"skill": "roulade"})["message"] == "busy"
 
 
 # -- state shaping -----------------------------------------------------------
 
 
-def test_set_state_shapes_health_and_refusals(fake: FakeRobotd, client: _Client) -> None:
-    fake.set_state(fallen=True, healthy=False, battery_frac=0.1, reason="control loop stalled")
-    health = client.call("robot.health")["result"]
+def test_set_state_adds_the_measured_sections_to_health(fake: FakeRobotd, client: _Client) -> None:
+    fake.set_state(
+        healthy=False,
+        degraded=True,
+        reason="control loop stalled",
+        battery_frac=0.1,
+        hottest_servo_c=61.5,
+        achieved_hz=48.2,
+    )
+    health = client.result("robot.health")
     assert health["healthy"] is False
+    assert health["degraded"] is True
     assert health["reason"] == "control loop stalled"
     assert health["battery"]["percent"] == pytest.approx(10.0)
-
-    enable = client.call("robot.enable", {"on": True})["result"]
-    assert enable["accepted"] is False
-    assert "fallen" in enable["reason"]
+    assert health["motors"] == {"hottest_c": 61.5}
+    assert health["control_loop"]["achieved_hz"] == pytest.approx(48.2)
 
 
-def test_set_state_shapes_the_skill_list(fake: FakeRobotd, client: _Client) -> None:
+def test_a_fallen_robot_refuses_to_drive(fake: FakeRobotd, client: _Client) -> None:
+    fake.set_state(fallen=True, skills=["roulade"], enabled=True)
+    assert client.result("robot.enable", {"on": True}) == {
+        "accepted": False,
+        "reason": "the robot has fallen",
+    }
+    assert client.result("robot.do", {"skill": "roulade"})["reason"] == "the robot has fallen"
+
+
+def test_configured_skills_are_accepted_once_the_robot_is_driving(
+    fake: FakeRobotd, client: _Client
+) -> None:
     fake.set_state(skills=["kick_left"])
-    policies = client.call("robot.policies")["result"]
-    assert [entry["name"] for entry in policies["skills"]] == ["kick_left"]
-    assert client.call("robot.do", {"skill": "roulade"})["result"]["accepted"] is False
-    assert client.call("robot.do", {"skill": "kick_left"})["result"]["accepted"] is True
+    assert client.result("robot.do", {"skill": "kick_left"})["reason"] == "the robot is not driving"
+    client.result("robot.enable", {"on": True})
+    assert client.result("robot.do", {"skill": "kick_left"}) == {"accepted": True}
+    # A skill in the enum but without a policy is still refused.
+    assert (
+        client.result("robot.do", {"skill": "roulade"})["reason"]
+        == "no policy configured for that skill"
+    )
 
 
-def test_joint_names_override_simulates_a_table_mismatch(fake: FakeRobotd, client: _Client) -> None:
-    fake.set_state(joint_names=("only_one",))
-    assert client.call("hello")["result"]["joint_names"] == ["only_one"]
+def test_a_configured_policy_makes_set_mode_switchable(fake: FakeRobotd, client: _Client) -> None:
+    fake.set_state(walk_policy="walk.onnx", unavailable=None)
+    assert client.result("robot.setMode", {"mode": "roller"}) == {"accepted": True}
+    assert client.result("robot.mode") == {"mode": "roller"}
+    assert client.result("robot.setMode", {"mode": "hover"})["accepted"] is False
 
 
 def test_set_state_rejects_an_unknown_field(fake: FakeRobotd) -> None:
@@ -256,19 +395,76 @@ def test_set_state_rejects_an_unknown_field(fake: FakeRobotd) -> None:
         fake.set_state(nonsense=True)
 
 
+# -- the policy methods are gated on the API version -------------------------
+
+
+@pytest.mark.parametrize("method", sorted(POLICY_METHODS))
+def test_policy_methods_are_absent_on_the_pinned_api_version(client: _Client, method: str) -> None:
+    error = client.error(method, {"slot": "walk", "source": "x"})
+    assert error["code"] == METHOD_NOT_FOUND
+    assert error["message"] == f'unknown method "{method}"'
+
+
+def test_policy_methods_appear_on_a_newer_daemon(fake: FakeRobotd, client: _Client) -> None:
+    fake.set_state(api_version=POLICY_API_VERSION, skills=["kick_left"])
+    assert client.result("hello", _HELLO)["api_version"] == POLICY_API_VERSION
+
+    policies = client.result("robot.policies")
+    assert policies["slots"]["walk"] is None
+    assert [entry["name"] for entry in policies["skills"]] == ["kick_left"]
+
+    skills = client.result("robot.skills")["skills"]
+    assert [entry["name"] for entry in skills] == list(SKILLS)
+    assert [entry["name"] for entry in skills if entry["available"]] == ["kick_left"]
+
+    assert client.result("robot.loadPolicy", {"slot": "walk", "source": "w.onnx"}) == {
+        "accepted": True
+    }
+    assert client.result("robot.policies")["slots"]["walk"] == "w.onnx"
+    assert client.result("robot.loadPolicy", {"slot": "hover", "source": "x"})["accepted"] is False
+
+
 # -- streams -----------------------------------------------------------------
 
 
-def test_subscribe_starts_a_state_notification_stream(fake: FakeRobotd, client: _Client) -> None:
-    answer = client.call("robot.subscribe", {"hz": 50})
-    assert answer["result"]["accepted"] is True
+def test_subscribe_answers_and_starts_the_state_stream(client: _Client) -> None:
+    assert client.result("robot.subscribe", {"hz": 50}) == {
+        "accepted": True,
+        "unavailable": "no policy configured; holding the startup pose",
+    }
 
     frame = client.read()
     assert frame["method"] == "robot.state"
     assert "id" not in frame
     params = frame["params"]
-    assert params["safety"]["fallen"] is False
-    assert len(params["joints"]) == len(JOINT_NAMES)
+    assert sorted(params) == [
+        "head",
+        "joints",
+        "loop",
+        "move",
+        "odom",
+        "policy",
+        "safety",
+        "t",
+        "targets",
+    ]
+    assert len(params["head"]) == 4
+    assert len(params["joints"]) == len(JOINT_NAMES) == 15
+    assert len(params["targets"]) == 15
+    assert sorted(params["safety"]) == ["fallen", "gain", "gravity", "limp"]
+    assert params["safety"]["gravity"] == [0.0, 0.0, -1.0]
+    assert params["safety"]["gain"] == 200
+    assert params["odom"] == {"position": [0.0, 0.0, 0.0], "yaw": 0.0}
+    assert params["policy"] == "held"
+
+
+def test_subscribe_names_the_configured_policies(fake: FakeRobotd, client: _Client) -> None:
+    fake.set_state(walk_policy="walk.onnx", stand_policy="stand.onnx", unavailable=None)
+    assert client.result("robot.subscribe") == {
+        "accepted": True,
+        "walk": "walk.onnx",
+        "stand": "stand.onnx",
+    }
 
 
 def test_the_state_stream_reflects_set_state(fake: FakeRobotd, client: _Client) -> None:
@@ -278,17 +474,28 @@ def test_the_state_stream_reflects_set_state(fake: FakeRobotd, client: _Client) 
     while time.monotonic() < deadline:
         frame = client.read()
         if frame.get("method") == "robot.state" and frame["params"]["safety"]["fallen"]:
+            assert frame["params"]["safety"]["gravity"] == [0.0, 0.0, 1.0]
             return
     pytest.fail("the state stream never reported the fallen robot")
 
 
+def test_joint_names_override_simulates_a_table_mismatch(fake: FakeRobotd, client: _Client) -> None:
+    """A daemon whose joint table disagrees with the client's, on the wire."""
+    fake.set_state(joint_names=("only_one",))
+    client.call("robot.subscribe", {"hz": 100})
+    frame = client.read()
+    assert frame["method"] == "robot.state"
+    assert len(frame["params"]["joints"]) == 1 != len(JOINT_NAMES)
+
+
 def test_pad_and_tof_streams_deliver_fed_frames(fake: FakeRobotd, client: _Client) -> None:
-    assert client.call("pad.input")["result"]["accepted"] is True
-    assert client.call("tof.stream")["result"]["sensor"] == "VL53L8CX"
+    assert client.result("pad.input")["accepted"] is True
+    assert client.result("tof.stream")["sensor"] == "VL53L8CX"
 
     assert fake.feed_pad_report({"buttons": ["a"]}) == 1
     pad = client.read()
     assert pad["method"] == "pad.report"
+    assert "id" not in pad
     assert pad["params"] == {"buttons": ["a"]}
 
     assert fake.feed_tof_frame({"seq": 1, "rows": 8, "cols": 8}) == 1
@@ -300,13 +507,13 @@ def test_pad_and_tof_streams_deliver_fed_frames(fake: FakeRobotd, client: _Clien
 def test_frames_are_not_pushed_to_an_unsubscribed_connection(
     fake: FakeRobotd, client: _Client
 ) -> None:
-    client.call("hello")
+    client.call("hello", _HELLO)
     assert fake.feed_pad_report({"buttons": []}) == 0
 
 
 def test_tof_stream_reports_a_missing_sensor(fake: FakeRobotd, client: _Client) -> None:
     fake.set_state(tof_sensor=None)
-    result = client.call("tof.stream")["result"]
+    result = client.result("tof.stream")
     assert result["accepted"] is True
     assert result["unavailable"]
     assert "sensor" not in result
@@ -320,7 +527,7 @@ def test_wedge_stops_the_server_reading_and_unwedge_resumes(
 ) -> None:
     fake.wedge()
     assert fake.wedged is True
-    request_id = client.send("hello")
+    request_id = client.send("hello", _HELLO)
     with pytest.raises(socket.timeout):
         client.read(timeout=0.3)
     assert fake.call_log == []  # nothing was even read off the socket
@@ -350,6 +557,13 @@ def test_delay_delays_every_reply(fake: FakeRobotd, client: _Client) -> None:
     started = time.monotonic()
     client.call("robot.health")
     assert time.monotonic() - started < 0.2
+
+
+def test_delay_applies_to_error_replies_too(fake: FakeRobotd, client: _Client) -> None:
+    fake.delay(150)
+    started = time.monotonic()
+    client.error("robot.nope")
+    assert time.monotonic() - started >= 0.15
 
 
 # -- lifecycle ---------------------------------------------------------------

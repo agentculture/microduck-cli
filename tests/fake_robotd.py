@@ -3,13 +3,23 @@
 A unix-socket JSON-RPC 2.0 server that speaks NDJSON (one JSON object per line),
 the way the real MicroDuck daemons do: a message carrying an ``id`` is a request
 and gets exactly one reply; a message without one is a notification and gets no
-reply at all. Server-to-client pushes (``robot.state``, ``pad.report``,
-``tof.frame``) are notifications too, so they never carry an ``id``.
+reply at all — not even when its params are wrong. Server-to-client pushes
+(``robot.state``, ``pad.report``, ``tof.frame``) are notifications too, so they
+never carry an ``id``.
 
-The behaviour here is implemented from the wire contract of
-``duck-ipc-proto/src/lib.rs`` at the commit pinned in ``docs/upstream-pins.md``
-(``0cd676d`` of ``pollen-robotics/microduck``). Nothing upstream is copied — the
-shapes below are a Python re-implementation of the documented protocol.
+Every shape below is implemented from two sources, never copied from either:
+
+* ``duck-ipc-proto/src/lib.rs`` at the commit pinned in ``docs/upstream-pins.md``
+  (``0cd676d`` of ``pollen-robotics/microduck``) — method names, param field
+  names, ``API_VERSION`` and ``JOINT_NAMES``.
+* A probe of the real ``robotd`` 0.10.0 built from that commit and run with
+  ``--fake`` — the exact reply payloads, and the serde-style ``-32602`` messages.
+
+The defaults deliberately mirror ``robotd --fake``: **no policy is configured**,
+so ``robot.subscribe`` reports ``unavailable``, ``robot.do`` refuses every skill,
+``robot.setMode`` refuses, and ``robot.health`` carries no battery or thermal
+section. Use :meth:`FakeRobotd.set_state` to give the fake a robot that can do
+more than a bare ``--fake`` daemon.
 
 Why the fake exists: CI cannot build and run the real ``robotd --fake``, so this
 is the CI surface for every client/behaviour test. The on-box run against the
@@ -43,10 +53,20 @@ from typing import Any, Callable, Iterable
 # as the real transcription of the pinned duck-ipc-proto commit; this table is only
 # what the fake needs to answer, transcribed from the same source.
 #
-# TODO(t10): reconcile these names, API_VERSION and JOINT_NAMES against
-# ``microduck_cli.ipc.proto`` and import from there instead of duplicating them.
+# TODO(t10): reconcile these names, API_VERSION, JOINT_NAMES and the param-field
+# tables against ``microduck_cli.ipc.proto`` and import from there instead of
+# duplicating them.
 
+#: ``pub const API_VERSION: u32 = 16`` on the pinned commit, and what the probed
+#: daemon answers. A client's own ``api_version`` is never refused — skew is
+#: reported by the answer, not rejected at the door.
 API_VERSION = 16
+
+#: The API version from which ``robot.policies`` / ``robot.skills`` /
+#: ``robot.loadPolicy`` exist. They are METHOD_NOT_FOUND on the pinned build.
+POLICY_API_VERSION = 18
+
+DAEMON_VERSION = "0.10.0"
 
 JOINT_NAMES: tuple[str, ...] = (
     "left_hip_yaw",
@@ -66,8 +86,6 @@ JOINT_NAMES: tuple[str, ...] = (
     "right_ankle",
 )
 assert len(JOINT_NAMES) == 15, "the pinned proto declares exactly 15 joints"
-
-ROBOT_MODEL = "microduck"
 
 #: JSON-RPC 2.0 error codes, as the pinned proto's ``code`` module names them.
 PARSE_ERROR = -32700
@@ -89,7 +107,6 @@ DISCRETE_METHODS: frozenset[str] = frozenset(
         "hello",
         "robot.health",
         "robot.subscribe",
-        "robot.policies",
         "robot.init",
         "robot.enable",
         "robot.relax",
@@ -98,7 +115,6 @@ DISCRETE_METHODS: frozenset[str] = frozenset(
         "robot.stop",
         "robot.setMode",
         "robot.mode",
-        "robot.loadPolicy",
         "robot.modelApi",
         "robot.remoteSessionActive",
         "robot.safeToRestart",
@@ -107,12 +123,41 @@ DISCRETE_METHODS: frozenset[str] = frozenset(
     }
 )
 
+#: Requests that exist only from :data:`POLICY_API_VERSION` onward.
+POLICY_METHODS: frozenset[str] = frozenset({"robot.policies", "robot.skills", "robot.loadPolicy"})
+
 #: Server -> client push method names. Never carry an id.
 STATE_NOTIFICATION = "robot.state"
 PAD_NOTIFICATION = "pad.report"
 TOF_NOTIFICATION = "tof.frame"
 
-#: The skill names ``robot.do`` accepts.
+#: Param field names, exactly as the pinned proto's param structs declare them.
+#: Every one of those structs is ``deny_unknown_fields``, which is where the
+#: ``-32602 unknown field`` answers come from.
+PARAM_FIELDS: dict[str, tuple[str, ...]] = {
+    "hello": ("api_version",),
+    "robot.enable": ("on", "toggle"),
+    "robot.do": ("skill",),
+    "robot.look": ("x", "y", "z", "neck_pitch"),
+    "robot.setMode": ("mode",),
+    "robot.subscribe": ("hz",),
+    # Continuous intents. Listed for the record and for tests to build valid
+    # payloads from; a notification is never answered, so nothing validates them.
+    "robot.move": ("vx", "vy", "vyaw"),
+    "robot.head": ("neck_pitch", "head_pitch", "head_yaw", "head_roll"),
+    "robot.pose": ("z", "roll", "pitch", "active"),
+    "robot.mouth": ("open",),
+    "robot.sound": ("tag", "hold"),
+}
+
+#: Params with no serde ``default``: absent means ``missing field``.
+REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "hello": ("api_version",),
+    "robot.do": ("skill",),
+}
+
+#: The ``Skill`` enum's wire variants — a value outside this set is a serde
+#: unknown-variant error, distinct from a skill with no policy behind it.
 SKILLS: tuple[str, ...] = (
     "ground_pick",
     "kick_left",
@@ -120,6 +165,19 @@ SKILLS: tuple[str, ...] = (
     "sit_toggle",
     "roulade",
 )
+
+#: The ``SoundTag`` enum's wire variants.
+SOUND_TAGS: tuple[str, ...] = (
+    "alarm",
+    "greet",
+    "inquire",
+    "peck",
+    "chirp",
+    "coo",
+    "wheee",
+)
+
+MODES: tuple[str, ...] = ("walk", "roller")
 
 _MAX_SOCKET_PATH = 100
 
@@ -145,28 +203,54 @@ class _Refusal:
     message: str
 
 
+@dataclass(frozen=True)
+class _Invalid:
+    """A handler's way of asking for an INVALID_PARAMS reply."""
+
+    message: str
+
+
 @dataclass
 class _RobotState:
-    """What the fake reports about itself, shaped by :meth:`FakeRobotd.set_state`."""
+    """What the fake reports about itself, shaped by :meth:`FakeRobotd.set_state`.
+
+    The defaults are a bare ``robotd --fake``: healthy, upright, not driving, no
+    policy of any kind loaded, and no battery or thermal reading.
+    """
 
     api_version: int = API_VERSION
+    daemon_version: str = DAEMON_VERSION
+    revision: str | None = None
     healthy: bool = True
+    degraded: bool = False
+    reason: str | None = None
     fallen: bool = False
     enabled: bool = False
-    battery_frac: float = 0.87
+    #: ``None`` means "not measured" — which is what ``--fake`` reports. A float
+    #: in 0..1 adds the ``battery`` section to ``robot.health``.
+    battery_frac: float | None = None
+    #: ``None`` means "not measured"; adds ``motors`` to ``robot.health``.
+    hottest_servo_c: float | None = None
+    #: ``robot.health``'s ``control_loop.achieved_hz``. ``None`` until a window
+    #: closes, which is what a freshly started daemon reports.
+    achieved_hz: float | None = None
+    #: ``robot.state``'s ``loop.hz``.
     loop_hz: float = 50.0
+    ticks: int = 1000
     mode: str = "walk"
     policy: str = "held"
-    walk_policy: str = "walk.onnx"
-    stand_policy: str = "stand.onnx"
+    gain: int | None = 200
+    #: Configured policy slots. ``None`` is ``--fake``'s "no policy configured".
+    walk_policy: str | None = None
+    stand_policy: str | None = None
+    unavailable: str | None = "no policy configured; holding the startup pose"
     remote_session: bool = False
-    skills: tuple[str, ...] = SKILLS
+    #: Which skills have a policy behind them. Empty on ``--fake``.
+    skills: tuple[str, ...] = ()
     joint_names: tuple[str, ...] = JOINT_NAMES
-    daemon_version: str = "0.0.0-fake"
+    imu_ready: bool = False
     tof_sensor: str | None = "VL53L8CX"
     pad_attached: bool = False
-    unavailable: str | None = None
-    reason: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -309,9 +393,12 @@ class FakeRobotd:
         """Shape what health / state / policies report.
 
         Accepts any field of the internal state record: ``fallen``, ``skills``,
-        ``enabled``, ``healthy``, ``battery_frac``, ``api_version``,
-        ``joint_names`` (so a joint-table mismatch can be simulated), ``loop_hz``,
-        ``mode``, ``policy``, ``remote_session``, ``reason``, ``unavailable``.
+        ``enabled``, ``healthy``, ``battery_frac`` (``None`` = not measured, as on
+        ``--fake``), ``api_version`` (raise it to :data:`POLICY_API_VERSION` to
+        turn the policy methods on), ``joint_names`` (so a joint-table mismatch
+        can be simulated), ``walk_policy``, ``stand_policy``, ``unavailable``,
+        ``loop_hz``, ``achieved_hz``, ``mode``, ``policy``, ``remote_session``,
+        ``reason``, ``hottest_servo_c``, ``tof_sensor``, ``pad_attached``.
         """
         with self._lock:
             for key, value in fields.items():
@@ -399,13 +486,10 @@ class FakeRobotd:
         try:
             message = json.loads(line)
         except json.JSONDecodeError:
-            self._reply(conn, {"jsonrpc": "2.0", "id": None, "error": _err(PARSE_ERROR, "parse")})
+            self._error(conn, None, PARSE_ERROR, "parse error")
             return
         if not isinstance(message, dict) or "method" not in message:
-            self._reply(
-                conn,
-                {"jsonrpc": "2.0", "id": None, "error": _err(INVALID_REQUEST, "invalid request")},
-            )
+            self._error(conn, None, INVALID_REQUEST, "invalid request")
             return
 
         method = message["method"]
@@ -422,36 +506,33 @@ class FakeRobotd:
             self._log.append(record)
 
         if not has_id:
-            # A notification is never answered — not even an unknown one, which
-            # is the JSON-RPC 2.0 rule and what the real daemons do.
+            # A notification is never answered — not even an unknown one, and not
+            # even one whose params are malformed. That is the JSON-RPC 2.0 rule,
+            # and the probed daemon sent nothing back for any of them.
             self._apply_notification(method, params)
             return
 
         with self._lock:
             refusal = self._refusals.get(method)
         if refusal is not None:
-            self._reply(
-                conn,
-                {
-                    "jsonrpc": "2.0",
-                    "id": record.id,
-                    "error": _err(refusal.code, refusal.message),
-                },
-            )
+            self._error(conn, record.id, refusal.code, refusal.message)
             return
 
         handler = self._handlers().get(method)
         if handler is None:
-            self._reply(
-                conn,
-                {
-                    "jsonrpc": "2.0",
-                    "id": record.id,
-                    "error": _err(METHOD_NOT_FOUND, f"method not found: {method}"),
-                },
-            )
+            self._error(conn, record.id, METHOD_NOT_FOUND, f'unknown method "{method}"')
             return
-        result = handler(conn, params if isinstance(params, dict) else {})
+
+        payload = params if isinstance(params, dict) else {}
+        complaint = _validate(method, params if isinstance(params, dict) else None)
+        if complaint is not None:
+            self._error(conn, record.id, INVALID_PARAMS, complaint)
+            return
+
+        result = handler(conn, payload)
+        if isinstance(result, _Invalid):
+            self._error(conn, record.id, INVALID_PARAMS, result.message)
+            return
         self._reply(conn, {"jsonrpc": "2.0", "id": record.id, "result": result})
 
     def _reply(self, conn: _Connection, message: dict[str, Any]) -> None:
@@ -461,48 +542,63 @@ class FakeRobotd:
             time.sleep(delay)
         conn.send(message)
 
+    def _error(self, conn: _Connection, request_id: Any, code: int, message: str) -> None:
+        self._reply(conn, {"jsonrpc": "2.0", "id": request_id, "error": _err(code, message)})
+
     def _apply_notification(self, method: str, params: Any) -> None:
         """Fold a continuous intent into the reported state, minimally."""
-        if method == "robot.pose" and isinstance(params, dict):
+        if not isinstance(params, dict):
+            return
+        if method == "robot.pose":
             with self._lock:
                 self.state.extra["pose"] = params
-        elif method == "robot.mouth" and isinstance(params, dict):
+        elif method == "robot.mouth":
             with self._lock:
                 self.state.extra["mouth"] = params.get("open", 0.0)
 
     # -- handlers -----------------------------------------------------------
 
     def _handlers(self) -> dict[str, Callable[[_Connection, dict[str, Any]], Any]]:
-        return {
+        handlers: dict[str, Callable[[_Connection, dict[str, Any]], Any]] = {
             "hello": self._h_hello,
             "robot.health": self._h_health,
             "robot.subscribe": self._h_subscribe,
-            "robot.policies": self._h_policies,
-            "robot.init": self._h_intent,
+            "robot.init": self._h_accepted,
             "robot.enable": self._h_enable,
             "robot.relax": self._h_relax,
             "robot.do": self._h_do,
             "robot.look": self._h_look,
-            "robot.stop": self._h_intent,
+            "robot.stop": self._h_accepted,
             "robot.setMode": self._h_set_mode,
             "robot.mode": self._h_mode,
-            "robot.loadPolicy": self._h_load_policy,
             "robot.modelApi": self._h_model_api,
             "robot.remoteSessionActive": self._h_session_active,
             "robot.safeToRestart": self._h_safe_to_restart,
             "pad.input": self._h_pad_input,
             "tof.stream": self._h_tof_stream,
         }
+        # robot.policies / robot.skills / robot.loadPolicy do not exist on the
+        # pinned build — the probed daemon answers METHOD_NOT_FOUND for all three.
+        # They arrive on a newer main; the fake gates them on the reported API
+        # version so a test can cover both daemons. TODO(t10): settle the real
+        # names and payloads against ipc/proto.py once that build is pinned.
+        with self._lock:
+            api_version = self.state.api_version
+        if api_version >= POLICY_API_VERSION:
+            handlers["robot.policies"] = self._h_policies
+            handlers["robot.skills"] = self._h_skills
+            handlers["robot.loadPolicy"] = self._h_load_policy
+        return handlers
 
     def _h_hello(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
+        # A client's own api_version is recorded in the call log and never
+        # refused: skew is the answer's business, not the door's.
         with self._lock:
             state = self.state
             return {
                 "api_version": state.api_version,
                 "daemon_version": state.daemon_version,
-                "revision": None,
-                "model": ROBOT_MODEL,
-                "joint_names": list(state.joint_names),
+                "revision": state.revision,
             }
 
     def _h_health(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
@@ -510,23 +606,33 @@ class FakeRobotd:
             state = self.state
             answer: dict[str, Any] = {
                 "healthy": state.healthy,
-                "degraded": False,
-                "battery": {
-                    "volts": round(6.0 + 2.4 * state.battery_frac, 3),
-                    "percent": round(100.0 * state.battery_frac, 1),
-                },
                 "control_loop": {
                     "target_hz": 50.0,
-                    "achieved_hz": state.loop_hz,
-                    "ticks": 1000,
+                    "achieved_hz": state.achieved_hz,
+                    "ticks": state.ticks,
                     "missed": 0,
                     "last_tick_age_ms": 4,
                 },
                 "bus": {"consecutive_errors": 0, "startup_failures": 0},
-                "imu": {"ready": True},
+                "imu": {
+                    "ready": state.imu_ready,
+                    "stale_blocks": 0,
+                    "consecutive_stale_blocks": 0,
+                },
             }
+            # Measurements are reported only when measured. Absent is "not known
+            # yet" — never zero, which would render as a flat pack.
+            if state.degraded:
+                answer["degraded"] = True
             if state.reason is not None:
                 answer["reason"] = state.reason
+            if state.battery_frac is not None:
+                answer["battery"] = {
+                    "volts": round(6.0 + 2.4 * state.battery_frac, 3),
+                    "percent": round(100.0 * state.battery_frac, 1),
+                }
+            if state.hottest_servo_c is not None:
+                answer["motors"] = {"hottest_c": state.hottest_servo_c}
             return answer
 
     def _h_subscribe(self, conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
@@ -535,48 +641,30 @@ class FakeRobotd:
         self._start_state_stream(conn, float(hz))
         with self._lock:
             state = self.state
-            answer: dict[str, Any] = {
-                "accepted": True,
-                "walk": state.walk_policy,
-                "stand": state.stand_policy,
-            }
+            answer: dict[str, Any] = {"accepted": True}
+            if state.walk_policy is not None:
+                answer["walk"] = state.walk_policy
+            if state.stand_policy is not None:
+                answer["stand"] = state.stand_policy
             if state.unavailable is not None:
                 answer["unavailable"] = state.unavailable
             for skill in state.skills:
                 answer[skill] = f"{skill}.onnx"
             return answer
 
-    def _h_policies(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
-        # NOTE: the pinned proto has no ``robot.policies`` method — the policy
-        # slots and the loaded skill networks are only visible through
-        # ``robot.subscribe``'s answer. The fake answers it because the CLI's
-        # planned ``policies`` surface asks for it; TODO(t10) drop or keep it
-        # deliberately once ipc/proto.py settles the real method name.
-        with self._lock:
-            state = self.state
-            return {
-                "slots": {
-                    "walk": state.walk_policy,
-                    "stand": state.stand_policy,
-                    "unavailable": state.unavailable,
-                },
-                "skills": [{"name": s, "file": f"{s}.onnx"} for s in state.skills],
-            }
-
-    def _h_intent(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
-            if self.state.fallen:
-                return {"accepted": False, "reason": "the robot has fallen"}
+    def _h_accepted(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
         return {"accepted": True}
 
     def _h_enable(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
-        on = bool(params.get("on", True))
         with self._lock:
-            if on and self.state.fallen:
+            if self.state.fallen:
                 return {"accepted": False, "reason": "the robot has fallen"}
+            on = not self.state.enabled if params.get("toggle") else bool(params.get("on", True))
             self.state.enabled = on
             self.state.policy = "walk" if on else "held"
-        return {"accepted": True}
+        if on:
+            return {"accepted": True, "reason": "enabled — driving"}
+        return {"accepted": True, "reason": "disabled — holding the home pose"}
 
     def _h_relax(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
@@ -584,41 +672,47 @@ class FakeRobotd:
             self.state.policy = "held"
         return {"accepted": True}
 
-    def _h_do(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
+    def _h_do(self, _conn: _Connection, params: dict[str, Any]) -> Any:
         skill = params.get("skill")
+        if skill not in SKILLS:
+            return _Invalid(f"unknown variant `{skill}`, {_expected(SKILLS)}")
         with self._lock:
-            known = self.state.skills
-        if skill not in known:
-            return {"accepted": False, "reason": f"unknown skill: {skill}"}
+            state = self.state
+            if state.fallen:
+                return {"accepted": False, "reason": "the robot has fallen"}
+            if skill not in state.skills:
+                return {"accepted": False, "reason": "no policy configured for that skill"}
+            if not state.enabled:
+                return {"accepted": False, "reason": "the robot is not driving"}
         return {"accepted": True}
 
     def _h_look(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
-        neck = float(params.get("neck_pitch", 0.0))
-        return {"head": {"neck_pitch": neck, "pitch": 0.0, "yaw": 0.0, "roll": 0.0}}
+        return {
+            "head": {
+                "neck_pitch": float(params.get("neck_pitch", 0.0)),
+                "head_pitch": 0.0,
+                "head_yaw": 0.0,
+                "head_roll": 0.0,
+            }
+        }
 
     def _h_set_mode(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
-        mode = params.get("mode")
-        if mode not in ("walk", "roller"):
-            return {"accepted": False, "reason": "known modes: walk, roller"}
+        mode = params.get("mode", "")
         with self._lock:
-            self.state.mode = mode
+            state = self.state
+            if state.walk_policy is None and state.stand_policy is None:
+                return {
+                    "accepted": False,
+                    "reason": "no policy on this robot, so there is nothing to switch between",
+                }
+            if mode not in MODES:
+                return {"accepted": False, "reason": f"known modes: {', '.join(MODES)}"}
+            state.mode = mode
         return {"accepted": True}
 
     def _h_mode(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             return {"mode": self.state.mode}
-
-    def _h_load_policy(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
-        # NOTE: also absent from the pinned proto — see ``_h_policies``. TODO(t10).
-        slot = params.get("slot", "walk")
-        name = params.get("policy") or params.get("file")
-        if slot not in ("walk", "stand"):
-            return {"accepted": False, "reason": "known slots: walk, stand"}
-        if not name:
-            return {"accepted": False, "reason": "no policy named"}
-        with self._lock:
-            setattr(self.state, f"{slot}_policy", name)
-        return {"accepted": True}
 
     def _h_model_api(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
         return {"model_api": 1}
@@ -648,6 +742,42 @@ class FakeRobotd:
             answer["sensor"] = sensor
         return answer
 
+    # -- policy methods: only from POLICY_API_VERSION on ---------------------
+
+    def _h_policies(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            state = self.state
+            return {
+                "slots": {
+                    "walk": state.walk_policy,
+                    "stand": state.stand_policy,
+                    "unavailable": state.unavailable,
+                },
+                "skills": [{"name": s, "file": f"{s}.onnx"} for s in state.skills],
+            }
+
+    def _h_skills(self, _conn: _Connection, _params: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            loaded = set(self.state.skills)
+        return {
+            "skills": [
+                {"name": s, "available": s in loaded, "file": f"{s}.onnx" if s in loaded else None}
+                for s in SKILLS
+            ]
+        }
+
+    def _h_load_policy(self, _conn: _Connection, params: dict[str, Any]) -> dict[str, Any]:
+        slot = params.get("slot", "walk")
+        source = params.get("source") or params.get("policy")
+        if slot not in ("walk", "stand"):
+            return {"accepted": False, "reason": "known slots: walk, stand"}
+        if not source:
+            return {"accepted": False, "reason": "no policy named"}
+        with self._lock:
+            setattr(self.state, f"{slot}_policy", source)
+            self.state.unavailable = None
+        return {"accepted": True}
+
     # -- state stream -------------------------------------------------------
 
     def _start_state_stream(self, conn: _Connection, hz: float) -> None:
@@ -670,21 +800,24 @@ class FakeRobotd:
         self._spawn(pump, name="fake-robotd-state")
 
     def _state_frame(self) -> dict[str, Any]:
+        """One ``robot.state`` frame, keyed exactly as the probed daemon's."""
         with self._lock:
             state = self.state
             joints = [0.0] * len(state.joint_names)
             return {
-                "t": round(time.monotonic() % 1e6, 4),
-                "move": {"requested": [0.0, 0.0, 0.0], "applied": [0.0, 0.0, 0.0]},
                 "head": [0.0, 0.0, 0.0, 0.0],
+                "joints": joints,
+                "loop": {"hz": state.loop_hz, "missed": 0},
+                "move": {"applied": [0.0, 0.0, 0.0], "requested": [0.0, 0.0, 0.0]},
+                "odom": {"position": [0.0, 0.0, 0.0], "yaw": 0.0},
                 "policy": state.policy,
                 "safety": {
                     "fallen": state.fallen,
+                    "gain": state.gain,
+                    "gravity": [0.0, 0.0, 1.0 if state.fallen else -1.0],
                     "limp": not state.enabled,
-                    "gravity": [0.0, 0.0, 9.81 if state.fallen else -9.81],
                 },
-                "loop": {"hz": state.loop_hz, "missed": 0},
-                "joints": joints,
+                "t": round(time.monotonic() % 1e6, 4),
                 "targets": list(joints),
             }
 
@@ -729,25 +862,62 @@ class _Connection:
             pass
 
 
+def _expected(fields: Iterable[str]) -> str:
+    """Render serde's "expected ..." clause for a field or variant list."""
+    quoted = [f"`{name}`" for name in fields]
+    if not quoted:
+        return "there are no fields"
+    if len(quoted) == 1:
+        return f"expected {quoted[0]}"
+    if len(quoted) == 2:
+        return f"expected {quoted[0]} or {quoted[1]}"
+    return "expected one of " + ", ".join(quoted)
+
+
+def _validate(method: str, params: dict[str, Any] | None) -> str | None:
+    """Return a serde-style INVALID_PARAMS message, or None when the params fit.
+
+    The pinned proto's param structs are ``deny_unknown_fields``, and the fields
+    without a serde ``default`` are genuinely required — which is why an unknown
+    key and a missing key are two different messages on the wire.
+    """
+    known = PARAM_FIELDS.get(method)
+    supplied = params or {}
+    if known is not None:
+        for key in supplied:
+            if key not in known:
+                return f"unknown field `{key}`, {_expected(known)}"
+    for key in REQUIRED_FIELDS.get(method, ()):
+        if key not in supplied:
+            return f"missing field `{key}`"
+    return None
+
+
 def _err(code: int, message: str) -> dict[str, Any]:
     return {"code": code, "message": message}
 
 
 __all__ = [
     "API_VERSION",
-    "CallRecord",
     "CONTINUOUS_METHODS",
+    "DAEMON_VERSION",
     "DISCRETE_METHODS",
-    "FakeRobotd",
     "INTERNAL_ERROR",
     "INVALID_PARAMS",
     "INVALID_REQUEST",
     "JOINT_NAMES",
     "METHOD_NOT_FOUND",
+    "MODES",
     "PAD_NOTIFICATION",
+    "PARAM_FIELDS",
     "PARSE_ERROR",
-    "ROBOT_MODEL",
+    "POLICY_API_VERSION",
+    "POLICY_METHODS",
+    "REQUIRED_FIELDS",
     "SKILLS",
+    "SOUND_TAGS",
     "STATE_NOTIFICATION",
     "TOF_NOTIFICATION",
+    "CallRecord",
+    "FakeRobotd",
 ]
