@@ -177,6 +177,18 @@ def test_serde_style_invalid_params(
     assert error["message"] == message
 
 
+def test_a_float_where_the_proto_wants_a_u32_is_a_type_error(client: _Client) -> None:
+    """``robot.subscribe``'s ``hz`` is a serde ``u32``: 50.0 is a type error, not 50.
+
+    Straight off the real daemon, and the reason it is asserted here: a client that
+    sends a JSON float is refused on the box, while a lenient fake would let it pass.
+    """
+    error = client.error("robot.subscribe", {"hz": 50.0})
+    assert error["code"] == INVALID_PARAMS
+    assert error["message"] == "invalid type: floating point `50.0`, expected u32"
+    assert client.result("robot.subscribe", {"hz": 50})["accepted"] is True
+
+
 def test_an_unknown_skill_is_an_unknown_variant(client: _Client) -> None:
     error = client.error("robot.do", {"skill": "backflip"})
     assert error["code"] == INVALID_PARAMS
