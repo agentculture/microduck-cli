@@ -74,6 +74,53 @@ jobs:
       - name: afi rubric gate
         run: uv run teken cli doctor . --strict
 
+  # Optional: the operate surface against the REAL robotd (--fake body) built from
+  # the pinned sim-remote-io commit. Runs only when the repository variable
+  # MICRODUCK_REAL_DAEMON is "true" and a Rust toolchain is available; otherwise
+  # the job is skipped (never failed). The in-process Python fake in
+  # tests/fake_robotd.py remains the always-on test surface (plan t2 risk).
+  real-daemon:
+    if: ${{ vars.MICRODUCK_REAL_DAEMON == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+
+      - run: uv python install 3.12
+
+      - run: uv sync
+
+      - name: Toolchain present?
+        id: toolchain
+        run: |
+          if command -v cargo >/dev/null 2>&1; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::cargo not available — skipping the real-daemon run"; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Clone microduck at the pinned commit and build robotd/robotctl
+        if: steps.toolchain.outputs.ok == 'true'
+        run: |
+          PIN=$(python3 -c "import re,pathlib; t=pathlib.Path('docs/upstream-pins.md').read_text(); print(re.search(r'sim-remote-io.*?`([0-9a-f]{40})`', t, re.S).group(1))")
+          git clone -q https://github.com/pollen-robotics/microduck.git ../microduck
+          git -C ../microduck fetch -q origin sim-remote-io && git -C ../microduck checkout -q "$PIN"
+          (cd ../microduck && cargo build --quiet -p robotd -p robotctl -p tof -p sounds)
+
+      - name: env up --fake, the operate walkthrough, env down
+        if: steps.toolchain.outputs.ok == 'true'
+        env:
+          MICRODUCK_CLONE: ${{ github.workspace }}/../microduck
+          DUCK_SIM_STATE: /tmp/ds
+        run: |
+          uv run microduck env doctor || true
+          uv run microduck env up --fake --skip-build
+          uv run microduck duck health --json
+          uv run microduck duck init --apply --json
+          uv run microduck duck enable --apply --json
+          uv run microduck rules check --duck duck-a
+          uv run microduck rules engine run --duck duck-a --apply --max-ticks 100 --json
+          uv run microduck env down
+
   version-check:
     # Only run on PR events. On push to main after a merged PR, the comparison
     # would always fail (PR_VERSION == MAIN_VERSION because HEAD and origin/main
