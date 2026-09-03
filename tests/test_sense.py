@@ -163,7 +163,22 @@ def test_empty_skills_tuple_is_a_real_reading():
 
 def test_bools_are_coerced_but_absence_is_preserved():
     assert read_sense(SenseProviders(fallen=lambda: 0), 0.0).fallen is False
-    assert read_sense(SenseProviders(fallen=lambda: "yes"), 0.0).fallen is True
+    assert read_sense(SenseProviders(fallen=lambda: 1), 0.0).fallen is True
+    assert read_sense(SenseProviders(fallen=lambda: True), 0.0).fallen is True
+
+
+@pytest.mark.parametrize("value", ["false", "true", "yes", "no", "0", "1", 0.0, 1.0, 2, [], {}])
+def test_malformed_bool_is_a_non_reading(value):
+    """Python truthiness must never authorise motion: only bool or int 0/1 count.
+
+    The string "false" is the canonical trap — Python truthiness would coerce
+    it to ``True`` and could authorise idle motion or corrupt
+    fallen/limp/remote_session. Anything that is not a real ``bool`` (or the
+    ints 0/1) is a non-reading, not a guess.
+    """
+    assert read_sense(SenseProviders(fallen=lambda: value), 0.0).fallen is None
+    assert read_sense(SenseProviders(limp=lambda: value), 0.0).limp is None
+    assert read_sense(SenseProviders(remote_session=lambda: value), 0.0).remote_session is None
 
 
 # --- freshness ------------------------------------------------------------

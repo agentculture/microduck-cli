@@ -345,6 +345,13 @@ class RobotSink:
         stays in charge rather than being overwritten with a neutral this CLI
         invented.
         """
+        for channel in DISCRETE_CHANNELS:
+            if channel not in pose:
+                # The owning behaviour is gone this tick (expired/evicted): forget
+                # its last-sent value so a LATER behaviour asking for the same
+                # discrete value (the same skill run again, say) is not silently
+                # suppressed by edge-triggering against a stale memory.
+                self.forget_discrete(channel)
         if not pose:
             return
         for channel in WRITE_ORDER:

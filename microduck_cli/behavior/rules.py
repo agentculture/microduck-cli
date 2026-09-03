@@ -46,6 +46,10 @@ an evaluator to notice at runtime.
   ``value``, or a numeric-op predicate missing/mistyping one;
 * an unknown ``run``/``disable`` action name;
 * a negative ``cooldown_s``/``hysteresis``, or a duplicate rule ``id``;
+* a non-finite ``cooldown_s``/``hysteresis``/``duration_s``/predicate ``value``/
+  numeric ``params`` entry (``NaN`` or ``inf``) — refused FAIL-CLOSED: a ``NaN``
+  cooldown makes every timing comparison false, which would let the rule fire
+  every tick instead of throttling;
 * a ``duration_s`` that is not a positive number (``<= 0``, non-numeric, or a
   ``bool``);
 * a react rule that runs a looping action (:data:`LOOPING_ACTIONS`) with no
@@ -186,8 +190,8 @@ def _require_str(data: Mapping, key: str, *, path: str) -> str:
 def _validate_nonneg_float(raw: object, *, name: str, path: str, default: float) -> float:
     if raw is None:
         return default
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
-        raise _error(f"{path}.{name} must be a number (got {raw!r})")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(raw):
+        raise _error(f"{path}.{name} must be a finite number (got {raw!r})")
     value = float(raw)
     if value < 0:
         raise _error(f"{path}.{name} must be >= 0 (got {value!r})")
@@ -420,10 +424,15 @@ def _validate_predicate_value(raw: Mapping, *, op: str, path: str) -> object:
             )
         return None
     if op in _ORDERED_OPS or op in _DURATION_OPS:
-        if not has_value or isinstance(value, bool) or not isinstance(value, (int, float)):
+        if (
+            not has_value
+            or isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
             raise _error(
-                f"{path}.when: op {op!r} requires a numeric 'value' (got {value!r})",
-                remediation="provide a numeric 'value'",
+                f"{path}.when: op {op!r} requires a finite numeric 'value' (got {value!r})",
+                remediation="provide a finite numeric 'value'",
             )
         if value < 0:
             raise _error(f"{path}.when: 'value' for op {op!r} must be >= 0 (got {value!r})")
@@ -454,6 +463,9 @@ def _validate_run_params(raw: object, *, path: str) -> dict[str, object]:
     for key, value in raw.items():
         if not isinstance(key, str):
             raise _error(f"{path}.params: keys must be strings (got {key!r})")
+        if not isinstance(value, bool) and isinstance(value, (int, float)):
+            if not math.isfinite(value):
+                raise _error(f"{path}.params.{key} must be a finite number (got {value!r})")
         params[key] = value
     return params
 

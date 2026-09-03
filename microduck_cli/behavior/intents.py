@@ -485,10 +485,14 @@ def _contribute_stop(_t: float, _params: dict, _s: Sense) -> dict:
     return {"twist": (0.0, 0.0, 0.0)}
 
 
-def _contribute_mode(_t: float, _params: dict, _s: Sense) -> dict:
+def _contribute_mode(_t: float, params: dict, _s: Sense) -> dict:
     # A mode switch happens stopped: the twist it owns is held at zero while it
-    # runs, and the mode itself rides in the behaviour's params for the sink.
-    return {"twist": (0.0, 0.0, 0.0)}
+    # runs. "mode" itself rides as an extra key beyond model.CHANNELS — exactly
+    # how sink.DISCRETE_CHANNELS already treats "mode"/"stop" as extra keys the
+    # sink's encoder table knows about without arbitration ever owning them —
+    # so robot.setMode is actually reachable instead of the value sitting inert
+    # on the behaviour's params.
+    return {"twist": (0.0, 0.0, 0.0), "mode": params["mode"]}
 
 
 def _contribute_idle(_t: float, _params: dict, _s: Sense) -> dict:

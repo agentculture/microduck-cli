@@ -22,7 +22,7 @@ from typing import Callable, Iterator
 import pytest
 
 from microduck_cli.behavior.engine import Engine
-from microduck_cli.behavior.intents import default_registry
+from microduck_cli.behavior.intents import Intent, default_registry
 from microduck_cli.behavior.model import Behavior, BehaviorSpec, Lifetime, StopClass
 from microduck_cli.behavior.rule_engine import RuleEngine
 from microduck_cli.behavior.rules import RulesConfig
@@ -258,6 +258,36 @@ def test_a_skill_goes_out_as_a_request_and_only_on_change(
     assert _wait_for(lambda: len(_calls(fake, proto.ROBOT_DO)) == 3)
 
 
+def test_a_repeated_skill_after_the_owning_behavior_expires_is_sent_again(
+    fake: FakeRobotd, sink: RobotSink
+) -> None:
+    """Edge-triggering must not suppress a skill forever.
+
+    Before the fix, ``_last_discrete`` kept ``"skill"`` pinned to ``"roulade"``
+    across ticks, so a SECOND behaviour admitted after the first one expired and
+    asked for the very same skill would never be sent — the edge-trigger saw no
+    change and dropped it. A write whose pose no longer carries the channel (the
+    owning behaviour expired/was evicted) must forget that memory so the next
+    admission of the same skill is a genuinely new request.
+    """
+    fake.clear_log()
+    sink.write({"skill": "roulade"})
+    assert _wait_for(lambda: _calls(fake, proto.ROBOT_DO))
+    time.sleep(0.05)
+    assert len(_calls(fake, proto.ROBOT_DO)) == 1
+
+    # The behaviour that owned "skill" expired: subsequent ticks compose a pose
+    # with no "skill" key at all.
+    sink.write({})
+    sink.write({"twist": (0.0, 0.0, 0.0)})
+
+    # A later behaviour admits the SAME skill again.
+    sink.write({"skill": "roulade"})
+    assert _wait_for(lambda: len(_calls(fake, proto.ROBOT_DO)) == 2)
+    calls = _calls(fake, proto.ROBOT_DO)
+    assert [c.params for c in calls] == [{"skill": "roulade"}, {"skill": "roulade"}]
+
+
 def test_a_refused_request_is_a_named_drop_with_the_daemons_reason(
     fake: FakeRobotd, sink: RobotSink, sense_log: _Records
 ) -> None:
@@ -274,6 +304,29 @@ def test_stop_and_mode_ride_the_same_seam_as_requests(fake: FakeRobotd, sink: Ro
     assert _wait_for(lambda: _calls(fake, proto.ROBOT_STOP) and _calls(fake, proto.ROBOT_SET_MODE))
     assert _calls(fake, proto.ROBOT_SET_MODE)[0].params == {"mode": "roller"}
     assert all(not rec.is_notification for rec in fake.call_log)
+
+
+def test_a_mode_intent_firing_sends_exactly_one_set_mode(fake: FakeRobotd, sink: RobotSink) -> None:
+    """A mode intent's contribution must actually reach the daemon as setMode.
+
+    Before the fix, ``_contribute_mode`` only ever produced a zero twist, so
+    the sink's mode encoder was unreachable and ``robot.setMode`` was never
+    sent no matter how a mode rule/intent fired. Admitting the intent and
+    writing its own contribution through the sink must yield exactly one
+    ``robot.setMode`` call carrying the requested mode.
+    """
+    admission = default_registry().admit(Intent("mode", {"mode": "roller"}))
+    assert admission.admitted and admission.behavior is not None
+    pose = admission.behavior.contribute(0.0, EMPTY_SENSE)
+    assert pose["mode"] == "roller"
+
+    fake.clear_log()
+    sink.write(pose)
+    assert _wait_for(lambda: _calls(fake, proto.ROBOT_SET_MODE))
+    time.sleep(0.05)
+    calls = _calls(fake, proto.ROBOT_SET_MODE)
+    assert len(calls) == 1
+    assert calls[0].params == {"mode": "roller"}
 
 
 def test_a_reply_without_an_accepted_field_is_not_a_refusal(
