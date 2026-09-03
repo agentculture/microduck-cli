@@ -131,6 +131,14 @@ _LEARN = """\
 Prints a structured self-teaching prompt covering purpose, command map,
 exit-code policy, `--json` support, and the `explain` pointer.
 
+It closes with **"Authoring the operator skill (operate-microduck)"** — the
+consent rule and the recipe for recreating this repo's first-party operator
+skill in another runtime: one directory, one `SKILL.md`, frontmatter carrying
+`name`, `description` and the load-bearing `type: command`, and the section
+list. The same content is in the `--json` payload under
+`skills.operate-microduck`. The canonical copy ships here at
+`.claude/skills/operate-microduck/SKILL.md`.
+
 ## Usage
 
     microduck-cli learn

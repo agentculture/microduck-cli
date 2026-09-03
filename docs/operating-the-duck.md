@@ -108,5 +108,10 @@ for — never by name (`pkill`/`killall`), because pids are recycled. See
 - `microduck-cli explain <noun>` (`env`, `duck`, `policy`, `rules`) — the full
   per-verb reference, each entry linking the upstream page it implements
   against.
+- [`.claude/skills/operate-microduck/SKILL.md`](../.claude/skills/operate-microduck/SKILL.md)
+  — the first-party operator skill: this walkthrough as a procedure an agent can
+  follow end to end (open the sim with its MuJoCo window, operate the duck, watch
+  it, close it down), plus the hard rules driving it must not break.
+  `microduck-cli learn` prints the recipe for recreating it in another runtime.
 - [`CLAUDE.md`](../CLAUDE.md) — the architecture: the agent-first CLI
   contracts, the behaviour engine, and what to take from each sibling repo.

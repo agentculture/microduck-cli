@@ -362,9 +362,29 @@ prose in `SKILL.md` and (b) adding `type: command` to the frontmatter (load-bear
 the culture backend's `core.skill_loader` silently skips any `SKILL.md` without it).
 Every divergence beyond that gets a row in the ledger — `cicd`'s repo-specific
 pre-PR steps and `ask-colleague`'s direct-from-colleague vendoring are the tracked
-ones today. There are **no first-party skills here yet**; when you add one (a duck
-wrapper would be the natural first, as `find-reachy` is in reachy-mini-cli), say so
-in this section — otherwise a reviewer can't tell "ours" from "vendored".
+ones today.
+
+**First-party skills** (origin = *this* repo, not vendored — for these the
+cite-don't-import rule points the other way: fixes land here and guildmaster may
+broadcast them to the mesh):
+
+- **`operate-microduck`** — the first one. The operator front door to the CLI:
+  open the simulation (`env up --sim` with its MuJoCo window, `--headless`,
+  `--fake`), operate the duck (`duck init`/`enable`/`do`/`look`/`move`/`quack`/
+  `monitor`/`record`, plus the `rules` layer and its engine), watch it (the
+  screenshot recipe for driving from a headless session), and close it down
+  (`env down`, never a kill-by-name). It states plainly the things that must not be
+  smoothed over: `relax` collapses the duck, a dry-run on a pipe moved nothing, and
+  locomotion is **not** achieved at the current pin
+  (`docs/verification/2026-09-04-sim-bringup.md`). **`microduck learn` teaches how
+  to create it** — its closing "Authoring the operator skill (operate-microduck)"
+  section (mirrored in `learn --json` under `skills.operate-microduck`) carries the
+  consent rule, the one-directory / one-`SKILL.md` recipe, the required
+  `type: command` frontmatter field and the section list, so an agent in another
+  runtime can copy `.claude/skills/operate-microduck/SKILL.md` or write it fresh.
+
+When you add another first-party skill, say so here *and* add its row to
+`docs/skill-sources.md` — otherwise a reviewer can't tell "ours" from "vendored".
 
 Day to day: **`cicd`** (the PR lane; needs `devex` ≥0.21 on PATH),
 **`communicate`** (cross-repo issues + mesh messages; needs `agtag`; posts auto-sign
