@@ -32,7 +32,29 @@ _UNIX_SUN_PATH_BYTES = 108
 _SOCK_SUFFIX = ".sock"
 _TOF_SUFFIX = "-tof.sock"
 
+#: The letters ``scripts/duck-sim`` hands out, in order: ``duck-a`` … ``duck-p``.
+#: Sixteen is upstream's own ceiling (its ``down`` sweeps indices 0..15).
+DUCK_LETTERS = "abcdefghijklmnop"
+
 ListDir = Callable[[str], list[str]]
+
+
+def duck_name(index: int) -> str:
+    """Return the ``duck-<letter>`` name upstream gives the duck at ``index``.
+
+    ``duck_name(0) == "duck-a"``. Raises ``CliError`` (exit 1) past the
+    sixteen names ``scripts/duck-sim`` knows how to start and stop.
+    """
+    if index < 0 or index >= len(DUCK_LETTERS):
+        raise CliError(
+            code=EXIT_USER_ERROR,
+            message=(
+                f"duck index {index} is outside 0..{len(DUCK_LETTERS) - 1}; upstream's "
+                f"simulation harness names at most {len(DUCK_LETTERS)} ducks"
+            ),
+            remediation=f"ask for at most {len(DUCK_LETTERS)} ducks",
+        )
+    return f"duck-{DUCK_LETTERS[index]}"
 
 
 @dataclass(frozen=True)
