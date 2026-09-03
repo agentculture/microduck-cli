@@ -302,6 +302,12 @@ class TickMetrics:
         }
 
 
+#: Discrete one-shots the sink sends as requests but which are not arbitrated
+#: channels of their own (see ``behavior/sink.py`` DISCRETE_CHANNELS): a channel
+#: owner's contribution may carry them and :func:`compose_pose` passes them through.
+EXTRA_POSE_KEYS: tuple[str, ...] = ("stop", "mode")
+
+
 def compose_pose(
     ownership: dict[str, Behavior | None], contribs: dict[str, Contribution]
 ) -> dict[str, object]:
@@ -314,13 +320,26 @@ def compose_pose(
     difference from the donor, whose neutral head pose is a documented constant.
     """
     pose: dict[str, object] = {}
+    owners: list[Behavior] = []
     for channel in CHANNELS:
         owner = ownership.get(channel)
         if owner is None:
             continue
+        if owner not in owners:
+            owners.append(owner)
         value = contribs.get(owner.id, {}).get(channel)
         if value is not None:
             pose[channel] = value
+    # The discrete one-shots that are not channels of their own (``stop``, ``mode``)
+    # ride along with a channel owner's contribution — the sink knows how to send
+    # them, and a rule-fired stop or mode switch must reach the daemon through the
+    # same tick as everything else.
+    for owner in owners:
+        contribution = contribs.get(owner.id, {})
+        for key in EXTRA_POSE_KEYS:
+            value = contribution.get(key)
+            if value is not None and key not in pose:
+                pose[key] = value
     return pose
 
 

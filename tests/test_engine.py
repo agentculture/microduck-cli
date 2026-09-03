@@ -459,3 +459,22 @@ def test_the_engine_publishes_a_heartbeat_every_beat_every_ticks(tmp_path):
 def test_beat_every_defaults_to_half_the_compose_rate():
     engine = Engine(RecordingSink(), hz=50.0)
     assert engine.beat_every == 25
+
+
+def test_compose_pose_passes_a_channel_owners_stop_and_mode_through():
+    from microduck_cli.behavior.engine import compose_pose
+
+    owner = behavior(
+        "mode-switch-1",
+        channels=("twist",),
+        stop_class=StopClass.STOPPING,
+        lifetime=Lifetime(1.0),
+        fn=lambda t, params, sense: {"twist": (0.0, 0.0, 0.0), "mode": "roller", "stop": True},
+    )
+    ownership = {"twist": owner}
+    contribs = {owner.id: {"twist": (0.0, 0.0, 0.0), "mode": "roller", "stop": True}}
+    pose = compose_pose(ownership, contribs)
+    assert pose["twist"] == (0.0, 0.0, 0.0)
+    assert pose["mode"] == "roller" and pose["stop"] is True
+    # An unowned extra never leaks: a contribution from a non-owner is ignored.
+    assert compose_pose({}, contribs) == {}
