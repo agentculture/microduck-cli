@@ -10,8 +10,10 @@ never carry an ``id``.
 Every shape below is implemented from two sources, never copied from either:
 
 * ``duck-ipc-proto/src/lib.rs`` at the commit pinned in ``docs/upstream-pins.md``
-  (``0cd676d`` of ``pollen-robotics/microduck``) — method names, param field
-  names, ``API_VERSION`` and ``JOINT_NAMES``.
+  (``0cd676d`` of ``pollen-robotics/microduck``) — param field names, transcribed
+  here. Method names, ``API_VERSION``, ``JOINT_NAMES`` and the error codes come
+  from ``microduck_cli.ipc.proto``, which transcribes that same file: the fake
+  and the client under test must not be able to drift apart.
 * A probe of the real ``robotd`` 0.10.0 built from that commit and run with
   ``--fake`` — the exact reply payloads, and the serde-style ``-32602`` messages.
 
@@ -47,20 +49,31 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, Callable, Iterable
 
-# --- private method table ---------------------------------------------------
+from microduck_cli.ipc import proto
+
+# --- the method table -------------------------------------------------------
 #
-# Deliberately local to the fake. A sibling task owns ``microduck_cli/ipc/proto.py``
-# as the real transcription of the pinned duck-ipc-proto commit; this table is only
-# what the fake needs to answer, transcribed from the same source.
+# Method names, API_VERSION, JOINT_NAMES and the JSON-RPC error codes come from
+# ``microduck_cli.ipc.proto`` — the real transcription of the pinned
+# duck-ipc-proto commit — rather than from a second copy here. A fake that
+# disagreed with the table the client indexes against would test nothing.
 #
-# TODO(t10): reconcile these names, API_VERSION, JOINT_NAMES and the param-field
-# tables against ``microduck_cli.ipc.proto`` and import from there instead of
-# duplicating them.
+# Two things stay local on purpose:
+#
+# * :data:`PARAM_FIELDS` / :data:`REQUIRED_FIELDS` / :data:`INTEGER_FIELDS`.
+#   proto.py transcribes constant *values*, not the shape of the Rust param
+#   structs, so there is nothing upstream to import; these are transcribed from
+#   the same ``lib.rs`` and from the probed daemon's serde error messages.
+# * :data:`POLICY_METHODS`. ``robot.policies`` / ``robot.skills`` /
+#   ``robot.loadPolicy`` do not exist on the pinned commit at all (the probed
+#   daemon answers METHOD_NOT_FOUND for all three), so proto.py deliberately
+#   carries no constant for them — see its "Deviations" docstring. They stay
+#   string literals here until a build that has them is pinned.
 
 #: ``pub const API_VERSION: u32 = 16`` on the pinned commit, and what the probed
 #: daemon answers. A client's own ``api_version`` is never refused — skew is
 #: reported by the answer, not rejected at the door.
-API_VERSION = 16
+API_VERSION = proto.API_VERSION
 
 #: The API version from which ``robot.policies`` / ``robot.skills`` /
 #: ``robot.loadPolicy`` exist. They are METHOD_NOT_FOUND on the pinned build.
@@ -68,92 +81,85 @@ POLICY_API_VERSION = 18
 
 DAEMON_VERSION = "0.10.0"
 
-JOINT_NAMES: tuple[str, ...] = (
-    "left_hip_yaw",
-    "left_hip_roll",
-    "left_hip_pitch",
-    "left_knee",
-    "left_ankle",
-    "neck_pitch",
-    "head_pitch",
-    "head_yaw",
-    "head_roll",
-    "mouth",
-    "right_hip_yaw",
-    "right_hip_roll",
-    "right_hip_pitch",
-    "right_knee",
-    "right_ankle",
-)
+JOINT_NAMES: tuple[str, ...] = proto.JOINT_NAMES
 assert len(JOINT_NAMES) == 15, "the pinned proto declares exactly 15 joints"
 
 #: JSON-RPC 2.0 error codes, as the pinned proto's ``code`` module names them.
-PARSE_ERROR = -32700
-INVALID_REQUEST = -32600
-METHOD_NOT_FOUND = -32601
-INVALID_PARAMS = -32602
-INTERNAL_ERROR = -32603
+PARSE_ERROR = proto.PARSE_ERROR
+INVALID_REQUEST = proto.INVALID_REQUEST
+METHOD_NOT_FOUND = proto.METHOD_NOT_FOUND
+INVALID_PARAMS = proto.INVALID_PARAMS
+INTERNAL_ERROR = proto.INTERNAL_ERROR
 
 #: Methods sent as notifications by a client (continuous intents: no id, no reply).
 #: The fake never relies on this to decide whether to answer — the presence of an
 #: ``id`` on the wire does — but it records the classification the proto documents.
-CONTINUOUS_METHODS: frozenset[str] = frozenset(
-    {"robot.move", "robot.head", "robot.pose", "robot.mouth", "robot.sound"}
-)
+CONTINUOUS_METHODS: frozenset[str] = proto.NOTIFICATION_METHODS
 
 #: Methods a client sends as answered requests (discrete intents and questions).
 DISCRETE_METHODS: frozenset[str] = frozenset(
     {
-        "hello",
-        "robot.health",
-        "robot.subscribe",
-        "robot.init",
-        "robot.enable",
-        "robot.relax",
-        "robot.do",
-        "robot.look",
-        "robot.stop",
-        "robot.setMode",
-        "robot.mode",
-        "robot.modelApi",
-        "robot.remoteSessionActive",
-        "robot.safeToRestart",
-        "pad.input",
-        "tof.stream",
+        proto.HELLO,
+        proto.ROBOT_HEALTH,
+        proto.ROBOT_SUBSCRIBE,
+        proto.ROBOT_INIT,
+        proto.ROBOT_ENABLE,
+        proto.ROBOT_RELAX,
+        proto.ROBOT_DO,
+        proto.ROBOT_LOOK,
+        proto.ROBOT_STOP,
+        proto.ROBOT_SET_MODE,
+        proto.ROBOT_MODE,
+        proto.ROBOT_MODEL_API,
+        proto.ROBOT_SESSION_ACTIVE,
+        proto.ROBOT_SAFE_TO_RESTART,
+        proto.PAD_INPUT,
+        proto.TOF_STREAM,
     }
 )
 
-#: Requests that exist only from :data:`POLICY_API_VERSION` onward.
+#: Requests that exist only from :data:`POLICY_API_VERSION` onward. Literals: the
+#: pinned proto has no constant for any of them (see the block comment above).
 POLICY_METHODS: frozenset[str] = frozenset({"robot.policies", "robot.skills", "robot.loadPolicy"})
 
 #: Server -> client push method names. Never carry an id.
-STATE_NOTIFICATION = "robot.state"
-PAD_NOTIFICATION = "pad.report"
-TOF_NOTIFICATION = "tof.frame"
+STATE_NOTIFICATION = proto.ROBOT_STATE
+PAD_NOTIFICATION = proto.PAD_REPORT
+TOF_NOTIFICATION = proto.TOF_FRAME
 
 #: Param field names, exactly as the pinned proto's param structs declare them.
 #: Every one of those structs is ``deny_unknown_fields``, which is where the
-#: ``-32602 unknown field`` answers come from.
+#: ``-32602 unknown field`` answers come from. Local by necessity: proto.py
+#: transcribes constants, not param structs.
 PARAM_FIELDS: dict[str, tuple[str, ...]] = {
-    "hello": ("api_version",),
-    "robot.enable": ("on", "toggle"),
-    "robot.do": ("skill",),
-    "robot.look": ("x", "y", "z", "neck_pitch"),
-    "robot.setMode": ("mode",),
-    "robot.subscribe": ("hz",),
+    proto.HELLO: ("api_version",),
+    proto.ROBOT_ENABLE: ("on", "toggle"),
+    proto.ROBOT_DO: ("skill",),
+    proto.ROBOT_LOOK: ("x", "y", "z", "neck_pitch"),
+    proto.ROBOT_SET_MODE: ("mode",),
+    proto.ROBOT_SUBSCRIBE: ("hz",),
     # Continuous intents. Listed for the record and for tests to build valid
     # payloads from; a notification is never answered, so nothing validates them.
-    "robot.move": ("vx", "vy", "vyaw"),
-    "robot.head": ("neck_pitch", "head_pitch", "head_yaw", "head_roll"),
-    "robot.pose": ("z", "roll", "pitch", "active"),
-    "robot.mouth": ("open",),
-    "robot.sound": ("tag", "hold"),
+    proto.ROBOT_MOVE: ("vx", "vy", "vyaw"),
+    proto.ROBOT_HEAD: ("neck_pitch", "head_pitch", "head_yaw", "head_roll"),
+    proto.ROBOT_POSE: ("z", "roll", "pitch", "active"),
+    proto.ROBOT_MOUTH: ("open",),
+    proto.ROBOT_SOUND: ("tag", "hold"),
 }
 
 #: Params with no serde ``default``: absent means ``missing field``.
 REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
-    "hello": ("api_version",),
-    "robot.do": ("skill",),
+    proto.HELLO: ("api_version",),
+    proto.ROBOT_DO: ("skill",),
+}
+
+#: Params typed as a Rust integer (``u32``). A JSON float is a *type* error there, not a
+#: roundable number: the probed daemon answers ``-32602 invalid type: floating point
+#: `50.0`, expected u32`` to ``robot.subscribe {"hz": 50.0}``. Recorded here because a
+#: fake that quietly accepted a float would hide exactly that bug in a client.
+INTEGER_FIELDS: dict[str, tuple[str, ...]] = {
+    proto.HELLO: ("api_version",),
+    proto.ROBOT_SUBSCRIBE: ("hz",),
 }
 
 #: The ``Skill`` enum's wire variants — a value outside this set is a serde
@@ -549,10 +555,10 @@ class FakeRobotd:
         """Fold a continuous intent into the reported state, minimally."""
         if not isinstance(params, dict):
             return
-        if method == "robot.pose":
+        if method == proto.ROBOT_POSE:
             with self._lock:
                 self.state.extra["pose"] = params
-        elif method == "robot.mouth":
+        elif method == proto.ROBOT_MOUTH:
             with self._lock:
                 self.state.extra["mouth"] = params.get("open", 0.0)
 
@@ -560,28 +566,29 @@ class FakeRobotd:
 
     def _handlers(self) -> dict[str, Callable[[_Connection, dict[str, Any]], Any]]:
         handlers: dict[str, Callable[[_Connection, dict[str, Any]], Any]] = {
-            "hello": self._h_hello,
-            "robot.health": self._h_health,
-            "robot.subscribe": self._h_subscribe,
-            "robot.init": self._h_accepted,
-            "robot.enable": self._h_enable,
-            "robot.relax": self._h_relax,
-            "robot.do": self._h_do,
-            "robot.look": self._h_look,
-            "robot.stop": self._h_accepted,
-            "robot.setMode": self._h_set_mode,
-            "robot.mode": self._h_mode,
-            "robot.modelApi": self._h_model_api,
-            "robot.remoteSessionActive": self._h_session_active,
-            "robot.safeToRestart": self._h_safe_to_restart,
-            "pad.input": self._h_pad_input,
-            "tof.stream": self._h_tof_stream,
+            proto.HELLO: self._h_hello,
+            proto.ROBOT_HEALTH: self._h_health,
+            proto.ROBOT_SUBSCRIBE: self._h_subscribe,
+            proto.ROBOT_INIT: self._h_accepted,
+            proto.ROBOT_ENABLE: self._h_enable,
+            proto.ROBOT_RELAX: self._h_relax,
+            proto.ROBOT_DO: self._h_do,
+            proto.ROBOT_LOOK: self._h_look,
+            proto.ROBOT_STOP: self._h_accepted,
+            proto.ROBOT_SET_MODE: self._h_set_mode,
+            proto.ROBOT_MODE: self._h_mode,
+            proto.ROBOT_MODEL_API: self._h_model_api,
+            proto.ROBOT_SESSION_ACTIVE: self._h_session_active,
+            proto.ROBOT_SAFE_TO_RESTART: self._h_safe_to_restart,
+            proto.PAD_INPUT: self._h_pad_input,
+            proto.TOF_STREAM: self._h_tof_stream,
         }
         # robot.policies / robot.skills / robot.loadPolicy do not exist on the
-        # pinned build — the probed daemon answers METHOD_NOT_FOUND for all three.
-        # They arrive on a newer main; the fake gates them on the reported API
-        # version so a test can cover both daemons. TODO(t10): settle the real
-        # names and payloads against ipc/proto.py once that build is pinned.
+        # pinned build — the probed daemon answers METHOD_NOT_FOUND for all three,
+        # and ipc/proto.py carries no constant for them for that reason. They
+        # arrive on a newer main; the fake gates them on the reported API version
+        # so a test can cover both daemons, keying them by literal until a build
+        # that defines them is pinned (docs/upstream-pins.md).
         with self._lock:
             api_version = self.state.api_version
         if api_version >= POLICY_API_VERSION:
@@ -890,6 +897,10 @@ def _validate(method: str, params: dict[str, Any] | None) -> str | None:
     for key in REQUIRED_FIELDS.get(method, ()):
         if key not in supplied:
             return f"missing field `{key}`"
+    for key in INTEGER_FIELDS.get(method, ()):
+        value = supplied.get(key)
+        if isinstance(value, float):
+            return f"invalid type: floating point `{value}`, expected u32"
     return None
 
 
@@ -902,6 +913,7 @@ __all__ = [
     "CONTINUOUS_METHODS",
     "DAEMON_VERSION",
     "DISCRETE_METHODS",
+    "INTEGER_FIELDS",
     "INTERNAL_ERROR",
     "INVALID_PARAMS",
     "INVALID_REQUEST",
