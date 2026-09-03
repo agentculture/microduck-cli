@@ -29,8 +29,9 @@ arbitration and motion on one 50 Hz tick) is itself still a scaffold, so it is
 
 ## Quickstart
 
-The installed console script is **`microduck`** (not `microduck-cli` — that is
-the distribution name and the name the CLI prints in its own output):
+Both console scripts install — **`microduck`** (short) and **`microduck-cli`**
+(the distribution name, and the prog name the CLI prints in its own output).
+They are the same entry point, so either works everywhere below:
 
 ```bash
 uv sync
@@ -50,6 +51,14 @@ uv run teken cli doctor . --strict    # the agent-first rubric gate CI runs
 | `overview` | Read-only descriptive snapshot of the agent. |
 | `doctor` | Check the agent-identity invariants (prompt-file-present, backend-consistency). |
 | `cli overview` | Describe the CLI surface itself. |
+| `env overview` | The environment noun — bring up / doctor the sim or real duck. |
+| `duck overview` | The duck noun — operate the duck in robotctl's words. |
+| `policy overview` | The policy noun — train, export, publish, install policies. |
+| `rules overview` | The rules noun — the data-only rules layer and its engine. |
+
+The four domain nouns (`env`, `duck`, `policy`, `rules`) are registered
+scaffolds: each answers `overview` today and grows its action verbs in its own
+task.
 
 Every command supports `--json`. Results go to stdout, errors/diagnostics to
 stderr (never mixed). Exit codes: `0` success, `1` user error, `2` environment

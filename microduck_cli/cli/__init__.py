@@ -2,8 +2,9 @@
 
 The agent-first global verbs (``whoami``, ``learn``, ``explain``, ``overview``,
 ``doctor``) are registered here under :mod:`microduck_cli.cli._commands`,
-alongside the ``cli`` noun group. Future noun groups register via their own
-``register()`` functions following the same pattern.
+alongside the ``cli`` noun group and the four domain nouns (``env``, ``duck``,
+``policy``, ``rules``). Every noun group registers via its own ``register()``
+function following the same pattern.
 
 Error propagation contract
 --------------------------
@@ -64,14 +65,19 @@ def _argv_has_json(argv: list[str] | None) -> bool:
 def _build_parser() -> argparse.ArgumentParser:
     from microduck_cli.cli._commands import cli as _cli_group
     from microduck_cli.cli._commands import doctor as _doctor_cmd
+    from microduck_cli.cli._commands import duck as _duck_group
+    from microduck_cli.cli._commands import env as _env_group
     from microduck_cli.cli._commands import explain as _explain_cmd
     from microduck_cli.cli._commands import learn as _learn_cmd
     from microduck_cli.cli._commands import overview as _overview_cmd
+    from microduck_cli.cli._commands import policy as _policy_group
+    from microduck_cli.cli._commands import rules as _rules_group
     from microduck_cli.cli._commands import whoami as _whoami_cmd
+    from microduck_cli.explain.catalog import TAGLINE
 
     parser = _CliArgumentParser(
         prog="microduck-cli",
-        description="microduck-cli — a clonable template for AgentCulture mesh agents.",
+        description=f"microduck-cli — {TAGLINE}",
     )
     parser.add_argument(
         "--version",
@@ -88,9 +94,13 @@ def _build_parser() -> argparse.ArgumentParser:
     _overview_cmd.register(sub)
     _doctor_cmd.register(sub)
     _cli_group.register(sub)
-    # Register your own noun groups here:
-    #   from microduck_cli.cli._commands import my_noun as _my_noun_group
-    #   _my_noun_group.register(sub)
+    # Domain noun groups. Each owns cli/_commands/<noun>.py + explain/<noun>.py
+    # and mirrors the cli group's shape (parser_class=type(p), --json on the noun
+    # and every verb, a bare `microduck-cli <noun>` printing its overview).
+    _env_group.register(sub)
+    _duck_group.register(sub)
+    _policy_group.register(sub)
+    _rules_group.register(sub)
 
     return parser
 
