@@ -242,15 +242,21 @@ def test_a_swallowed_sigterm_still_releases_and_propagates(
     it from ``__exit__`` after the release, so a block that looks clean only because
     it swallowed the raise still releases the duck and still exits non-zero.
     """
+    ctx = owning(client)
+
+    def _swallow_sigterm() -> None:
+        try:
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(0.5)  # pragma: no cover - the signal lands first
+        except Exception:  # noqa: BLE001 - the swallow this test is about
+            pass
+
     with pytest.raises(SignalExit):
-        with owning(client) as owner:
-            try:
-                os.kill(os.getpid(), signal.SIGTERM)
-                time.sleep(0.5)  # pragma: no cover - the signal lands first
-            except Exception:  # noqa: BLE001 - the swallow this test is about
-                pass
+        with ctx as owner:
+            _swallow_sigterm()
     assert _wait_for(lambda: _released(fake))
-    assert owner.report is not None and owner.report.complete
+    assert owner.report is not None
+    assert owner.report.complete
 
 
 @pytest.mark.skipif(
