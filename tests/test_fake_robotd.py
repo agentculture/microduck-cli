@@ -412,7 +412,7 @@ def test_set_state_rejects_an_unknown_field(fake: FakeRobotd) -> None:
 
 @pytest.mark.parametrize("method", sorted(POLICY_METHODS))
 def test_policy_methods_are_absent_on_the_pinned_api_version(client: _Client, method: str) -> None:
-    error = client.error(method, {"slot": "walk", "source": "x"})
+    error = client.error(method, {"slot": "walk", "path": "x"})
     assert error["code"] == METHOD_NOT_FOUND
     assert error["message"] == f'unknown method "{method}"'
 
@@ -425,15 +425,40 @@ def test_policy_methods_appear_on_a_newer_daemon(fake: FakeRobotd, client: _Clie
     assert policies["slots"]["walk"] is None
     assert [entry["name"] for entry in policies["skills"]] == ["kick_left"]
 
-    skills = client.result("robot.skills")["skills"]
-    assert [entry["name"] for entry in skills] == list(SKILLS)
-    assert [entry["name"] for entry in skills if entry["available"]] == ["kick_left"]
+    # robot.skills reads the live [[policy.skill]] table (robot.setSkill /
+    # robot.removeSkill), not the legacy `skills` field set_state seeds above —
+    # empty until something is added.
+    assert client.result("robot.skills") == {"skills": [], "built_in": list(SKILLS)}
 
-    assert client.result("robot.loadPolicy", {"slot": "walk", "source": "w.onnx"}) == {
+    assert client.result("robot.loadPolicy", {"slot": "walk", "path": "w.onnx"}) == {
         "accepted": True
     }
     assert client.result("robot.policies")["slots"]["walk"] == "w.onnx"
-    assert client.result("robot.loadPolicy", {"slot": "hover", "source": "x"})["accepted"] is False
+    assert client.result("robot.loadPolicy", {"slot": "hover", "path": "x"})["accepted"] is False
+
+    # robot.reloadPolicies re-reads every slot from disk; the fake models this as
+    # a no-op accept.
+    assert client.result("robot.reloadPolicies") == {"accepted": True}
+
+    # robot.setSkill / robot.removeSkill write and read back the same shape
+    # ("the same shape read and written" — SkillParams's doc comment).
+    assert client.result("robot.setSkill", {"name": "polite-bow", "duration": 5.0}) == {
+        "accepted": True
+    }
+    skills = client.result("robot.skills")["skills"]
+    assert skills == [
+        {"name": "polite-bow", "duration": 5.0, "overridden": True},
+    ]
+
+    assert client.result("robot.removeSkill", {"name": "polite-bow"}) == {
+        "accepted": True,
+        "removed": True,
+    }
+    assert client.result("robot.skills")["skills"] == []
+    assert client.result("robot.removeSkill", {"name": "polite-bow"}) == {
+        "accepted": True,
+        "removed": False,
+    }
 
 
 # -- streams -----------------------------------------------------------------
