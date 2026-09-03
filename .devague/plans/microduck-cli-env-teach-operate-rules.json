@@ -5,7 +5,7 @@
   "schema_version": 5,
   "status": "exported",
   "created": "2026-09-03T19:23:57Z",
-  "updated": "2026-09-03T19:49:22Z",
+  "updated": "2026-09-03T22:16:39Z",
   "targets": [
     {
       "id": "c1",
@@ -963,6 +963,14 @@
       "text": "Console-script half-rename (microduck vs microduck-cli) is still open; decide whether it rides with t9's scaffold PR or ships alone first \u2014 it touches pyproject, prog=, every _commands module, catalog, README and tests",
       "kind": "follow_up",
       "task_id": "t9",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r8",
+      "text": "Sim locomotion at the pinned commits: the walk network outputs a static pose in MuJoCo (verified with the CLI and with upstream's drive shape); upstream's launcher is broken at this pin pair. Re-pin both repos together and re-run tests/live with MICRODUCK_LIVE_BODY=sim; the walking xfail sentinel flips to XPASS when it works.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t23",
       "resolved": false,
       "resolution": ""
     }

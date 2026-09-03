@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-03T17:42:45Z",
-  "updated": "2026-09-03T19:49:22Z",
+  "updated": "2026-09-03T19:56:27Z",
   "claims": [
     {
       "id": "c1",
@@ -797,8 +797,8 @@
       "text": "The exact robot.state / robot.health payload fields were not read in this pass (robotd/src/{intents,control}.rs, or a captured 'robotctl monitor --json'). The duck sense-field vocabulary for rules must be derived from a real capture, not guessed.",
       "kind": "unknown_nonblocking",
       "claim_id": "c12",
-      "resolved": false,
-      "resolution": "",
+      "resolved": true,
+      "resolution": "Captured from the pinned daemon (robotd 0.10.0, sim-remote-io 0cd676d, --fake): robot.state notification params = {head[4], joints[15], loop{hz,missed}, move{applied[3],requested[3]}, odom{position[3],yaw}, policy (str, e.g. 'held'), safety{fallen,gain,gravity[3],limp}, t, targets[15]} at ~50 Hz after robot.subscribe; robot.health result = {healthy, control_loop{target_hz,achieved_hz,ticks,missed,last_tick_age_ms}, bus{consecutive_errors,startup_failures}, imu{ready,stale_blocks,consecutive_stale_blocks}} (no battery/temperature on --fake). robot.policies is METHOD_NOT_FOUND on this build; hello requires api_version.",
       "resolution_claim_id": null
     },
     {

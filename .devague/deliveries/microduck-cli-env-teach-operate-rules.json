@@ -1,0 +1,628 @@
+{
+  "plan_slug": "microduck-cli-env-teach-operate-rules",
+  "schema_version": 2,
+  "created": "2026-09-03T19:58:22Z",
+  "updated": "2026-09-03T22:16:39Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "The pinned simulator daemon (microduck sim-remote-io 0cd676d, robotd 0.10.0) speaks API_VERSION 16 and has NO policy.*, account.*, robot.policies, robot.skills or robot.loadPolicy methods \u2014 the policy channel (API 18+, robotctl policy load/add/search/check) landed on main after the sim branch forked. The plan (c6, c8, c33, t17/t18/t19/t21) assumed main's API 23. Proposed resolution: (1) ipc/proto.py is transcribed from the pinned commit as-is (API 16); (2) the policy noun's slot/skill verbs are implemented against main's documented method names and, on a daemon that answers METHOD_NOT_FOUND, exit 2 with a named 'daemon API 16 has no policy channel \u2014 needs API >= 18' remediation instead of being silently absent; (3) on the pinned build the skills list is read from robot.subscribe's SubscribeResult (walk/stand/unavailable + per-skill file names) and rules check accepts --skills snapshots; robot.policies is used only when the hello api_version >= 18; (4) the Python fake serves both shapes behind its api_version setting so tests cover both daemons; (5) t23 records the API-16 limits verbatim in the verification doc.",
+      "task_ref": "t19",
+      "reason": "Discovered by probing the real built daemon before wave 1 merged; the pinned branch is 87 commits behind main and predates the policy channel.",
+      "affects": [
+        "c6",
+        "c8",
+        "c33",
+        "t17",
+        "t18",
+        "t19",
+        "t21"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "classification": null,
+      "seq": 1
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e1",
+      "obligation_ref": "o1",
+      "test_ref": "tests/test_proto.py::test_method_table_matches_fixture",
+      "behavior_text": "asserts every method constant, API_VERSION (16), JOINT_NAMES and obs/action lengths against the fixture transcribed from the pinned duck-ipc-proto blob",
+      "contract_text": "every method name, API_VERSION, JOINT_NAMES and obs/action length equals the fixture",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "table test fails on any single constant that differs from the fixture; ran green at the named commit (998 passed)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 2
+    },
+    {
+      "id": "e2",
+      "obligation_ref": "o2",
+      "test_ref": "tests/test_fake_robotd.py::test_call_log_preserves_order_and_separates_notifications_from_requests",
+      "behavior_text": "asserts the fake's call log keeps arrival order and marks kind=notification for id-less frames",
+      "contract_text": "records every call in arrival order and marks notifications (no id) apart from requests",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "interleaved requests and notifications over one socket; ran green at the named commit",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 3
+    },
+    {
+      "id": "e3",
+      "obligation_ref": "o3",
+      "test_ref": "tests/test_rules.py::test_never_loads_a_partially_valid_file",
+      "behavior_text": "asserts from_dict refuses each documented bad shape naming the rule id and never returns a partial config",
+      "contract_text": "refuses each documented bad shape naming the rule id; never loads a partially valid file",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "30 refusal cases parametrised over the documented bad shapes; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 4
+    },
+    {
+      "id": "e4",
+      "obligation_ref": "o4",
+      "test_ref": "tests/test_sense.py::test_read_sense_never_propagates_even_when_every_provider_raises",
+      "behavior_text": "asserts a raising, None-returning or missing provider yields None on the snapshot and nothing propagates",
+      "contract_text": "a raising, missing or None provider yields None on the snapshot and never propagates into the tick",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "parametrised over every Sense field; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 5
+    },
+    {
+      "id": "e5",
+      "obligation_ref": "o5",
+      "test_ref": "tests/test_gate.py::test_consent_tty_via_real_pty",
+      "behavior_text": "asserts PROMPT on a real pty, DRY_RUN on a pipe, APPLY with --apply",
+      "contract_text": "non-TTY without --apply performs zero sends; --apply proceeds; TTY prompts",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pty.openpty and a real pipe drive the three branches; the zero-sends half is asserted per verb in tests/test_duck.py::test_gated_verb_non_tty_prints_the_plan_and_sends_nothing; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 6
+    },
+    {
+      "id": "e6",
+      "obligation_ref": "o6",
+      "test_ref": "tests/test_addressing.py::test_resolve_by_duck_name",
+      "behavior_text": "asserts resolve() returns the socket paths with socket.socket and subprocess monkeypatched to raise",
+      "contract_text": "resolves a name to socket paths with no network or subprocess call",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "any socket or subprocess use would raise inside the test; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 7
+    },
+    {
+      "id": "e7",
+      "obligation_ref": "o7",
+      "test_ref": "tests/test_zero_deps.py::test_check_zero_deps_flags_nonempty_dependencies",
+      "behavior_text": "each guard scanner is run over a planted violating tree and must flag it, then over the real tree and must pass (deps, hardware paths, config writes, secrets)",
+      "contract_text": "a violating module under microduck_cli/ fails the matching guard",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "four guard files each plant a violation in tmp_path; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 8
+    },
+    {
+      "id": "e8",
+      "obligation_ref": "o8",
+      "test_ref": "tests/test_hosts.py::test_classify_known_host_classes",
+      "behavior_text": "asserts five host fixtures yield their class and torch-source verdict",
+      "contract_text": "each of the five host fixtures yields its class and torch-source verdict",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "fixture table; ran green. Live: env doctor on this box classified gb10 with torch source applies",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 9
+    },
+    {
+      "id": "e9",
+      "obligation_ref": "o9",
+      "test_ref": "tests/test_lockstep.py::test_checker_catches_an_undocumented_noun_verb",
+      "behavior_text": "registers a throwaway verb without catalog/overview/learn entries and asserts the checker names it",
+      "contract_text": "a registered verb without a catalog entry, overview line and learn mention fails the test naming the verb",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "the planted-verb case plus the whole-parser walk; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 10
+    },
+    {
+      "id": "e10",
+      "obligation_ref": "o10",
+      "test_ref": "tests/test_client.py::test_notify_returns_under_a_millisecond_with_the_socket_wedged",
+      "behavior_text": "measures notify() over 100+ calls with the fake wedged and asserts sub-millisecond mean/median plus an ipc-queue-full drop once the queue fills",
+      "contract_text": "returns in under 1 ms with the socket wedged and counts an ipc-queue-full drop instead of blocking",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "timing asserted as mean+median under 1 ms (max is reported, not gated, because of xdist scheduling noise); ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 11
+    },
+    {
+      "id": "e11",
+      "obligation_ref": "o11",
+      "test_ref": "tests/test_intents.py::test_the_same_over_limit_payload_refuses_identically_from_any_origin",
+      "behavior_text": "asserts byte-identical refusal text for the same over-limit payload via a rule firing and via inject(); an AST test pins exactly one KindRegistry and one validate()",
+      "contract_text": "rule-fired and injected intents receive byte-identical refusal text for the same over-limit payload",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "also asserted end to end in tests/test_rule_engine.py; live: rules intent move vyaw=9.0 printed the registry's refusal verbatim on this box",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 12
+    },
+    {
+      "id": "e12",
+      "obligation_ref": "o12",
+      "test_ref": "tests/test_liveness.py::test_the_same_engine_starts_once_the_heartbeat_is_stale",
+      "behavior_text": "asserts a second engine exits 1 'engine live' on a fresh heartbeat with a live pid and starts once stale",
+      "contract_text": "a second engine exits 1 while the heartbeat is fresh and starts once it is stale",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "with test_second_engine_refuses_while_the_heartbeat_is_fresh_and_the_pid_alive; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 13
+    },
+    {
+      "id": "e13",
+      "obligation_ref": "o13",
+      "test_ref": "tests/test_stack.py::test_down_never_signals_by_name",
+      "behavior_text": "asserts down() signals only pids whose injected /proc cmdline matches and removes a stale pidfile without signalling",
+      "contract_text": "signals only pids whose /proc cmdline matches the expected binary; never kills by name",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "with test_stale_pidfile_is_removed_without_signalling_the_recycled_pid; live: env down terminated duck-a and body by pidfile on this box",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 14
+    },
+    {
+      "id": "e14",
+      "obligation_ref": "o14",
+      "test_ref": "tests/test_lane.py::test_train_without_smoke_record_refuses_naming_smoke_command",
+      "behavior_text": "asserts train() raises CliError exit 1 whose message contains the exact smoke command when no smoke record exists",
+      "contract_text": "refuses to build a long-run argv without a recorded smoke pass, naming the smoke command",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "ran green; live: policy smoke recorded a pass on this box (58.6 s, 64 envs, 5 iters)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 15
+    },
+    {
+      "id": "e15",
+      "obligation_ref": "o15",
+      "test_ref": "tests/test_env_doctor.py::test_empty_probe_lists_every_missing_item_with_a_pollen_robotics_url",
+      "behavior_text": "asserts every failing required check's remediation carries a pollen-robotics URL and the verb exits 2 on the no-tools fixture",
+      "contract_text": "every failing required check carries an upstream doc URL and the command exits 2",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "with tests/test_env.py::test_env_doctor_exits_2_on_the_no_tools_fixture_and_matches_render_text; live: env doctor healthy 13/13 on this box",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 16
+    },
+    {
+      "id": "e16",
+      "obligation_ref": "o16",
+      "test_ref": "tests/test_release.py::test_a_keyboard_interrupt_mid_behaviour_releases_exactly_four_sends",
+      "behavior_text": "asserts exactly stop, pose active:false, mouth 0, sound hold:false in order, never robot.relax, and a refused stop does not skip the other three",
+      "contract_text": "sends stop, pose active:false, mouth 0, sound hold:false independently and never robot.relax",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "with test_release_never_sends_robot_relax and test_a_refused_stop_is_named_and_the_other_three_still_go_out; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 17
+    },
+    {
+      "id": "e17",
+      "obligation_ref": "o17",
+      "test_ref": "tests/test_replay.py::test_fallen_inhibits_every_action_except_stop_within_one_tick_shipped_rules_only",
+      "behavior_text": "replays a recorded fall through the shipped rules and asserts every action except stop is inhibited on the next tick",
+      "contract_text": "every skill and the idle base are inhibited within one tick of fallen=true",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 18
+    },
+    {
+      "id": "e18",
+      "obligation_ref": "o18",
+      "test_ref": "tests/test_duck.py::test_gated_verb_non_tty_prints_the_plan_and_sends_nothing",
+      "behavior_text": "parametrised over the seven gated verbs: pty prompt with 'n' sends nothing, non-TTY dry-run leaves the fake's call log empty, --apply sends the exact call",
+      "contract_text": "init/relax/enable/do/move/mode each pass the three gate tests against the fake's call log",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "with test_gated_verb_apply_sends_the_exact_call and test_gated_verb_prompts_on_a_tty_and_no_sends_nothing; live: duck init dry-run then --apply on the real daemon",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 19
+    },
+    {
+      "id": "e19",
+      "obligation_ref": "o19",
+      "test_ref": "tests/test_policy.py::test_policy_load_issues_robot_loadpolicy_only_on_api18",
+      "behavior_text": "asserts load sends only robot.loadPolicy {slot, path}, opens no config file, and prints 'survives a reboot' and 'policy reset'",
+      "contract_text": "issues robot.loadPolicy only, never opens a config file, and prints 'survives a reboot' and 'policy reset'",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "plus tests/test_no_config_writes.py over the module; the API-16 path exits 2 per d1 (test_policy_load_on_api16_exits_2_naming_api_ge_18)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 20
+    },
+    {
+      "id": "e20",
+      "obligation_ref": "o20",
+      "test_ref": "tests/test_env.py::test_env_up_fake_reaches_healthy_and_prints_the_socket_path",
+      "behavior_text": "asserts env up --fake reaches healthy within the timeout against the fake and env down leaves no tracked pidfile",
+      "contract_text": "reaches healthy within the timeout and leaves no tracked pid after down",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "ran green; live on this box: env up --fake and --sim both healthy, env down left no process (docs/verification/2026-09-04-sim-bringup.md)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 21
+    },
+    {
+      "id": "e21",
+      "obligation_ref": "o21",
+      "test_ref": "tests/test_rules_cli.py::test_engine_run_logs_the_six_start_steps_in_order",
+      "behavior_text": "asserts the [SENSE stage=start] lines connect, hello, health, init, enable, armed in order and that a skill refused before enable is a named drop with no retry",
+      "contract_text": "connect, hello, health, init, enable, armed appear in order; a skill before enable is a named drop with no retry",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "with test_a_refused_skill_is_a_named_drop_with_no_retry; live: the six lines appeared in order on the real daemon",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 22
+    },
+    {
+      "id": "e22",
+      "obligation_ref": "o22",
+      "test_ref": "tests/test_links.py::test_every_noun_explain_entry_carries_a_pollen_robotics_url",
+      "behavior_text": "asserts a pollen-robotics URL in every explain entry under the four nouns and in every topic remediation (AST scan)",
+      "contract_text": "every explain entry and remediation under the four nouns carries a pollen-robotics docs URL",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "with test_topic_cli_error_remediations_carry_a_pollen_robotics_url; ran green",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 23
+    },
+    {
+      "id": "e23",
+      "obligation_ref": "o23",
+      "test_ref": "docs/verification/2026-09-04-sim-bringup.md (manual walkthrough)",
+      "behavior_text": "the duck/env/rules verbs were exercised BY HAND against the real robotd built from the pinned commit (--fake and --sim bodies) and every output recorded; the pytest suite itself was NOT run against the real socket \u2014 no switch exists to point it there",
+      "contract_text": "the duck verb test-suite passes unchanged against the real daemon on this box, with any divergence filed",
+      "evidence_type": "manual",
+      "strength": "coverage",
+      "strength_basis": "the obligation as written (suite vs real daemon) is unmet; what exists is a recorded manual walkthrough plus an optional CI job running the same walkthrough. The two divergences the walkthrough found (achieved_hz semantics, DUCK_SIM_RL in the train lane) were fixed at 88868dc/39af5ce and filed as deltas",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-03T21:24:37Z",
+        "commit": "9fbcb19550a9c32545aedc2b962b0dc6f195ad06"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 24
+    },
+    {
+      "id": "e24",
+      "obligation_ref": "o23",
+      "test_ref": "tests/live/test_live_cli.py (MICRODUCK_LIVE=1 MICRODUCK_LIVE_SIM=1 uv run pytest -m live -n0)",
+      "behavior_text": "12 live tests drive the console entry point as subprocesses against the real robotd built from the pinned sim-remote-io commit: env doctor, duck version (API 16), health at 50 Hz, init dry-run then --apply, enable + do roulade, move + stop, rules check reading skills from robot.subscribe, verbatim over-limit intent refusal, rules engine run with the six start steps in order at ~50 Hz, pure-JSONL record, env status/down, and the MuJoCo body standing the duck up (trunk z > 0.10 m, not fallen)",
+      "contract_text": "the duck verb test-suite passes unchanged against the real daemon on this box, with any divergence filed",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "12 passed, 0 failed at the named commit on this box (log in the session scratchpad; the first draft's one failure was the test's own wrong JSON key, fixed before this run). This is a dedicated live suite, not the fake-based unit suite re-pointed; it supersedes e23's fail",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-03T21:49:21Z",
+        "commit": "25114a250ce8d6797d9d4582e228fc407e29c31c"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 25
+    }
+  ],
+  "deltas": [
+    {
+      "id": "b1",
+      "kind": "amended",
+      "behavior_text": "Policy-channel verbs (policy load/add/remove/reset/list) target upstream main's methods (robot.loadPolicy {slot,path}, robot.setSkill, robot.removeSkill, robot.policies) and on the pinned API-16 daemon exit 2 with a 'needs API >= 18' remediation; the skills list comes from robot.subscribe on API 16; Hub sources print the robotctl line because fetching lives in updaterd",
+      "caused_by": [
+        "d1",
+        "c6",
+        "c8"
+      ],
+      "evidence_refs": [
+        "e19"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b2",
+      "kind": "amended",
+      "behavior_text": "Engine metrics: achieved_hz is the wall-clock cadence (start-to-start) and the work-only figure is published separately as capacity_hz; the first live run showed '5935 Hz achieved' on a paced 50 Hz loop",
+      "caused_by": [
+        "c23"
+      ],
+      "evidence_refs": [
+        "e21"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b3",
+      "kind": "amended",
+      "behavior_text": "Intent payloads name the yaw-rate axis vyaw (the wire's and upstream docs' name) instead of wz; the sink no longer renames",
+      "caused_by": [
+        "c24"
+      ],
+      "evidence_refs": [
+        "e11"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b4",
+      "kind": "added",
+      "behavior_text": "Discrete channels (skill, stop, mode) are edge-triggered in the sink: a behaviour holding the channel sends robot.do once, not once per tick; continuous channels are never de-duplicated",
+      "caused_by": [
+        "c31",
+        "c35"
+      ],
+      "evidence_refs": [
+        "e16"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b5",
+      "kind": "added",
+      "behavior_text": "The train lane resolves the RL clone the way env doctor does (DUCK_SIM_RL > MICRODUCK_RL_CLONE > ../microduck_rl) and names a missing clone as an environment error; the first smoke attempt leaked 'unexpected: FileNotFoundError'",
+      "caused_by": [
+        "c8",
+        "c25"
+      ],
+      "evidence_refs": [
+        "e14"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b6",
+      "kind": "amended",
+      "behavior_text": "On-box verification is a recorded manual walkthrough (docs/verification/2026-09-04-sim-bringup.md) plus an optional real-daemon CI job, not the pytest suite against a real socket",
+      "caused_by": [
+        "c30"
+      ],
+      "evidence_refs": [
+        "e23"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": true
+    },
+    {
+      "id": "b7",
+      "kind": "added",
+      "behavior_text": "The recording contract: duck record writes {ts, source, params} JSONL with a hello head record and raw remoteSessionActive answers; behavior/replay.py reads exactly that shape (reconciled after t17/t18 built the two ends in parallel)",
+      "caused_by": [
+        "c41"
+      ],
+      "evidence_refs": [
+        "e17"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b8",
+      "kind": "amended",
+      "behavior_text": "On-box verification is an opt-in pytest suite (tests/live, marker 'live') that operates the CLI end to end against the real daemon on both bodies, run here and by the optional real-daemon CI job; the earlier manual walkthrough (docs/verification/2026-09-04-sim-bringup.md) remains the record of the first run",
+      "caused_by": [
+        "c30",
+        "c1"
+      ],
+      "evidence_refs": [
+        "e24"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b9",
+      "kind": "amended",
+      "behavior_text": "In the MuJoCo body at the pinned commits, 'duck move' engages the walk policy (policy=walk, twist applied) but the network outputs a static pose, so the duck does not advance; stand-up, skills, rules and every operate verb work on the sim body. Upstream's own drive shape gives the same result and its launcher does not start at this pin pair (body_server lacks --cameras).",
+      "caused_by": [
+        "c28",
+        "c30"
+      ],
+      "evidence_refs": [
+        "e24"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    }
+  ],
+  "supersessions": [
+    {
+      "id": "s1",
+      "action": "supersede",
+      "target_ref": "b6",
+      "replacement_ref": "b8",
+      "origin": "user"
+    }
+  ]
+}
