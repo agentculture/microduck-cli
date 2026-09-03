@@ -90,7 +90,7 @@ from microduck_cli.duck.gate import (
     consent,
     render_dry_run,
 )
-from microduck_cli.explain.policy import VERBS
+from microduck_cli.explain.policy import _CHEATSHEET_URL, VERBS
 from microduck_cli.ipc.client import RobotClient, RpcError
 from microduck_cli.ipc.proto import METHOD_NOT_FOUND
 from microduck_cli.train import artifacts, lane
@@ -111,8 +111,8 @@ POLICY_API_VERSION = 18
 
 D1_REMEDIATION = (
     "daemon API {api} has no policy channel — needs API >= 18 (microduck main); "
-    "on this build the skills list comes from robot.subscribe"
-)
+    "on this build the skills list comes from robot.subscribe — see "
+) + _CHEATSHEET_URL
 
 #: Quoted verbatim from ``docs/robot/cheatsheet.md``, "#### The slots, and four
 #: things worth knowing", ``pollen-robotics/microduck`` **main** (this section

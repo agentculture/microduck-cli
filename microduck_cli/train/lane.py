@@ -51,6 +51,11 @@ from microduck_cli.cli._errors import EXIT_USER_ERROR, CliError
 RL_CLONE_ENV_VAR = "MICRODUCK_RL_CLONE"
 _DEFAULT_RL_CLONE = "microduck_rl"
 
+# Upstream pages every remediation about the smoke gate or `robotctl policy`
+# install line points at (docs/upstream-pins.md pins the exact commit).
+_RL_AGENTS_URL = "https://github.com/pollen-robotics/microduck_rl/blob/develop/AGENTS.md"
+_CHEATSHEET_URL = "https://github.com/pollen-robotics/microduck/blob/main/docs/robot/cheatsheet.md"
+
 _SMOKE_NUM_ENVS = "64"
 _SMOKE_MAX_ITERATIONS = "5"
 
@@ -183,7 +188,8 @@ def train(
                 f"run the smoke test first: {smoke_cmd}",
                 remediation=(
                     f"run `{smoke_cmd}` (microduck_rl AGENTS.md: 'never launch a long run "
-                    "without one'), or pass force=True with a reason to bypass this gate"
+                    "without one'), or pass force=True with a reason to bypass this gate — see "
+                    f"{_RL_AGENTS_URL}"
                 ),
             )
         if not reason:
@@ -193,7 +199,10 @@ def train(
                     "force=True bypasses the smoke gate but needs a stated reason "
                     f"(no recorded smoke pass for task {task_id!r}; smoke command: {smoke_cmd})"
                 ),
-                remediation="pass reason=<why> explaining why the smoke gate is being bypassed",
+                remediation=(
+                    "pass reason=<why> explaining why the smoke gate is being bypassed — see "
+                    f"{_RL_AGENTS_URL}"
+                ),
             )
 
     return argv, cwd
@@ -292,7 +301,10 @@ def install_argv(kind: str, name: str, repo: str, hold: int | None = None) -> st
         raise CliError(
             EXIT_USER_ERROR,
             f"install_argv: kind must be 'add' or 'load', got {kind!r}",
-            remediation="use 'add' for an episodic/held policy, 'load' for a gait slot",
+            remediation=(
+                "use 'add' for an episodic/held policy, 'load' for a gait slot — see "
+                f"{_CHEATSHEET_URL}"
+            ),
         )
     line = f"sudo robotctl policy {kind} {name} {repo}"
     if hold is not None:
@@ -300,7 +312,9 @@ def install_argv(kind: str, name: str, repo: str, hold: int | None = None) -> st
             raise CliError(
                 EXIT_USER_ERROR,
                 "install_argv: hold is only valid with kind='add' (a held pose)",
-                remediation="drop hold, or use kind='add' for a held-pose policy",
+                remediation=(
+                    f"drop hold, or use kind='add' for a held-pose policy — see {_CHEATSHEET_URL}"
+                ),
             )
         line += f" --hold {hold}"
     return line

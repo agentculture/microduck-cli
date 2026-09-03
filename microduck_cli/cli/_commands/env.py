@@ -325,7 +325,8 @@ def cmd_env_up(args: argparse.Namespace) -> int:
                 code=EXIT_ENV_ERROR,
                 message=f"{launcher} up exited {result.returncode}",
                 remediation=(
-                    f"run `{launcher} up` by hand in {microduck_clone} and read its output"
+                    f"run `{launcher} up` by hand in {microduck_clone} and read its output "
+                    f"— see {_UPSTREAM_SIM_DOC}"
                 ),
             )
         emit_result(

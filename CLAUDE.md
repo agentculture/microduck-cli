@@ -106,16 +106,12 @@ wiring (reachy-mini-cli's split). What is on disk today:
 
 | Package | What it holds |
 |---|---|
-| `microduck_cli/ipc/` | `proto.py` — the duck-ipc-proto wire table, transcribed from the pinned commit in `docs/upstream-pins.md`. No client yet. |
-| `microduck_cli/duck/` | `addressing.py` (name → sockets, pure: env and `listdir` injected), `gate.py` (the TTY / dry-run / `--apply` motion gate). |
+| `microduck_cli/ipc/` | `proto.py` — the duck-ipc-proto wire table, transcribed from the pinned commit in `docs/upstream-pins.md`; `client.py` — the JSON-RPC socket client (`RobotClient`, `RpcError`). |
+| `microduck_cli/duck/` | `addressing.py` (name → sockets, pure: env and `listdir` injected), `gate.py` (the arm101-style TTY / dry-run / `--apply` motion gate, `Consent`/`consent()`/`render_dry_run()`), `record.py` (the JSONL sense recorder, `Recorder`, shared schema with replay). |
 | `microduck_cli/env/` | `hosts.py` (train-host detection), `doctor.py` (rubric-shaped environment report), `params.py` (generated robotd params for a laptop run), `stack.py` (sim stack up/down/status, pid-by-cmdline). |
+| `microduck_cli/train/` | `lane.py` (pure argv builders for `list-envs`, the 64-env smoke test, `train`, `play`, `export`, `publish`, `infer`, plus the smoke-gate record that refuses a long run without a passed smoke) and `artifacts.py` (append-only JSONL ledger). Never imports the RL package. |
 | `microduck_cli/behavior/` | The engine and everything it composes — see the next section. |
 | `microduck_cli/explain/` | `catalog.py` plus one module per noun (`duck`, `env`, `policy`, `rules`). |
-
-`microduck_cli/train/` — `lane.py` (pure argv builders for `list-envs`, the
-64-env smoke test, `train`, `play`, `export`, `publish`, `infer`, plus the
-smoke-gate record that refuses a long run without a passed smoke) and
-`artifacts.py` (append-only JSONL ledger). It never imports the RL package.
 
 ### The agent-first rubric (why some code looks odd)
 
@@ -144,7 +140,7 @@ that is on disk; nothing here is a roadmap entry.
 - **`model.py` / `sense.py` / `rules.py`** — pure value objects and pure
   functions: channels + `StopClass` priorities + `Lifetime` + `arbitrate` /
   `admit`; the frozen `Sense` snapshot and the `SenseProviders` peek seam; the
-  data-only rules schema. No I/O, no loop.
+  data-only rules schema (two-layer merge: shipped + box-local overlay, by id).
 - **`engine.py`** — `Engine(sink, providers, clock=…, sleep=…, hz=50)` and its
   loop. Per tick, in this order: read ONE `Sense`; ask each live behaviour for its
   contribution once; `arbitrate` a single owner per channel; compose the pose;
@@ -154,10 +150,59 @@ that is on disk; nothing here is a roadmap entry.
   `ownership`, `pose`, `emit`, `admit`, `evict`, `active_names`). `TickBus` is the
   ordered, fault-isolating fan-out. `TickMetrics` wraps the whole tick and reports
   `overruns` / `max_tick_ms` / `achieved_hz`.
+- **`sink.py`** — the `TargetSink` that turns one composed pose into robotd wire
+  traffic and nothing else: continuous channels go as notifications, discrete
+  ones as requests (per `microduck_cli.ipc.proto.is_notification`), and it owns
+  the params encoding `behavior/intents.py` deliberately refuses to invent.
+- **`intents.py`** — `Intent` (kind, payload, provenance) and the ONE
+  `KindRegistry`/`default_registry()` every submission path validates through —
+  a rule firing and `rules intent` are the same act, judged identically.
+- **`rule_engine.py`** — `RuleEngine`: react/inhibit evaluation against one
+  `Sense` snapshot, answering what fires and what doesn't (and why, as a `Drop`
+  in `TickResult`) each tick. No I/O.
+- **`human_gate.py`** — while a human is driving (a recent `pad.report`,
+  `pad_active`, or `robot.remoteSessionActive`) every MOTION channel the engine
+  composed is withheld — robotd arbitrates nothing between clients, so the
+  engine gets out of the way instead of fighting the pad for the socket.
+- **`idle.py`** — the resting layer: small, slow head motion plus an occasional
+  chirp (`StopClass.PASSIVE`), so the duck reads as "alive, not driving" rather
+  than "off" between commands; hands a channel back the instant anything else
+  claims it.
+- **`skills.py`** — a `SkillsSnapshot` (what the duck can actually run) built
+  from `robot.subscribe` (API 16, deviation d1) or `robot.policies` (API ≥ 18),
+  both normalised to one shape so a caller never needs to know which daemon it
+  is talking to.
+- **`defaults.py`** — reads `microduck_cli/behavior/default_rules.toml` (shipped
+  inside the wheel via `importlib.resources`) through the same
+  `RulesConfig.from_dict` gate every operator overlay goes through.
+- **`replay.py`** — the offline half of the rule engine: drives `RuleEngine`
+  tick by tick over a recorded JSONL sense stream with a fake, record-driven
+  clock — no socket, no sleep, fully reproducible.
+- **`release.py`** — own what you energize: on any abnormal exit sends
+  `robot.stop`, `robot.pose {"active": false}`, `robot.mouth {"open": 0}` and
+  `robot.sound {"hold": false}`, each independently so one failure doesn't abort
+  the rest; never `robot.relax` (a duck with no torque falls); sends nothing on
+  a clean exit so a deliberate hold survives.
+- **`compose.py`** — the ONE composition root: `build_runtime()` wires one
+  `RobotClient`, the one `KindRegistry`, and the tick-seam riders
+  (`human_gate`, `idle`, the rule engine, the intent spool) into a running
+  duck; `cli/_commands/rules.py` is thin argparse wiring on top of it.
 - **`liveness.py`** — the `state.json` heartbeat (`Heartbeat.beat`, temp file +
   `os.replace`) and `refuse_if_engine_live()`.
 - **`senselog.py`** — the `microduck.sense` logger, the fixed
   `[SENSE stage=… source=… event=…] detail` line, and `install_logging()`.
+
+The `rules` noun (`cli/_commands/rules.py`) drives `compose.py` through its
+`engine` sub-noun's four verbs — `run` (foreground, gated: connect → hello →
+health → init → enable → armed, each step logged), `start` (a detached `engine
+run --apply`, liveness is the heartbeat alone — no pidfile), `stop` (SIGTERM
+after a `/proc/<pid>/cmdline` identity check), `status` (heartbeat freshness +
+pid liveness + tick rate + daemon reachability) — plus `rules intent <kind>`,
+which submits one intent through the same `KindRegistry`: with an engine live it
+is appended to `<state>/intents.jsonl` (the spool the engine drains on its next
+tick) and the verb waits up to 2s for the engine's acknowledgement in
+`<state>/intents.log`; with no engine live it is validated and the would-be
+admission is printed, sending nothing.
 
 Four rules the code enforces and a change must keep:
 
@@ -232,40 +277,52 @@ The consequences of that decision, in the order a reviewer meets them:
 
 The mature robot CLI in the family (`reachy/`, ~2000-line `CLAUDE.md`). Its
 `CLAUDE.md` "Architecture: the agent-first CLI" and "Noun internals" sections are
-the reference. The load-bearing lessons:
+the reference. **Its ONE-tick-seam lesson has landed here as `microduck_cli/behavior/`**
+(`engine.py` + `TickBus` + `compose.py`, the "Architecture: the behaviour engine"
+section above) — read the load-bearing lessons below as "why it looks like this",
+not as a roadmap:
 
 - **One noun per capability, each with `overview`**, engine logic in a sibling
   package (`reachy/behavior/`, `reachy/motion/`…) and only argparse wiring in
-  `_commands/`. Keep that split here: `microduck_cli/cli/_commands/` stays thin.
+  `_commands/`. Kept here: `microduck_cli/cli/_commands/` stays thin, `behavior/`
+  holds every loop and composition decision.
 - **The single-SDK-owner model.** The hardware exposes one client and one head;
   every sense process contends for them, and the loser throttles. So **compose
-  senses onto ONE tick seam, never as two processes** (`_compose_run_seam`). Two
-  standalone sense nouns were deleted for exactly this reason — don't recreate the
-  mistake in duck form.
+  senses onto ONE tick seam, never as two processes** (`_compose_run_seam` there,
+  `compose.build_runtime()` + `TickBus` here). Two standalone sense nouns were
+  deleted upstream for exactly this reason — the mistake was not recreated in
+  duck form: `rules engine run` is the only process that ever opens the duck's
+  control socket.
 - **Don't arbitrate across processes on a flag file.** A flag cannot expire; a
-  heartbeat in `state.json` can. Refuse early (`refuse_if_engine_live()`) instead
-  of running a silently useless second process.
+  heartbeat in `state.json` can. `behavior/liveness.py`'s `refuse_if_engine_live()`
+  refuses early instead of running a silently useless second process.
 - **Sense-stage logging.** A named drop reason (`self-mute`, `cooldown`,
-  `audio-muted`…) on a dedicated logger, stderr-only, so JSONL export on stdout
-  stays pure. A layer whose drops are invisible is indistinguishable from one that
-  silently no-ops.
+  `audio-muted`… there; `tick-driver-fault` and friends here) on a dedicated
+  logger, stderr-only, so JSONL export on stdout stays pure. A layer whose drops
+  are invisible is indistinguishable from one that silently no-ops.
 
 ### `../arm101-cli` — the hardware-safety patterns at this maturity
 
 The closest peer: same template, same half-rename gotcha, a real hardware layer
-grown on top (`arm101/hardware/`, `arm101/explore/`). Copy its two shipped
-disciplines when duck motion lands:
+grown on top (`arm101/hardware/`, `arm101/explore/`). **Both its shipped
+disciplines have landed here, in `microduck_cli/duck/gate.py` and
+`microduck_cli/behavior/release.py`:**
 
 - **Gated motion.** Every verb that moves hardware confirms on a TTY, prints a
   zero-side-effect dry-run plan on a non-TTY without `--apply`, and proceeds on a
-  non-TTY *with* `--apply` (agent mode).
+  non-TTY *with* `--apply` (agent mode) — `duck/gate.py`'s `consent()` and
+  `Consent` tri-state, driving every gated `duck`/`policy`/`rules engine` verb.
 - **Own what you energize.** Release on any abnormal exit (exception, bus fault,
   Ctrl-C), each actuator released independently so one failure doesn't abort the
-  rest; leave torque untouched on a *clean* exit so a deliberate hold survives.
-  State the limits you cannot cover (a bus that is physically gone) rather than
-  implying safety you don't have.
+  rest; leave torque untouched on a *clean* exit so a deliberate hold survives —
+  `behavior/release.py`'s four independent sends, run from `rules engine run`'s
+  exit path. State the limits you cannot cover (a bus that is physically gone)
+  rather than implying safety you don't have.
 - **Hardware deps go in an extra, lazy-imported** (`[seeed]` there), so the base
   install stays zero-dep and introspection works on a box with no robot attached.
+  Not yet needed here — the duck layer speaks JSON-RPC over a unix socket, no
+  hardware SDK to lazy-import — but the same discipline applies the moment one
+  is.
 
 ## Hard constraints
 

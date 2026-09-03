@@ -12,6 +12,13 @@ separator the lockstep test splits on.
 
 from __future__ import annotations
 
+#: The upstream page every `env` verb bringing up or tearing down the stack is
+#: answerable to, at the ref pinned in ``docs/upstream-pins.md`` (``sim-remote-io``
+#: @ ``0cd676d``).
+_SIM_DOC_URL = (
+    "https://github.com/pollen-robotics/microduck/blob/sim-remote-io/docs/design/simulation.md"
+)
+
 VERBS: list[str] = [
     "env overview — describe the environment noun (sim or real MicroDuck bring-up)",
     "env doctor — diagnose whether this box can run the sim/train lane, exit 2 when unhealthy",
@@ -21,7 +28,7 @@ VERBS: list[str] = [
     "env hosts — classify this host for the torch/CUDA training lane",
 ]
 
-_ENV = """\
+_ENV = f"""\
 # microduck-cli env
 
 Noun group for the MicroDuck *environment*: bringing up and doctoring the stack
@@ -45,10 +52,11 @@ socket path.
     microduck-cli env status
     microduck-cli env hosts
 
-See also: `microduck-cli explain env doctor`, `microduck-cli explain env up`.
+See also: `microduck-cli explain env doctor`, `microduck-cli explain env up`,
+{_SIM_DOC_URL}
 """
 
-_ENV_OVERVIEW = """\
+_ENV_OVERVIEW = f"""\
 # microduck-cli env overview
 
 Read-only description of the `env` noun: what it holds (bring up / doctor the
@@ -59,6 +67,8 @@ hard-fails — a stray positional argument is accepted and ignored.
 
     microduck-cli env overview
     microduck-cli env overview --json
+
+See also: {_SIM_DOC_URL}
 """
 
 _ENV_DOCTOR = """\
@@ -126,7 +136,7 @@ On timeout, exits `2` naming the daemon's log file in the remediation.
 See also: https://github.com/pollen-robotics/microduck/blob/sim-remote-io/docs/design/simulation.md
 """  # noqa: E501
 
-_ENV_DOWN = """\
+_ENV_DOWN = f"""\
 # microduck-cli env down
 
 Stops every process `microduck-cli env up` started under the state directory
@@ -145,9 +155,11 @@ After stopping, knocks on the `duck-body` TCP port with a plain
     microduck-cli env down
     microduck-cli env down --state /tmp/duck-sim
     microduck-cli env down --json
+
+See also: {_SIM_DOC_URL}
 """
 
-_ENV_STATUS = """\
+_ENV_STATUS = f"""\
 # microduck-cli env status
 
 Reports `microduck_cli.env.stack.SimStack.status()` — which tracked pids are
@@ -160,6 +172,8 @@ control socket, whether it currently answers a `hello` handshake.
     microduck-cli env status
     microduck-cli env status --state /tmp/duck-sim
     microduck-cli env status --json
+
+See also: {_SIM_DOC_URL}
 """
 
 _ENV_HOSTS = """\
@@ -174,6 +188,8 @@ source applies here.
 
     microduck-cli env hosts
     microduck-cli env hosts --json
+
+See also: https://github.com/pollen-robotics/microduck_rl/blob/develop/README.md
 """
 
 ENTRIES: dict[tuple[str, ...], str] = {
