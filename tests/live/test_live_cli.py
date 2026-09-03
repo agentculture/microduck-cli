@@ -10,8 +10,10 @@ never starts a daemon. Run it serially::
 
     MICRODUCK_LIVE=1 uv run pytest -m live -n0 -q
 
-``MICRODUCK_LIVE_SIM=1`` additionally runs the MuJoCo body (needs a synced
-``microduck_rl`` venv; see ``docs/verification/2026-09-04-sim-bringup.md``).
+``MICRODUCK_LIVE_BODY=sim`` runs the whole module against the MuJoCo body instead
+of ``--fake`` (needs a synced ``microduck_rl`` venv; ``--headless``), and
+``MICRODUCK_LIVE_SIM=1`` adds the sim-only checks (stand-up, walking); see
+``docs/verification/2026-09-04-sim-bringup.md``.
 
 What it asserts is the operator-visible contract: exit codes, the JSON payloads,
 the six start steps, the cadence, the refusal texts — never the daemon's
@@ -82,10 +84,15 @@ def duck_env():
     )
 
 
+BODY = os.environ.get("MICRODUCK_LIVE_BODY", "fake")
+
+
 @pytest.fixture(scope="module")
 def fake_duck(duck_env):
-    """``env up --fake`` against the real daemon; ``env down`` afterwards."""
-    up = _cli("env", "up", "--fake", "--skip-build", "--json", env=duck_env, timeout=120)
+    """``env up`` (``--fake`` or, with MICRODUCK_LIVE_BODY=sim, the MuJoCo body)."""
+    headless = os.environ.get("MICRODUCK_LIVE_HEADLESS", "1") == "1"
+    body = (["--sim", "--headless"] if headless else ["--sim"]) if BODY == "sim" else ["--fake"]
+    up = _cli("env", "up", *body, "--skip-build", "--json", env=duck_env, timeout=180)
     payload = _json(up)
     assert payload["healthy"] is True and payload["sockets"], up.stderr
     yield payload
@@ -244,3 +251,60 @@ def test_sim_body_stands_the_duck_up(duck_env):
         assert params["odom"]["position"][2] > 0.10, params["odom"]
     finally:
         _cli("env", "down", "--json", env=env, timeout=60)
+
+
+@pytest.mark.skipif(
+    not (LIVE_SIM and LIVE and _clone_ready() and BODY == "sim"),
+    reason="MICRODUCK_LIVE_BODY=sim MICRODUCK_LIVE_SIM=1: the duck walks under the walk policy",
+)
+@pytest.mark.xfail(
+    strict=False,
+    reason="at the pinned commits (docs/upstream-pins.md) the walk policy engages (policy=walk, "
+    "twist applied) but outputs a static pose in MuJoCo, so odometry does not advance; upstream's "
+    "own scripts/duck-sim drive behaves the same, and its launcher does not start at this pin pair "
+    "(body_server lacks --cameras). An XPASS here means a re-pin fixed walking — promote it.",
+)
+def test_sim_body_walks_forward_on_move(fake_duck, duck_env):
+    def frame():
+        frames = _cli("duck", "monitor", "--frames", "2", "--json", env=duck_env)
+        last = json.loads(frames.stdout.splitlines()[-1])
+        return last.get("params", last)
+
+    # Bring the duck up ONCE: init re-homes a driving duck, so only init when it is held.
+    if frame()["policy"] == "held":
+        assert _json(_cli("duck", "init", "--apply", "--json", env=duck_env))["result"]["accepted"]
+        time.sleep(8)
+        assert _json(_cli("duck", "enable", "--apply", "--json", env=duck_env))["result"][
+            "accepted"
+        ]
+        time.sleep(3)
+
+    def odom():
+        params = frame()
+        return params["odom"]["position"], params["safety"]["fallen"]
+
+    before, fallen = odom()
+    assert fallen is False
+    moved = _json(
+        _cli(
+            "duck",
+            "move",
+            "--vx",
+            "0.15",
+            "--vy",
+            "0",
+            "--vyaw",
+            "0",
+            "--duration",
+            "4",
+            "--apply",
+            "--json",
+            env=duck_env,
+            timeout=60,
+        )
+    )
+    assert moved["sent"] is True
+    after, fallen_after = odom()
+    assert fallen_after is False, after
+    dx = after[0] - before[0]
+    assert dx > 0.05, {"before": before, "after": after}

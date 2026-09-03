@@ -174,3 +174,38 @@ the intent payload named the yaw axis `wz` where the wire and the upstream docs 
 
 Raw logs from the runs are kept outside the repo (session scratchpad); the
 numbers above are copied from them unchanged.
+
+## Walking in the MuJoCo body — not achieved at this pin (2026-09-04, later run)
+
+Sampled at 25 Hz over the daemon's state stream during `duck move --vx 0.15`
+(CLI commit `bd8b011`), and again with upstream's own `scripts/duck-sim drive`
+command shape (`robot.move {vx 0.15, vy 0, vyaw 0}` at 10 Hz for 8 s):
+
+```text
+policy: walk   move.requested [0.15, 0, 0]   move.applied [0.15, 0, 0]   fallen: false
+left-knee target over 97 walk frames:   min -0.09  max -0.05  rad
+hip-pitch target over 97 walk frames:   min -0.36  max -0.33  rad
+odom x: 0.065 -> 0.072 m over 4.4 s     (two screenshots 4 s apart: same tile)
+sim real-time factor (upstream's probe): 1.00
+```
+
+The twist reaches the daemon and the walk network is selected, but its joint
+targets are static — no gait — so the duck stands where it is. The earlier
+"it walked" reading in this session was a duck that had toppled at `enable`,
+thrashed under the recovery policy and slid 0.6 m; not locomotion.
+
+Ruled out: the CLI's command shape (identical to upstream's `drive`), the
+generated params (policy section identical to the launcher's), the keyframe
+(the body defaults to `SIT` as upstream does), the real-time factor (1.00,
+windowed and headless), and the viewer (same result headless).
+
+Upstream's own launcher could not be used as a control: at this pin pair
+`scripts/duck-sim` (microduck `0cd676d`) starts the body with `--cameras` and
+`--frame-port`, which the pinned `microduck_rl` (`29e887e`) `body_server` does
+not accept — the two pinned commits disagree with each other. Our `env up`
+does not pass those flags and is the path that works.
+
+**Status:** stand-up, skills, rules and every verb are verified on the sim
+body; locomotion is not. `tests/live/test_live_cli.py::test_sim_body_walks_forward_on_move`
+is kept as a non-strict `xfail` sentinel: an XPASS after a re-pin means walking
+arrived and the mark should be dropped.
