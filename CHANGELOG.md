@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-09-04
+
+### Added
+
+- `docs/specs/2026-09-04-readme-as-proof.md` — the converged, challenged devague frame behind the README rewrite (29 claims, 20 scope entries, two resolved hard questions, two parked residuals).
+
+### Changed
+
+- README.md rewritten as a proof rather than a pitch: a topology diagram and a tick-engine diagram (mermaid), a numbered simulation walkthrough that doubles as the text fallback for PyPI, verbatim captures from the three verification records (DGX Spark, Jetson AGX Thor, Jetson AGX Orin) with home directories shortened to `~` and no account names, an explicit `Not verified` section (no physical duck, no locomotion at the pin, Thor's uncommitted torch override pending microduck_rl#39, no sm_87 kernels on Orin), install-from-PyPI first, stated prerequisites and platform (Linux aarch64), the motion gate and the `relax` warning, and a citation section separating upstream pins from AgentCulture siblings.
+
 ## [0.9.3] - 2026-09-04
 
 ### Added
