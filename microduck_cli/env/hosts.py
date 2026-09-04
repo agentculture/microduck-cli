@@ -25,7 +25,7 @@ linux-aarch64 host that is *not* Jetson. Jetson and unknown hosts get
 `torch_source_applies=False` plus a remediation.
 
 `HostInfo.verified` names the on-box record for a host class the sanity has
-actually run on (GB10 and Thor today, each pointing at its
+actually run on (GB10, Thor and Orin today, each pointing at its
 `docs/verification/` file); `env doctor` appends it to the `host_class` line.
 What the remediation says differs per board, on evidence:
 
@@ -40,9 +40,15 @@ What the remediation says differs per board, on evidence:
   source was never exercised there, so `torch_source_applies` stays False
   and the remediation spells out the override instead of calling the path
   unverified.
-* **Jetson AGX Orin** and any unidentified Jetson — still unverified; the
-  remediation says so (the `t8`/`t15` `unknown_nonblocking` risk in the
-  plan, resolved for Thor only).
+* **Jetson AGX Orin** — verified on 2026-09-04
+  (`docs/verification/2026-09-04-orin-sanity.md`) as *not* trainable at this
+  pin: the same SBSA torch wheel installs and initialises CUDA but carries
+  no `sm_87` kernels, and no other torch==2.9.1 cp312 wheel exists on the
+  Jetson indexes. Checks 1-4 (sim, fake body, rules) pass. The remediation
+  says so and points at the record; `torch_source_applies` stays False.
+* Any **unidentified Jetson** — still unverified; the remediation says so
+  (the `t8`/`t15` `unknown_nonblocking` risk in the plan, resolved for Thor
+  and Orin).
 """
 
 from __future__ import annotations
@@ -82,6 +88,21 @@ _GB10_VERIFIED = (
 _THOR_VERIFIED = (
     "Jetson AGX Thor, 2026-09-04, with a local torch-source override of the "
     "microduck_rl clone — docs/verification/2026-09-04-thor-sanity.md"
+)
+
+_ORIN_VERIFIED = (
+    "Jetson AGX Orin, 2026-09-04, checks 1-4 pass; GPU training NOT available at "
+    "this pin — docs/verification/2026-09-04-orin-sanity.md"
+)
+
+_ORIN_NO_TRAINING_REMEDIATION = (
+    "GPU training is not available on Jetson AGX Orin (sm_87) at the pinned "
+    "microduck_rl commit, verified 2026-09-04: the only torch==2.9.1 cp312 "
+    "aarch64 CUDA-13 wheel (pypi.jetson-ai-lab.io/sbsa/cu130) ships sm_110/sm_121 "
+    "kernels only and fails with 'no kernel image is available'; the jp6 indexes "
+    "carry torch 2.9.1 for cp310 only. The sim, the fake body and the rules layer "
+    "all work there — train elsewhere (Spark, Thor, HF Jobs) — see "
+    "docs/verification/2026-09-04-orin-sanity.md."
 )
 
 _THOR_VERIFIED_REMEDIATION = (
@@ -260,7 +281,8 @@ def _classify(probe: HostProbe) -> HostInfo:
                 host_class="jetson-agx-orin",
                 display_name="NVIDIA Jetson AGX Orin",
                 torch_source_applies=False,
-                remediation=_UNVERIFIED_REMEDIATION,
+                remediation=_ORIN_NO_TRAINING_REMEDIATION,
+                verified=_ORIN_VERIFIED,
             )
         # A Jetson signal fired (nv_tegra_release present, or GPU name says
         # "tegra") but the chip itself is not one we name explicitly.

@@ -1,0 +1,408 @@
+{
+  "slug": "orin-sanity",
+  "title": "orin-sanity",
+  "schema_version": 6,
+  "status": "exported",
+  "created": "2026-09-04T05:02:12Z",
+  "updated": "2026-09-04T06:57:21Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "microduck-cli passes the on-box sanity checks on Jetson AGX Orin, recorded as a verification doc beside the Spark one",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h1",
+          "text": "every number and output line in the Orin record is pasted from an actual run on this box; nothing is smoothed, and any check that fails or cannot run is recorded verbatim as such",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "bring the box up (rustup, clone both repos at the docs/upstream-pins.md commits, uv sync the RL venv, set MICRODUCK_CLONE/DUCK_SIM_RL), run env doctor until healthy, then execute the six checks of docs/verification/2026-09-04-sim-bringup.md in order (fake body first, then sim), run the live suite, and write the record with outputs pasted unchanged",
+      "revisions": []
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "re-run the Spark sanity's six success-signal checks on this Jetson AGX Orin and land a sibling record in docs/verification/ \u2014 the Spark record's 'What was NOT verified' names 'Jetson Thor / AGX Orin \u2014 not attempted; the host classifier only' as the gap",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h2",
+          "text": "the Orin checks map 1:1 to the Spark record's six checks; anything not attempted lands in an explicit NOT-verified section, never silently omitted",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "run the six checks in the Spark record's order (fake body first, then MuJoCo sim), paste each check's output unchanged into docs/verification/<date>-orin-sanity.md with the CLI commit named per check",
+      "revisions": []
+    },
+    {
+      "id": "c3",
+      "kind": "requirement",
+      "text": "bring the box up first: this Orin has no cargo/rustc, no microduck/microduck_rl clones, and MICRODUCK_CLONE/DUCK_SIM_RL unset \u2014 install rustup (env doctor requires cargo, stack.py remediation says >= 1.89; Spark used 1.93.1), clone both repos at the pins in docs/upstream-pins.md, uv sync the RL venv; user approved installing rust",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h3",
+          "text": "bring-up uses exactly the pinned commits from docs/upstream-pins.md and rustup for the toolchain; no system-wide installs beyond the rust toolchain the user approved",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "install rustup (stable toolchain, cargo >= 1.89), clone pollen-robotics/microduck at 0cd676d (branch sim-remote-io) and microduck_rl at 29e887e (branch develop) beside this repo or set MICRODUCK_CLONE/DUCK_SIM_RL, uv sync the RL clone, then iterate 'microduck env doctor' to healthy",
+      "revisions": []
+    },
+    {
+      "id": "c4",
+      "kind": "boundary",
+      "text": "microduck_cli/env/hosts.py needs no change: classify() already returns jetson-agx-orin for this box (tegra_release present, 'orin' in the gpu-name haystack) with torch_source_applies=False and the unverified remediation \u2014 the sanity run confirms the live verdict, it does not touch the classifier",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h4",
+          "text": "if the live doctor does NOT report jetson-agx-orin on this box, that is a classifier defect to surface to the user \u2014 never patched silently mid-sanity",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "verify via 'microduck env doctor --json' that this box reports host_class jetson-agx-orin with the unverified-torch remediation; the diff of microduck_cli/env/hosts.py stays empty",
+      "revisions": []
+    },
+    {
+      "id": "c5",
+      "kind": "boundary",
+      "text": "microduck_cli/env/doctor.py needs no change: the host_class check is info-only and always passes (torch_source_applies=False just attaches the remediation text) \u2014 on this box doctor will fail on cargo_version and the clone-pin checks until bring-up is done, which is the tool doing its job",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h5",
+          "text": "doctor failures on this box are fixed by changing the environment, never by editing the checks",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "drive bring-up from doctor output; the diff of microduck_cli/env/doctor.py stays empty",
+      "revisions": []
+    },
+    {
+      "id": "c6",
+      "kind": "non_goal",
+      "text": "no re-pin: the sanity runs against the exact pins in docs/upstream-pins.md (microduck sim-remote-io 0cd676d, microduck_rl develop 29e887e, API 16) \u2014 re-pinning is its own deliberate PR with its own re-verification",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c7",
+      "kind": "boundary",
+      "text": "the walking xfail sentinel stays expected-fail on Orin: locomotion-not-achieved is a pin-level defect (walk network selected but joint targets static, ruled out CLI/params/keyframe/RTF on Spark), not host-level \u2014 an Orin walk failure is NOT a regression, and an XPASS would mean the pin question needs revisiting, not the Orin run",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h6",
+          "text": "an XPASS on the walking sentinel is reported to the user as news (walking arrived at this pin), never silently absorbed",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "run 'MICRODUCK_LIVE=1 uv run pytest -m live -n0' (plus MICRODUCK_LIVE_SIM=1 for the sim body); the walking sentinel must report xfail, and its result is quoted in the record",
+      "revisions": []
+    },
+    {
+      "id": "c8",
+      "kind": "audience",
+      "text": "the operator of this box plus future agents and reviewers who need microduck-cli's verified-on-Orin status; mesh peers reading docs/verification/",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h7",
+          "text": "the record must be trustworthy to a reader who did not watch the run \u2014 no reference to unavailable scratchpad logs as load-bearing evidence",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "write the record self-contained like the Spark one: a header table (host, L4T/CUDA, toolchain, pins, CLI commits, daemon API) so a reader needs no session context",
+      "revisions": []
+    },
+    {
+      "id": "c9",
+      "kind": "before_state",
+      "text": "the Spark record names 'Jetson Thor / AGX Orin \u2014 not attempted; the host classifier only' as an open gap, and this box is bare: no rust toolchain, no microduck/microduck_rl clones, MICRODUCK_CLONE/DUCK_SIM_RL unset",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h8",
+          "text": "the before-state is recorded as probed on this box, not assumed",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "record the bare-box starting state (no rust, no clones, unset env vars) in the record so the bring-up steps are reproducible",
+      "revisions": []
+    },
+    {
+      "id": "c10",
+      "kind": "after_state",
+      "text": "a dated record docs/verification/<date>-orin-sanity.md exists beside the Spark one, recording the six checks as run on this Orin with outputs pasted verbatim \u2014 including check 5's torch-on-L4T outcome, pass or fail \u2014 and lands via a version-bumped PR",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h9",
+          "text": "the record is written only from actual runs at named CLI commits, per-check, as the Spark doc does",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "name the file with the run date, link docs/upstream-pins.md, open the PR with a version bump via the version-bump + cicd skills",
+      "revisions": []
+    },
+    {
+      "id": "c11",
+      "kind": "success_signal",
+      "text": "env up --sim yields a standing duck on this box, the live suite passes (MICRODUCK_LIVE=1, walking sentinel still xfail), the gates (check 6) are green, and CI passes on the record PR",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h10",
+          "text": "success signals are pasted outputs, never paraphrased summaries",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "quote the standing-duck monitor frames, the live-suite summary line, and the check-6 gate outputs verbatim in the record",
+      "revisions": []
+    },
+    {
+      "id": "c12",
+      "kind": "assumption",
+      "text": "uv sync of the microduck_rl clone must succeed for checks 1-4 as well, not just check 5: body_server (MuJoCo) and onnxruntime live in that venv, and uv sync will attempt the pytorch-cu129 aarch64 torch wheel on this box \u2014 a torch install failure would block the sim body, not only the smoke",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h11",
+          "text": "if uv sync fails on the torch wheel, the record states the failure verbatim and the sim checks are reported as blocked-by-venv (falling back to the --fake body only), never silently narrowed",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c13",
+      "kind": "requirement",
+      "text": "the record's header states the box's runtime conditions the tick-rate signals depend on: power mode (probed today: MAXN), memory pressure at run time, and what else was running \u2014 on Jetson unified memory the GPU budget is the system budget",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h12",
+          "text": "the header's runtime-conditions values (power mode, memory, co-tenants) are probed again at run time on the sanity box, never copied forward from this challenge pass's probes",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    }
+  ],
+  "open_vagueness": [
+    {
+      "id": "v1",
+      "text": "MuJoCo body_server + onnxruntime aarch64 wheels installed and ran on Spark (GB10, also linux-aarch64) but have never been exercised on Orin's L4T userspace; likely fine (plain aarch64 CPU wheels, ORT dlopened from the RL venv) but only the live run tells",
+      "kind": "unknown_nonblocking",
+      "claim_id": null,
+      "resolved": false,
+      "resolution": "",
+      "resolution_claim_id": null
+    },
+    {
+      "id": "v2",
+      "text": "check 5 may hang rather than fail cleanly on an incompatible torch/GPU stack \u2014 the run needs a timeout discipline (lands plan-side as a risk/task once /spec-to-plan seeds the plan)",
+      "kind": "unknown_nonblocking",
+      "claim_id": null,
+      "resolved": false,
+      "resolution": "",
+      "resolution_claim_id": null
+    }
+  ],
+  "scope_entries": [
+    {
+      "id": "s1",
+      "surface": "docs/verification/2026-09-04-sim-bringup.md",
+      "finding": "the Spark sanity is the template: six checks (env up --sim standing duck, health 50Hz, duck do skill, rules overlay + refusal, policy smoke local+HF dry-run, the gates) plus the fake-body pass and the live suite; its NOT-verified list explicitly names AGX Orin as not attempted",
+      "seeds": [
+        "c2"
+      ]
+    },
+    {
+      "id": "s2",
+      "surface": "this box (Jetson AGX Orin, L4T R39, CUDA 13.2, driver 595.78)",
+      "finding": "probed read-only: /etc/nv_tegra_release R39 present, GPU 'Orin (nvgpu)', uv + python 3.12.3 present, but no rust toolchain and no upstream clones \u2014 bring-up is a prerequisite, and the user approved installing rust",
+      "seeds": [
+        "c3"
+      ]
+    },
+    {
+      "id": "s3",
+      "surface": "microduck_cli/env/hosts.py",
+      "finding": "jetson-agx-orin branch exists and matches this box's probe (gpu 'Orin (nvgpu)', nv_tegra_release R39); torch_source_applies=False by design \u2014 Jetson gets JetPack-index torch, not pytorch-cu129",
+      "seeds": [
+        "c4"
+      ]
+    },
+    {
+      "id": "s4",
+      "surface": "microduck_cli/env/doctor.py",
+      "finding": "host_class check is severity=info, passed=True regardless of torch verdict (lines 540-560); the real Orin blockers doctor will report are cargo_version and the clone checks \u2014 MICRODUCK_CLONE else ../microduck sibling, DUCK_SIM_RL/MICRODUCK_RL_CLONE else ../microduck_rl sibling",
+      "seeds": [
+        "c5"
+      ]
+    },
+    {
+      "id": "s5",
+      "surface": "docs/upstream-pins.md",
+      "finding": "pins are validated-against commits; the doc itself says re-pin deliberately (one PR, all rows) and re-run on-box verification when you do \u2014 so the Orin sanity holds the pins fixed",
+      "seeds": [
+        "c6"
+      ]
+    },
+    {
+      "id": "s6",
+      "surface": "tests/live/test_live_cli.py",
+      "finding": "the live suite (MICRODUCK_LIVE=1, -m live -n0; MICRODUCK_LIVE_SIM=1 for the MuJoCo body) is the runnable half of the sanity \u2014 12 checks passed on Spark; test_sim_body_walks_forward_on_move is a non-strict xfail sentinel by design",
+      "seeds": [
+        "c7"
+      ]
+    },
+    {
+      "id": "s7",
+      "surface": "microduck_cli/train/lane.py + microduck_rl [tool.uv.sources] (read at the pin via hosts.py docstring)",
+      "finding": "the train lane resolves the RL clone via DUCK_SIM_RL/MICRODUCK_RL_CLONE and shells to uv run train there; whether that venv's torch actually runs on Orin is exactly the t8/t15 unknown_nonblocking risk the classifier remediation names \u2014 seeded question q1 (include check 5 or record it not-attempted)",
+      "seeds": []
+    },
+    {
+      "id": "s8",
+      "surface": "challenge pass / adjacent-systems lens: microduck_rl pyproject at pin + train/lane.py",
+      "finding": "the RL venv is a shared dependency of the sim checks and the smoke; torch install failure contaminates checks 1-4, not just 5 \u2014 seeded the venv assumption",
+      "seeds": [
+        "c12"
+      ]
+    },
+    {
+      "id": "s9",
+      "surface": "challenge pass / operations lens: this box (nvpmodel, free, ps)",
+      "finding": "probed: MAXN power mode, 12 cores, 1.4T disk free, port 7801 free, headless (no DISPLAY, matches the Spark recipe) \u2014 but 53Gi/61Gi RAM held by a vLLM engine (colleague backend), ~7.7Gi available",
+      "seeds": [
+        "c13"
+      ]
+    },
+    {
+      "id": "s10",
+      "surface": "challenge pass / failure-mode lens: policy smoke on unverified torch",
+      "finding": "a hang is likelier than a clean ImportError on a bad GPU stack; Spark's smoke took 58.6s \u2014 parked the timeout-discipline residual for the plan leg",
+      "seeds": []
+    },
+    {
+      "id": "s11",
+      "surface": "challenge pass / reversibility lens: rustup + clones",
+      "finding": "clean: rustup self uninstall reverses the toolchain, clones are plain directories; g++ is absent but rust links via cc \u2014 if any build step wants g++ an apt install is surfaced to the user first, not done silently",
+      "seeds": []
+    },
+    {
+      "id": "s12",
+      "surface": "challenge pass / security lens: bring-up downloads",
+      "finding": "clean pass: clones are pinned commits from pollen-robotics, wheels from PyPI/PyTorch indexes over uv, rustup from the official installer; no credentials touched (HF/wandb stay unset unless check 5 needs the dry-run namespace)",
+      "seeds": []
+    }
+  ],
+  "lapses": [],
+  "obligations": [
+    {
+      "id": "o1",
+      "claim_id": "c11",
+      "seam": "opt-in live suite against the real daemon + MuJoCo body",
+      "behavior": "the CLI operates a real simulated duck end to end on this host: doctor, health at 50 Hz, init/enable/skill, move+stop, rules check, refusal, six-step engine start, record, stand-up",
+      "source_text": "env up --sim yields a standing duck on this box, the live suite passes (MICRODUCK_LIVE=1, walking sentinel still xfail), the gates (check 6) are green, and CI passes on the record PR",
+      "origin": "user",
+      "status": "approved"
+    },
+    {
+      "id": "o2",
+      "claim_id": "c7",
+      "seam": "walking sentinel (test_sim_body_walks_forward_on_move)",
+      "behavior": "locomotion remains expected-fail at this pin; an XPASS would be surfaced, never absorbed",
+      "source_text": "the walking xfail sentinel stays expected-fail on Orin: locomotion-not-achieved is a pin-level defect (walk network selected but joint targets static, ruled out CLI/params/keyframe/RTF on Spark), not host-level \u2014 an Orin walk failure is NOT a regression, and an XPASS would mean the pin question needs revisiting, not the Orin run",
+      "origin": "user",
+      "status": "approved"
+    },
+    {
+      "id": "o3",
+      "claim_id": "c4",
+      "seam": "env/hosts.py classifier (unit + live doctor)",
+      "behavior": "jetson-agx-orin is classified correctly on this box AND the gb10/DGX-Spark class still classifies with torch_source_applies=True \u2014 Orin support is additive, Spark support unchanged",
+      "source_text": "microduck_cli/env/hosts.py needs no change: classify() already returns jetson-agx-orin for this box (tegra_release present, 'orin' in the gpu-name haystack) with torch_source_applies=False and the unverified remediation \u2014 the sanity run confirms the live verdict, it does not touch the classifier",
+      "origin": "user",
+      "status": "approved"
+    },
+    {
+      "id": "o4",
+      "claim_id": "c10",
+      "seam": "PR #6 (docs/orin-sanity, 0.9.2)",
+      "behavior": "the verification record lands via a version-bumped PR with CI green",
+      "source_text": "a dated record docs/verification/<date>-orin-sanity.md exists beside the Spark one, recording the six checks as run on this Orin with outputs pasted verbatim \u2014 including check 5's torch-on-L4T outcome, pass or fail \u2014 and lands via a version-bumped PR",
+      "origin": "user",
+      "status": "approved"
+    },
+    {
+      "id": "o5",
+      "claim_id": "c2",
+      "seam": "policy smoke on the Orin GPU (check 5)",
+      "behavior": "the smoke is attempted under an explicit timeout and its outcome recorded verbatim \u2014 pass, fail, or timeout",
+      "source_text": "re-run the Spark sanity's six success-signal checks on this Jetson AGX Orin and land a sibling record in docs/verification/ \u2014 the Spark record's 'What was NOT verified' names 'Jetson Thor / AGX Orin \u2014 not attempted; the host classifier only' as the gap",
+      "origin": "user",
+      "status": "approved"
+    }
+  ]
+}

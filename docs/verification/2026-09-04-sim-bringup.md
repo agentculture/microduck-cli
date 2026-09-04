@@ -172,8 +172,9 @@ the intent payload named the yaw axis `wz` where the wire and the upstream docs 
   "designed and measured but not built" on this branch; not attempted.
 - **Jetson AGX Thor** — verified later the same day, all three tiers, in
   [`2026-09-04-thor-sanity.md`](2026-09-04-thor-sanity.md) (training needed a
-  local torch-source override of the RL clone). **AGX Orin** training — still
-  not attempted; the host classifier only.
+  local torch-source override of the RL clone). **AGX Orin** — verified the
+  same day in [`2026-09-04-orin-sanity.md`](2026-09-04-orin-sanity.md): checks
+  1-4 pass, GPU training is not available there at this pin (sm_87).
 
 Raw logs from the runs are kept outside the repo (session scratchpad); the
 numbers above are copied from them unchanged.

@@ -303,7 +303,10 @@ markdownlint-cli2 "**/*.md" ...          0 error(s)   (markdownlint-cli2@0.13.0 
   `rl_pinned_commit` check fails there by design.
 - **A real HF Jobs submission**, as on Spark.
 - **Walking**, unchanged: still `xfail` at this pin pair.
-- **AGX Orin** — not attempted; the host classifier only.
+- **AGX Orin** — verified separately the same day in
+  [`2026-09-04-orin-sanity.md`](2026-09-04-orin-sanity.md): the same SBSA
+  torch wheel initialises CUDA there but carries no `sm_87` kernels, so GPU
+  training is not available on Orin at this pin; checks 1-4 pass.
 - **No physical duck.** The `--fake` and MuJoCo bodies only.
 - **The self-hosted GitHub runner on this box** (`~/git/actions-runner`) was
   not paused; whether any other repo's job overlapped the 144 s smoke was not
@@ -311,7 +314,7 @@ markdownlint-cli2 "**/*.md" ...          0 error(s)   (markdownlint-cli2@0.13.0 
 
 Plan risk t8/t15 of the September 3 plan ("Jetson Thor / AGX Orin torch+warp
 path unverified") is resolved for Thor — **with the override**, not as
-shipped — and stays open for Orin.
+shipped — and is resolved for Orin too, as "not available" (its own record).
 
 The complete logs behind every excerpt above — doctor before/after, the cargo
 build, both `uv sync` passes, the probe, both live-suite logs (full `-v`

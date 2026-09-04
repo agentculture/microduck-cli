@@ -72,10 +72,27 @@ def test_gb10_torch_source_applies_and_no_remediation():
     assert info.remediation is None
 
 
-def test_jetson_orin_carries_unverified_remediation():
+def test_jetson_orin_says_training_is_not_available_and_cites_its_record():
+    """Orin was verified on-box (docs/verification/2026-09-04-orin-sanity.md):
+    checks 1-4 pass, GPU training does not exist at this pin (sm_87 vs the
+    only cp312 torch 2.9.1 wheel). Not 'unverified' — verified as not working."""
     info = classify(JETSON_AGX_ORIN_PROBE)
+    assert info.torch_source_applies is False
+    assert info.remediation is not None
+    assert "unverified" not in info.remediation
+    assert "not available" in info.remediation
+    assert "sm_87" in info.remediation
+    assert "2026-09-04-orin-sanity.md" in info.remediation
+
+
+def test_unidentified_jetson_still_carries_the_unverified_remediation():
+    info = classify(
+        HostProbe(machine="aarch64", gpu_name="NVIDIA Tegra Something", tegra_release="# R40")
+    )
+    assert info.host_class == "aarch64-other"
     assert info.remediation is not None
     assert "unverified" in info.remediation
+    assert info.verified is None
 
 
 def test_jetson_thor_carries_the_verified_override_remediation():
@@ -92,12 +109,12 @@ def test_jetson_thor_carries_the_verified_override_remediation():
     assert "2026-09-04-thor-sanity.md" in info.verified
 
 
-def test_verified_records_point_at_the_two_boxes_that_ran_the_sanity():
-    """GB10 (Spark) and Thor each carry their docs/verification pointer; a host
-    nobody has verified on carries None, never an invented record."""
+def test_verified_records_point_at_the_three_boxes_that_ran_the_sanity():
+    """GB10 (Spark), Thor and Orin each carry their docs/verification pointer;
+    a host nobody has verified on carries None, never an invented record."""
     assert "2026-09-04-sim-bringup.md" in classify(GB10_PROBE).verified
     assert "2026-09-04-thor-sanity.md" in classify(JETSON_THOR_PROBE).verified
-    assert classify(JETSON_AGX_ORIN_PROBE).verified is None
+    assert "2026-09-04-orin-sanity.md" in classify(JETSON_AGX_ORIN_PROBE).verified
     assert classify(X86_64_PROBE).verified is None
 
 

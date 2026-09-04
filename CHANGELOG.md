@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.2] - 2026-09-04
+## [0.9.3] - 2026-09-04
 
 ### Added
 
@@ -25,13 +25,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `nvidia-cudss-cu13` wheels that wheel links but does not declare, via a
   local override of the `microduck_rl` clone. `torch_source_applies` stays
   `False` because upstream's `pytorch-cu129` source was never exercised there.
-  AGX Orin keeps the unverified text (`env/hosts.py`, `tests/test_hosts.py`).
+  (`env/hosts.py`, `tests/test_hosts.py`).
+- `env doctor`'s `host_class` remediation on Jetson AGX Orin now states the
+  verified outcome from the Orin record instead of "unverified": GPU training
+  is not available there at this pin (the only torch 2.9.1 cp312 CUDA-13 wheel
+  has no `sm_87` kernels), while the sim, the fake body and the rules layer
+  work. Only an unidentified Jetson still reads "unverified".
 - `HostInfo.verified` points a verified host class at its on-box record — GB10
-  at the Spark record, Jetson AGX Thor at the Thor one, every other class
-  `None` — and `env doctor` appends `verified on-box: …` to the `host_class`
-  line.
+  at the Spark record, Jetson AGX Thor and Jetson AGX Orin at theirs, every
+  other class `None` — and `env doctor` appends `verified on-box: …` to the
+  `host_class` line. All three boxes the CLI targets locally now carry their
+  evidence.
 - The Spark record's "Jetson Thor / AGX Orin — not attempted" bullet now links
   the Thor record.
+
+## [0.9.2] - 2026-09-04
+
+### Added
+
+- docs/verification/2026-09-04-orin-sanity.md — the six Spark sanity checks re-run on a Jetson AGX Orin: checks 1-4, the gates, and the live suite (12 passed, walking sentinel xfailed) all pass; check 5 fails with a recorded finding — no torch wheel with sm_87 kernels exists for cp312+2.9.1 on the Jetson indexes, so GPU training on AGX Orin is not available at this pin. Includes the Orin RL-venv recipe (SBSA cu130 index + venv-local nvidia/nvpl libs) and the bare uv-run re-lock gotcha.
+- docs/specs and docs/plans 2026-09-04-orin-sanity.md — the challenged devague spec (scope + think + challenge, vLLM co-tenancy finding) and its converged six-task plan, with the .devague frame/plan state.
 
 ## [0.9.1] - 2026-09-04
 
