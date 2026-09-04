@@ -291,9 +291,14 @@ markdownlint-cli2 "**/*.md" ...          0 error(s)   (markdownlint-cli2@0.13.0 
 - **Upstream's own torch routing on Thor.** Every tier ran on the local
   `sbsa/cu130` override; the `cu129` path was never tried here (plan risk r1
   stays open on that half). The override is uncommitted in the clone and is
-  the finding to carry upstream: the SBSA torch wheel omits its NVPL and
-  cuDSS dependencies, and `microduck_rl`'s aarch64 marker cannot tell a Thor
-  from a GB10.
+  the finding carried upstream as
+  [microduck_rl#38](https://github.com/pollen-robotics/microduck_rl/issues/38)
+  and fixed in [microduck_rl#39](https://github.com/pollen-robotics/microduck_rl/pull/39)
+  (Jetson split from GB10 on the `platform_release` marker, the three
+  undeclared wheels added and pre-loaded; 209 upstream tests and the smoke
+  pass on Thor with no `LD_LIBRARY_PATH`). Until that merges and this repo
+  re-pins, the Thor clone sits on that branch and `env doctor`'s
+  `rl_pinned_commit` check fails there by design.
 - **A real HF Jobs submission**, as on Spark.
 - **Walking**, unchanged: still `xfail` at this pin pair.
 - **AGX Orin** — not attempted; the host classifier only.
