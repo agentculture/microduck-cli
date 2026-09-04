@@ -7,7 +7,9 @@ the same six checks recorded for Spark in
 [`2026-09-04-sim-bringup.md`](2026-09-04-sim-bringup.md), run **headless** on a
 Jetson AGX Thor at the **same upstream pins**, in three tiers whose
 prerequisites differ — the `--fake` body, the MuJoCo body, and the train smoke.
-Outputs are pasted as produced; nothing here was smoothed.
+Outputs are copied from the run logs unchanged, but several blocks are
+**excerpts**: every elision is marked (`...`, `{...}`, `(the eleven above)`) and
+the complete logs are named at the end. Nothing was reworded or smoothed.
 
 ## The box and the pins
 
@@ -311,7 +313,9 @@ Plan risk t8/t15 of the September 3 plan ("Jetson Thor / AGX Orin torch+warp
 path unverified") is resolved for Thor — **with the override**, not as
 shipped — and stays open for Orin.
 
-Raw logs (doctor before/after, cargo build, both `uv sync` passes, the probe,
-both live-suite logs, the smoke payload, the dry run, the gates) are kept in
-the session scratchpad outside the repo; the numbers above are copied from
-them unchanged.
+The complete logs behind every excerpt above — doctor before/after, the cargo
+build, both `uv sync` passes, the probe, both live-suite logs (full `-v`
+output), the smoke's JSON payload with the trainer's whole stdout/stderr, the
+dry run, the gates — are kept in the session scratchpad outside the repo, as
+the Spark record's are; the numbers and lines above are copied from them
+unchanged.

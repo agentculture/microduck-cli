@@ -14,8 +14,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   headless on Thor at the same upstream pins — provisioning, the `--fake` live
   suite (11 passed), the MuJoCo live suite (12 passed, walking still `xfail`),
   the 64-env train smoke (`ok: true`, 144 s) and the HF Jobs dry run — with
-  every output pasted verbatim, plus the devague frame, spec and plan that
-  drove it (`thor-sanity`).
+  the outputs excerpted unchanged (elisions marked), plus the devague frame,
+  spec and plan that drove it (`thor-sanity`).
 
 ### Changed
 
