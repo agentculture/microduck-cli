@@ -1,0 +1,359 @@
+{
+  "slug": "readme-as-proof",
+  "title": "README as proof",
+  "frame_slug": "readme-as-proof",
+  "schema_version": 5,
+  "status": "drafting",
+  "created": "2026-09-04T19:10:38Z",
+  "updated": "2026-09-04T19:17:26Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "microduck-cli's README reads like a proof, not a pitch: one diagram of what the CLI actually is, command blocks over prose, verbatim captures from three verified boxes, a plain statement of what is not verified, and every upstream and sibling repo cited",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "README.md contains at least one mermaid fence, at least one verbatim capture copied from docs/verification/, and a section stating what has not been verified; markdownlint-cli2 exits 0 on README.md",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c2",
+      "kind": "audience",
+      "text": "Humans meeting microduck-cli cold on GitHub or PyPI first \u2014 deciding whether this CLI is real; operator agents second, who are routed on to 'microduck learn', the explain catalog and the operate-microduck skill rather than taught inside the README",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "Nothing above the first command block uses a term the README has not yet defined, and the README never tries to teach an agent the CLI surface itself \u2014 it links microduck learn, the explain catalog and the operate-microduck skill",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "before_state",
+      "text": "README.md (109 lines, at 0.9.3) is prose-first: four narrative paragraphs before any command, no diagram anywhere in the repo's markdown, two short command blocks with no output shown, no install-from-PyPI line although microduck-cli 0.9.3 is published, and no pointer to the three on-box verification records that hold the actual evidence",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "The before state is quotable from the merge-base README.md at 0.9.3: 109 lines, first command at line 74, zero mermaid or image fences in the repo's markdown, no PyPI install line, no link to docs/verification/",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c4",
+      "kind": "after_state",
+      "text": "A reader who has only README.md can, in one screen-height each: see a diagram of what the CLI sits between (operator, JSON-RPC socket, robotd, sim/fake/real body), copy a command block that works, read a verbatim capture from a real box with its host, pins and CLI commit stamped beside it, and state plainly what has NOT been verified \u2014 no physical duck, no locomotion at the current pin",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "A reader given only README.md can name what the CLI talks to, run one block start to finish without another file, cite one capture's box and pin, and list the unverified items",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "why_it_matters",
+      "text": "This CLI's whole claim is that it was built against a real daemon and honestly recorded; a README that asserts that in prose while the evidence sits unlinked in docs/verification/ asks the reader to take it on faith, which is exactly the thing the repo's own honesty discipline refuses",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h15",
+      "kind": "honesty",
+      "text": "Every credibility claim the README makes is either shown (a capture) or linked to the record that shows it; no claim about hardware or verification stands on prose alone",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c6",
+      "kind": "requirement",
+      "text": "README.md gains mermaid diagrams of what the CLI actually is: at minimum one topology diagram (agent or human -> microduck-cli -> JSON-RPC over a unix socket -> robotd -> fake / MuJoCo sim / real body) and one of the ONE 50 Hz tick seam (sense -> rules -> arbitrate -> compose -> sink, with the human gate withholding motion)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "Every node and edge in each mermaid fence corresponds to something in the code or the pins table \u2014 the socket path, robotd, the three body kinds, and the tick order in microduck_cli/behavior/engine.py; the numbered 'Try it in simulation' walkthrough is the single text fallback for the PyPI render and no per-diagram prose equivalent is required (user decision on q1)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c7",
+      "kind": "requirement",
+      "text": "Prose gives way to commands: every section leads with a runnable block, and every command in every block is checked against the shipped --help output at the version README names",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "Every fenced microduck command in README.md resolves against the shipped --help at the version README names, checked by a script whose miss count is zero, and the README names that version",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "requirement",
+      "text": "README.md carries live proofs \u2014 short verbatim captures copied from docs/verification/, each stamped with the box, the upstream pins, the CLI commit and the microduck-cli version it was recorded at, so a reader can tell when a capture has aged",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "Every capture in README.md is byte-identical to its source in docs/verification/ modulo explicitly marked elision, and each carries the host, the upstream pins or a link to them, the CLI commit and the microduck-cli version it was recorded at",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c9",
+      "kind": "requirement",
+      "text": "README.md states what microduck-cli is and is not in one place a skimmer cannot miss: sim-first with no physical duck ever driven from it, locomotion NOT achieved at the current pin, the API-16 deviation d1 that leaves the policy channel unavailable, neurosymbolic-system named as a future import and not a dependency, and zero third-party runtime dependencies",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "The what-it-is-not section states all five: no physical duck has been driven, locomotion is not achieved at the current pin, deviation d1 leaves the policy channel unavailable on API 16, neurosymbolic-system is not a dependency, and runtime dependencies are empty \u2014 each traceable to the file that records it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c10",
+      "kind": "requirement",
+      "text": "README.md cites its sources in two tables: the upstream pins it is validated against (pollen-robotics/microduck sim-remote-io, microduck_rl develop, with commits) and the AgentCulture siblings it composes (neurosymbolic-system, reachy-mini-cli, arm101-cli, teken, devague), each with the one thing taken from it and the cite-don't-import policy stated once",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "Every repo link in README.md resolves to a public repository, the upstream commits are linked through docs/upstream-pins.md rather than duplicated, and the cite-don't-import policy is stated once in prose",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c11",
+      "kind": "requirement",
+      "text": "Install leads with the published package (uv tool install microduck-cli, or uvx microduck-cli) since 0.9.3 is on PyPI today, with the from-source uv sync path second for contributors",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "The install block's package name and command are verified against the live PyPI release at PR time, and the from-source path still works from a clean clone",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c12",
+      "kind": "boundary",
+      "text": "This work changes README.md only, plus the version bump and CHANGELOG entry CI requires; no module under microduck_cli/, no test, no skill and no docs/verification record is touched",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "git status on the branch before the PR lists README.md, CHANGELOG.md and pyproject.toml and nothing else",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c13",
+      "kind": "boundary",
+      "text": "The three verification records are quoted, never edited or reworded \u2014 including their negative findings; a capture that will not fit is elided with an explicit marker and a link, the same convention the records themselves use",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h11",
+      "kind": "honesty",
+      "text": "Every quoted block traces to a line range in a docs/verification record, and no file under docs/verification/ appears in the branch diff",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c19",
+      "kind": "success_signal",
+      "text": "A reader given only README.md can name what the CLI talks to and how, run one command block start to finish without opening another file, point at one verbatim capture and say which box and pin it came from, and list what is not verified; markdownlint-cli2 exits 0 on README.md; a script matches every fenced command against --help with zero misses",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "The four reader questions are answerable from README.md alone; markdownlint-cli2 exits 0 on it; the fenced-command check script reports zero misses",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c21",
+      "kind": "requirement",
+      "text": "The proof section names all three boxes it was verified on \u2014 DGX Spark (GB10), Jetson AGX Thor and Jetson AGX Orin \u2014 and carries each box's caveat in the same table as its result: Thor's tiers ran on an uncommitted local torch override whose upstream fix is still open as pollen-robotics/microduck_rl#39 (issue #38), so env doctor's rl_pinned_commit fails there by design until it merges and this repo re-pins; Orin's SBSA torch wheel carries no sm_87 kernels, so GPU training is unavailable there and only checks 1-4 pass",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "The three-box table names Thor's override and links microduck_rl#39 as still open (re-checked at PR time, since it may have merged), and names Orin's missing sm_87 kernels; both caveats are traceable to docs/verification/2026-09-04-thor-sanity.md and -orin-sanity.md",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c22",
+      "kind": "requirement",
+      "text": "Captures pasted into README.md are scrubbed of identity before they ship: the three records contain box home directories (/home/spark, /home/thor, /home/orin) and the operator's Hugging Face namespace (--namespace orinachum), and README.md is the PyPI long description, so a verbatim paste republishes them to an external index",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h17",
+      "kind": "honesty",
+      "text": "No home directory of a real box and no account name appears in README.md; every redaction is marked, and the redacted text still matches its source line character for character outside the marked span",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c23",
+      "kind": "requirement",
+      "text": "The simulation walkthrough states its prerequisites before its first command: two upstream clones (pollen-robotics/microduck at the pinned sim-remote-io commit, microduck_rl at develop) and a Rust toolchain, or 'env doctor' fails seven of its thirteen checks and the reader's first experience of the CLI is a wall of FAILs",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "A reader who has neither clone can tell from README.md alone, before running anything, that the simulation section needs them and which command reports on them",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c24",
+      "kind": "requirement",
+      "text": "README.md names the platform its evidence covers: every verified box is Linux on aarch64 (DGX Spark GB10, Jetson AGX Thor, Jetson AGX Orin); no x86_64 and no macOS run is recorded, and the CLI speaks unix domain sockets to a daemon built with cargo",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h19",
+      "kind": "honesty",
+      "text": "Every platform statement in README.md traces to a box table in docs/verification/; no untested platform is implied as supported",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c25",
+      "kind": "requirement",
+      "text": "The what-it-is-not section carries the two hardware-safety facts a reader with a real duck needs before copying anything: motion verbs are gated (a dry run on a pipe moves nothing, --apply is required in agent mode) and 'duck relax' drops torque, which collapses the duck",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h20",
+      "kind": "honesty",
+      "text": "The gate and the relax warning appear above any block containing a motion verb, and both are traceable to duck/gate.py and the operate-microduck skill",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c26",
+      "kind": "requirement",
+      "text": "README.md uses one command form throughout and reconciles it with docs/operating-the-duck.md, which writes every command as 'uv run microduck ...' while an install-first README would write bare 'microduck ...'",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h21",
+      "kind": "honesty",
+      "text": "Every fenced command in README.md uses the same invocation form, and that form is consistent with docs/operating-the-duck.md or the difference is explained once",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c27",
+      "kind": "boundary",
+      "text": "README.md's honesty section may extend but must not contradict the CLI's own sim-first statements, which already ship inside the binary (microduck_cli/cli/_commands/learn.py line 25 and explain/catalog.py line 79)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h22",
+      "kind": "honesty",
+      "text": "The README's what-it-is-not list and the CLI's own learn/explain text make no contradictory claim about what has been driven",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "Rewrite README.md to the confirmed section order with both diagrams, command-first sections, and the numbered walkthrough as the PyPI text fallback",
+      "origin": "llm",
+      "status": "proposed",
+      "acceptance_criteria": [],
+      "deps": [],
+      "covers": [],
+      "instruction": ""
+    },
+    {
+      "id": "t2",
+      "summary": "Paste the live-proof captures from the three verification records, scrubbed of identity and stamped with box and CLI commit",
+      "origin": "llm",
+      "status": "proposed",
+      "acceptance_criteria": [],
+      "deps": [],
+      "covers": [],
+      "instruction": ""
+    },
+    {
+      "id": "t3",
+      "summary": "Write the what-it-is-not and Not verified sections, and the two citation tables",
+      "origin": "llm",
+      "status": "proposed",
+      "acceptance_criteria": [],
+      "deps": [],
+      "covers": [],
+      "instruction": ""
+    },
+    {
+      "id": "t4",
+      "summary": "Run the validation checks agent-side: commands vs --help, captures vs records, identity grep, links, markdownlint, readme_renderer, and the repo gates",
+      "origin": "llm",
+      "status": "proposed",
+      "acceptance_criteria": [],
+      "deps": [],
+      "covers": [],
+      "instruction": ""
+    },
+    {
+      "id": "t5",
+      "summary": "Version bump, CHANGELOG entry, commit, and open the PR through the cicd lane",
+      "origin": "llm",
+      "status": "proposed",
+      "acceptance_criteria": [],
+      "deps": [],
+      "covers": [],
+      "instruction": ""
+    }
+  ],
+  "risks": [],
+  "obligations": []
+}
