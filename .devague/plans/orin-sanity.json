@@ -1,0 +1,316 @@
+{
+  "slug": "orin-sanity",
+  "title": "orin-sanity",
+  "frame_slug": "orin-sanity",
+  "schema_version": 5,
+  "status": "exported",
+  "created": "2026-09-04T05:19:05Z",
+  "updated": "2026-09-04T05:21:07Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "microduck-cli passes the on-box sanity checks on Jetson AGX Orin, recorded as a verification doc beside the Spark one",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "every number and output line in the Orin record is pasted from an actual run on this box; nothing is smoothed, and any check that fails or cannot run is recorded verbatim as such",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "re-run the Spark sanity's six success-signal checks on this Jetson AGX Orin and land a sibling record in docs/verification/ \u2014 the Spark record's 'What was NOT verified' names 'Jetson Thor / AGX Orin \u2014 not attempted; the host classifier only' as the gap",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "the Orin checks map 1:1 to the Spark record's six checks; anything not attempted lands in an explicit NOT-verified section, never silently omitted",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "requirement",
+      "text": "bring the box up first: this Orin has no cargo/rustc, no microduck/microduck_rl clones, and MICRODUCK_CLONE/DUCK_SIM_RL unset \u2014 install rustup (env doctor requires cargo, stack.py remediation says >= 1.89; Spark used 1.93.1), clone both repos at the pins in docs/upstream-pins.md, uv sync the RL venv; user approved installing rust",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "bring-up uses exactly the pinned commits from docs/upstream-pins.md and rustup for the toolchain; no system-wide installs beyond the rust toolchain the user approved",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c4",
+      "kind": "boundary",
+      "text": "microduck_cli/env/hosts.py needs no change: classify() already returns jetson-agx-orin for this box (tegra_release present, 'orin' in the gpu-name haystack) with torch_source_applies=False and the unverified remediation \u2014 the sanity run confirms the live verdict, it does not touch the classifier",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "if the live doctor does NOT report jetson-agx-orin on this box, that is a classifier defect to surface to the user \u2014 never patched silently mid-sanity",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "boundary",
+      "text": "microduck_cli/env/doctor.py needs no change: the host_class check is info-only and always passes (torch_source_applies=False just attaches the remediation text) \u2014 on this box doctor will fail on cargo_version and the clone-pin checks until bring-up is done, which is the tool doing its job",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "doctor failures on this box are fixed by changing the environment, never by editing the checks",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c7",
+      "kind": "boundary",
+      "text": "the walking xfail sentinel stays expected-fail on Orin: locomotion-not-achieved is a pin-level defect (walk network selected but joint targets static, ruled out CLI/params/keyframe/RTF on Spark), not host-level \u2014 an Orin walk failure is NOT a regression, and an XPASS would mean the pin question needs revisiting, not the Orin run",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "an XPASS on the walking sentinel is reported to the user as news (walking arrived at this pin), never silently absorbed",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "audience",
+      "text": "the operator of this box plus future agents and reviewers who need microduck-cli's verified-on-Orin status; mesh peers reading docs/verification/",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "the record must be trustworthy to a reader who did not watch the run \u2014 no reference to unavailable scratchpad logs as load-bearing evidence",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c9",
+      "kind": "before_state",
+      "text": "the Spark record names 'Jetson Thor / AGX Orin \u2014 not attempted; the host classifier only' as an open gap, and this box is bare: no rust toolchain, no microduck/microduck_rl clones, MICRODUCK_CLONE/DUCK_SIM_RL unset",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "the before-state is recorded as probed on this box, not assumed",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c10",
+      "kind": "after_state",
+      "text": "a dated record docs/verification/<date>-orin-sanity.md exists beside the Spark one, recording the six checks as run on this Orin with outputs pasted verbatim \u2014 including check 5's torch-on-L4T outcome, pass or fail \u2014 and lands via a version-bumped PR",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "the record is written only from actual runs at named CLI commits, per-check, as the Spark doc does",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c11",
+      "kind": "success_signal",
+      "text": "env up --sim yields a standing duck on this box, the live suite passes (MICRODUCK_LIVE=1, walking sentinel still xfail), the gates (check 6) are green, and CI passes on the record PR",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "success signals are pasted outputs, never paraphrased summaries",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c13",
+      "kind": "requirement",
+      "text": "the record's header states the box's runtime conditions the tick-rate signals depend on: power mode (probed today: MAXN), memory pressure at run time, and what else was running \u2014 on Jetson unified memory the GPU budget is the system budget",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "the header's runtime-conditions values (power mode, memory, co-tenants) are probed again at run time on the sanity box, never copied forward from this challenge pass's probes",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "Bring-up: rustup toolchain, clones at the pins, RL venv, env doctor to healthy",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "cargo --version reports >= 1.89, installed via rustup",
+        "microduck clone at 0cd676d6 (sim-remote-io) and microduck_rl at 29e887ec (develop), verified by git rev-parse",
+        "'microduck env doctor' reports healthy on this box, or every remaining failure is recorded verbatim with its remediation",
+        "the bare-box before-state (no rust, no clones, MICRODUCK_CLONE/DUCK_SIM_RL unset) was probed and captured BEFORE installing anything",
+        "if uv sync fails on the torch wheel, the failure is recorded verbatim and downstream checks run --fake-only, stated as such",
+        "torch in the RL venv resolves from NVIDIA's JetPack 7 / CUDA 13 Jetson index FIRST (user decision), overriding the pyproject's pytorch-cu129 source via uv config only \u2014 the pinned clone's files stay unmodified, and the exact index URL and override mechanism are recorded in the verification record; the cu129 wheel is attempted only as a recorded fallback"
+      ],
+      "deps": [],
+      "covers": [
+        "c3",
+        "h3",
+        "c9",
+        "h8"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t2",
+      "summary": "Preflight: re-probe runtime conditions, verify host class, stop vLLM with user go-ahead",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "power mode, free memory, and co-tenant processes re-probed at run time and captured for the record header",
+        "'microduck env doctor --json' reports host_class jetson-agx-orin; a mismatch is surfaced as a classifier defect, never patched mid-sanity",
+        "diffs of microduck_cli/env/hosts.py and microduck_cli/env/doctor.py are empty at run end; doctor failures were fixed in the environment only",
+        "vLLM stopped only after an explicit user go-ahead at that moment; the stop and its time captured for the record"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c4",
+        "h4",
+        "c5",
+        "h5",
+        "c13",
+        "h12"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t3",
+      "summary": "Checks 1-4 plus the live suite: fake body first, then MuJoCo sim",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "each check's output captured unchanged, with the CLI commit named per check",
+        "env up --sim yields a standing duck; monitor frames pasted verbatim",
+        "live suite run (MICRODUCK_LIVE=1 pytest -m live -n0, plus MICRODUCK_LIVE_SIM=1); summary line captured; the walking sentinel reports xfail \u2014 an XPASS is reported to the user as news, never absorbed"
+      ],
+      "deps": [
+        "t2"
+      ],
+      "covers": [
+        "c2",
+        "c7",
+        "h6",
+        "c11",
+        "h10"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t4",
+      "summary": "Check 5: attempt the policy smoke under an explicit timeout, record the outcome verbatim",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "the smoke runs under an explicit timeout; pass, fail, or timeout is recorded verbatim \u2014 a torch failure is a finding, not a sanity failure",
+        "the HF Jobs half is dry-run only; nothing submitted, nothing billed"
+      ],
+      "deps": [
+        "t3"
+      ],
+      "covers": [
+        "c2"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t5",
+      "summary": "Check 6: the gates on this box",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "pytest -n auto --cov, black/isort/flake8/bandit, teken cli doctor --strict, and markdownlint outcomes captured verbatim"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c2"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t6",
+      "summary": "Write the verification record, restart vLLM, open the version-bumped PR",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "docs/verification/<run-date>-orin-sanity.md exists with a self-contained header table (host, L4T/CUDA, power mode, memory + co-tenants, toolchain, pins, CLI commits per check, daemon API)",
+        "checks map 1:1 to the Spark record's six; anything not attempted lands in an explicit NOT-verified section",
+        "vLLM restarted and verified serving; both transitions noted in the record",
+        "PR opened via the cicd skill with a version bump; CI green"
+      ],
+      "deps": [
+        "t3",
+        "t4",
+        "t5"
+      ],
+      "covers": [
+        "c1",
+        "h1",
+        "c2",
+        "h2",
+        "c8",
+        "h7",
+        "c10",
+        "h9",
+        "c11"
+      ],
+      "instruction": ""
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "check 5 may hang rather than fail cleanly on an incompatible torch/GPU stack \u2014 the smoke runs under an explicit timeout (order 15 min; Spark took 59s) and a timeout is itself a recorded outcome",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "the pytorch-cu129 aarch64 torch wheel has never been installed on L4T R39 \u2014 uv sync of the RL venv may fail, degrading checks 1-4 to the --fake body only",
+      "kind": "unknown_nonblocking",
+      "task_id": "t1",
+      "resolved": false,
+      "resolution": ""
+    }
+  ],
+  "obligations": []
+}
