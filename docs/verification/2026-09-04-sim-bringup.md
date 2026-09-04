@@ -170,7 +170,10 @@ the intent payload named the yaw axis `wz` where the wire and the upstream docs 
 - **No physical duck.** Everything here is the `--fake` and MuJoCo bodies.
 - **Multi-duck, the ether, cameras and ToF** in sim — upstream marks them
   "designed and measured but not built" on this branch; not attempted.
-- **Jetson Thor / AGX Orin** training — not attempted; the host classifier only.
+- **Jetson AGX Thor** — verified later the same day, all three tiers, in
+  [`2026-09-04-thor-sanity.md`](2026-09-04-thor-sanity.md) (training needed a
+  local torch-source override of the RL clone). **AGX Orin** training — still
+  not attempted; the host classifier only.
 
 Raw logs from the runs are kept outside the repo (session scratchpad); the
 numbers above are copied from them unchanged.

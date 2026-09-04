@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-09-04
+
+### Added
+
+- On-box verification on NVIDIA Jetson AGX Thor
+  (`docs/verification/2026-09-04-thor-sanity.md`): the six Spark checks run
+  headless on Thor at the same upstream pins — provisioning, the `--fake` live
+  suite (11 passed), the MuJoCo live suite (12 passed, walking still `xfail`),
+  the 64-env train smoke (`ok: true`, 144 s) and the HF Jobs dry run — with
+  every output pasted verbatim, plus the devague frame, spec and plan that
+  drove it (`thor-sanity`).
+
+### Changed
+
+- `env doctor`'s `host_class` remediation on Jetson AGX Thor now states the
+  verified recipe instead of calling the path unverified: torch from NVIDIA's
+  `sbsa/cu130` index plus the `nvpl-blas`, `nvpl-lapack` and
+  `nvidia-cudss-cu13` wheels that wheel links but does not declare, via a
+  local override of the `microduck_rl` clone. `torch_source_applies` stays
+  `False` because upstream's `pytorch-cu129` source was never exercised there.
+  AGX Orin keeps the unverified text (`env/hosts.py`, `tests/test_hosts.py`).
+- The Spark record's "Jetson Thor / AGX Orin — not attempted" bullet now links
+  the Thor record.
+
 ## [0.9.1] - 2026-09-04
 
 ### Changed

@@ -72,11 +72,22 @@ def test_gb10_torch_source_applies_and_no_remediation():
     assert info.remediation is None
 
 
-def test_jetson_hosts_carry_unverified_remediation():
-    for probe in (JETSON_THOR_PROBE, JETSON_AGX_ORIN_PROBE):
-        info = classify(probe)
-        assert info.remediation is not None
-        assert "unverified" in info.remediation
+def test_jetson_orin_carries_unverified_remediation():
+    info = classify(JETSON_AGX_ORIN_PROBE)
+    assert info.remediation is not None
+    assert "unverified" in info.remediation
+
+
+def test_jetson_thor_carries_the_verified_override_remediation():
+    """Thor was verified on-box (docs/verification/2026-09-04-thor-sanity.md),
+    but only with a local override of the RL clone — so the source verdict
+    stays False and the remediation names the override, not 'unverified'."""
+    info = classify(JETSON_THOR_PROBE)
+    assert info.torch_source_applies is False
+    assert info.remediation is not None
+    assert "unverified" not in info.remediation
+    assert "sbsa/cu130" in info.remediation
+    assert "2026-09-04-thor-sanity.md" in info.remediation
 
 
 def test_aarch64_non_jetson_torch_source_applies():
