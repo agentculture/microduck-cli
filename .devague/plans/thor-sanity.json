@@ -1,0 +1,439 @@
+{
+  "slug": "thor-sanity",
+  "title": "thor-sanity",
+  "frame_slug": "thor-sanity",
+  "schema_version": 5,
+  "status": "exported",
+  "created": "2026-09-04T05:21:31Z",
+  "updated": "2026-09-04T05:26:01Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "microduck-cli passes its on-box sanity on Jetson AGX Thor: the same six checks recorded for DGX Spark in docs/verification/2026-09-04-sim-bringup.md run headless on Thor at the same upstream pins, the result is recorded verbatim in a second verification record, and env doctor's jetson-thor 'training path unverified' remediation is either retired or kept with evidence",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "The six checks in the Thor record carry the same headings as the Spark record and each ends in Pass or a verbatim failure",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "requirement",
+      "text": "The sanity runs in three tiers because their prerequisites differ: (1) --fake body needs only cargo-built robotd; (2) --sim body adds the microduck_rl venv (mujoco/warp/torch on Thor); (3) the train smoke (check 5) adds a working CUDA torch. Each tier is recorded pass/fail on its own so a torch failure does not hide a passing fake/sim result",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "The Thor record has one pass/fail line per tier, and a failing smoke tier appears alongside a passing fake and sim tier rather than replacing them",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c4",
+      "kind": "requirement",
+      "text": "The repeatable runner is tests/live/test_live_cli.py: MICRODUCK_LIVE=1 uv run pytest -m live -n0 for the fake body, MICRODUCK_LIVE_BODY=sim MICRODUCK_LIVE_SIM=1 for MuJoCo, always --headless. No new test code is needed for Thor; the record cites the pass/fail count as the Spark record did (12 passed at 25114a2)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "The record cites the live suite's exact pytest summary line (N passed, N xfailed) on Thor with the CLI commit hash, for the fake run and the sim run separately",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "A new record docs/verification/<date>-thor-sanity.md mirrors the Spark record's shape (box-and-pins table, one section per check, outputs pasted verbatim, a 'What was NOT verified' section), and the Spark record's 'Jetson Thor / AGX Orin training \u2014 not attempted' bullet is updated to point at it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "docs/verification/<date>-thor-sanity.md exists with the box-and-pins table, one section per check, and a 'What was NOT verified' section; the Spark record's 'Jetson Thor / AGX Orin training \u2014 not attempted' bullet links to it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c6",
+      "kind": "requirement",
+      "text": "env/hosts.py's _UNVERIFIED_REMEDIATION for jetson-thor is the claim the sanity tests: if the train smoke passes on Thor, the remediation text and its docstring change to say Thor is verified (tests/test_hosts.py asserts the verdict); if it fails, the text stays and the record carries the failure. Either way the version bumps and CHANGELOG gets an entry",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "After the run, env doctor on Thor prints a host_class remediation consistent with the record: empty (with tests/test_hosts.py updated) if the smoke passed, the unverified text if it failed; pyproject version differs from origin/main",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c7",
+      "kind": "boundary",
+      "text": "No re-pin: docs/upstream-pins.md stays at microduck 0cd676d / microduck_rl 29e887e so the Thor result is comparable to Spark's. A re-pin is its own PR with both boxes re-verified",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "git diff of the sanity PR leaves docs/upstream-pins.md untouched",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "boundary",
+      "text": "hosts.py classification logic is not changed by the sanity: it already returns jetson-thor on this box (verified live via env doctor --json). Only the remediation string and docstring may change, per the evidence",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "classify() and _classify() in env/hosts.py are byte-identical before and after; only _UNVERIFIED_REMEDIATION and the module docstring may differ",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c9",
+      "kind": "boundary",
+      "text": "operate-microduck SKILL.md's screenshot recipe is not exercised or edited: Thor has no graphical session (DISPLAY unset, user confirmed headless); --headless is the documented path and is already in the skill",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": ".claude/skills/operate-microduck/SKILL.md is untouched in the sanity PR",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c10",
+      "kind": "boundary",
+      "text": "The CI real-daemon job (.github/workflows/tests.yml, ubuntu-latest x86_64, gated on MICRODUCK_REAL_DAEMON) is untouched: it never runs on a Jetson and Thor evidence is an on-box record, not a CI job",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": ".github/workflows/tests.yml is untouched in the sanity PR",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c14",
+      "kind": "audience",
+      "text": "The operator of this Thor box and any agent that reads env doctor's host_class remediation before trusting the train lane on a Jetson; secondarily the reviewer comparing the Thor record to the Spark one",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h11",
+      "kind": "honesty",
+      "text": "The record's opening table names the box, the pins and the CLI commit so an operator can reproduce it, and env doctor's remediation text is quoted in the record",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c15",
+      "kind": "before_state",
+      "text": "Only DGX Spark is verified on-box; on Thor the CLI classifies the host but env doctor tells every user the training path is unverified, and nobody has run even the --fake body there",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "The record pastes the pre-provisioning env doctor output showing jetson-thor with the unverified remediation and 7 provisioning errors",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c16",
+      "kind": "after_state",
+      "text": "docs/verification carries a Thor record beside the Spark one with all three tiers' outcomes pasted verbatim, env doctor's jetson-thor remediation matches the evidence, and the live suite's pass/fail count on Thor is on record at a named commit",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "docs/verification lists two records, and grep for 'jetson-thor' in env/hosts.py shows text consistent with the Thor record's smoke outcome",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c17",
+      "kind": "why_it_matters",
+      "text": "Thor is the second real box in this workspace and the closest to the duck's own aarch64 target; a sanity there turns the plan's t8/t15 unknown_nonblocking risk into a fact either way, so the train lane's Jetson claim stops being a guess",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "The Thor record cites plan risk t8/t15 by name and states which way it resolved",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c18",
+      "kind": "success_signal",
+      "text": "On Thor at the same pins: env doctor healthy (13/13) after provisioning; the fake-body live suite passes; the sim live suite stands the duck up headless at 50 Hz; policy smoke returns ok true or a verbatim failure; the six gates pass; CHANGELOG and version bumped",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h19",
+      "kind": "honesty",
+      "text": "Each item of the success signal maps to a pasted line in the Thor record: the doctor healthy count, the two pytest summaries, the smoke's ok/failure line with elapsed time, the six gate outputs, and the version/CHANGELOG diff",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c22",
+      "kind": "requirement",
+      "text": "Tier 3 (policy smoke) is run under an explicit wall-clock bound chosen by the operator (e.g. the coreutils timeout command, 30 min) because policy smoke has no local timeout (train/lane.py only passes --timeout to the HF Jobs path), and the record states elapsed time beside Spark's 58.6 s so a JIT-bound Thor run is visible as a number, not a hang",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "The record's tier-3 section has an elapsed-time line and, on a timeout, says so verbatim rather than reporting a pass or an unexplained failure",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c23",
+      "kind": "boundary",
+      "text": "The Thor record is hand-pasted markdown, outside the CLI's no-secrets guard (tests/test_no_secrets_in_output.py covers CLI output only), and this shell exports HF_TOKEN and HUGGINGFACE_TOKEN; before commit the record is grepped for token prefixes (hf_, wandb) and any env dump, and env doctor output is pasted only in its set/unset form",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "grep -E 'hf_[A-Za-z0-9]{20,}|WANDB_API_KEY=' on the record returns nothing at PR time",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "Provision Thor for tiers 1-3 (outside the repo): capture the pre-provisioning 'env doctor --json' output, install rustup (cargo >= 1.89), clone microduck at 0cd676d and microduck_rl at 29e887e under ~/git beside this repo, cargo build -p robotd -p robotctl -p tof -p sounds natively",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The pre-provisioning env doctor --json output (7 provisioning errors, host_class jetson-thor) is saved verbatim to the scratchpad for the record",
+        "target/debug/robotd, robotctl, tofd and sounds exist in the microduck clone and 'git rev-parse HEAD' in each clone equals its pinned commit",
+        "env doctor reports cargo_version, daemons_built, both clone and both pinned-commit checks passed; only rl_venv_with_onnxruntime may still fail"
+      ],
+      "deps": [],
+      "covers": [
+        "c15",
+        "h12"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t2",
+      "summary": "Sync the RL venv Jetson-index first: write a LOCAL uncommitted [tool.uv.sources]/[[tool.uv.index]] override in the microduck_rl clone routing torch (and warp if needed) to pypi.jetson-ai-lab.io/jp7/cu130, run UV_HTTP_TIMEOUT=600 uv sync, probe torch.cuda.is_available() and warp.init(); on failure revert the override and sync upstream's cu129 routing as the recorded second attempt",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The override text and the exact 'uv sync' resolution lines for torch and warp (version, wheel tag, index) are saved verbatim for the record, per attempt",
+        "python -c 'import torch, warp; print(torch.__version__, torch.version.cuda, torch.cuda.is_available()); warp.init()' output is saved per attempt, with the first exception verbatim on failure",
+        "env doctor on Thor reports healthy (13/13) after whichever attempt succeeded; if neither did, the doctor output is saved and tiers 2-3 are recorded as blocked by it"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [],
+      "instruction": ""
+    },
+    {
+      "id": "t3",
+      "summary": "Tier 1 - fake body: run MICRODUCK_LIVE=1 uv run pytest -m live -n0 -v tests/live with MICRODUCK_CLONE set, on Thor",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The pytest summary line (N passed / xfailed / failed) and the CLI commit hash are saved verbatim for the record",
+        "No robotd process and no socket under the live suite's temp state dir remain afterwards (pgrep robotd empty)"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c4",
+        "h2"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t4",
+      "summary": "Tier 2 - MuJoCo body headless: with lobes lowered by the operator and 'free -g' captured immediately before, run MICRODUCK_LIVE=1 MICRODUCK_LIVE_BODY=sim MICRODUCK_LIVE_SIM=1 uv run pytest -m live -n0 -v tests/live on Thor",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The 'free -g' line before the run and the pytest summary line (including the walking xfail's state) are saved verbatim with the commit hash",
+        "A stand-up check shows policy stand and a trunk height consistent with the Spark record, or the failure is saved verbatim; the walking sentinel's xfail/XPASS state is noted"
+      ],
+      "deps": [
+        "t2",
+        "t3"
+      ],
+      "covers": [
+        "c3",
+        "h1"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t5",
+      "summary": "Tier 3 - the train smoke under a wall-clock bound: 'free -g' captured, then 'timeout 30m' (or the operator's bound) around WANDB_MODE=offline microduck policy smoke Mjlab-Velocity-Flat-MicroDuck --json on the venv t2 produced; if the Jetson-index venv fails here, repeat once on the cu129 venv",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The smoke's argv, ok/failure line, elapsed wall-clock time and, on failure, the first exception with the library that raised it (warp/nvrtc, torch, mjlab) are saved verbatim per attempt",
+        "A timeout is recorded as 'timed out after N min', never as a pass or an unexplained failure",
+        "The HF Jobs --dry-run half of check 5 is attempted and its outcome (including any missing hf CLI or login) is saved verbatim"
+      ],
+      "deps": [
+        "t2",
+        "t4"
+      ],
+      "covers": [
+        "c22",
+        "h16"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t6",
+      "summary": "Write docs/verification/2026-09-04-thor-sanity.md in the Spark record's shape (box-and-pins table, one section per check in the Spark order, verbatim outputs, tier-3 attempts as separate subsections, a 'What was NOT verified' section naming plan risk t8/t15 and which way it resolved), update the Spark record's 'Jetson Thor / AGX Orin training - not attempted' bullet to link it, and grep the record for secrets before commit",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "The record has the six Spark headings, each ending in Pass or a verbatim failure, and one pass/fail line per tier; a failing tier 3 sits beside passing tiers 1-2",
+        "grep -E 'hf_[A-Za-z0-9]{20,}|WANDB_API_KEY=' docs/verification/2026-09-04-thor-sanity.md returns nothing; env doctor lines appear only in set/unset form",
+        "docs/verification/2026-09-04-sim-bringup.md's Thor bullet links to the new record; markdownlint-cli2 passes on both files"
+      ],
+      "deps": [
+        "t3",
+        "t4",
+        "t5"
+      ],
+      "covers": [
+        "c1",
+        "h6",
+        "c5",
+        "h3",
+        "c14",
+        "h11",
+        "c16",
+        "h13",
+        "c17",
+        "h14",
+        "c23",
+        "h18"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t7",
+      "summary": "Adjust env/hosts.py's jetson-thor remediation and docstring to the tier-3 outcome (retire the unverified text with tests/test_hosts.py updated if the smoke passed on either attempt, or keep it and cite the record if it failed), touching nothing else in the module",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "git diff microduck_cli/env/hosts.py shows changes only in _UNVERIFIED_REMEDIATION / the module docstring; classify() and _classify() are byte-identical",
+        "uv run pytest tests/test_hosts.py passes and 'microduck env doctor --json' on Thor prints a host_class remediation consistent with the record"
+      ],
+      "deps": [
+        "t5"
+      ],
+      "covers": [
+        "c6",
+        "h4",
+        "c8",
+        "h8"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t8",
+      "summary": "Bump the version (version-bump skill), add the CHANGELOG entry naming the Thor record and the remediation outcome, run the six gates (teken cli doctor --strict, black, isort, flake8, bandit, pytest -n auto --cov, markdownlint), verify the untouched-file boundaries, and open the PR via the cicd skill",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "git diff origin/main --stat shows no change to docs/upstream-pins.md, .claude/skills/operate-microduck/SKILL.md or .github/workflows/tests.yml",
+        "pyproject.toml version differs from origin/main and CHANGELOG.md has a matching dated entry",
+        "All six gate commands exit 0 and their summary lines are pasted into the record's check-6 section"
+      ],
+      "deps": [
+        "t6",
+        "t7"
+      ],
+      "covers": [
+        "c18",
+        "h19",
+        "c7",
+        "h7",
+        "c9",
+        "h9",
+        "c10",
+        "h10"
+      ],
+      "instruction": ""
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "Neither the Jetson-index nor the cu129 venv may initialise warp on compute capability 11.0 (CUDA 12.9 predates sm_110; the JetPack 7 index's torch/warp versions are unread from here) - t5 then records a double failure and t7 keeps the unverified text; the plan still converges because a recorded failure is a valid tier-3 outcome",
+      "kind": "unknown_nonblocking",
+      "task_id": "t5",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "The JetPack 7 index may resolve a torch other than upstream's ==2.9.1 pin, forcing the local override to relax the pin; mjlab 1.3.0 / rsl_rl compatibility with that torch is unknown until sync",
+      "kind": "unknown_nonblocking",
+      "task_id": "t2",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r3",
+      "text": "Tiers 1-5 are on-box operator steps on a shared machine (lobes lowered, self-hosted runner present); they are serial by nature and should not be fanned out to parallel agents - only t6/t7 are file-disjoint repo edits",
+      "kind": "follow_up",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r4",
+      "text": "The hf CLI is absent and no HF session exists on Thor; the --dry-run half of check 5 may need 'uv tool install huggingface_hub' or a login, decided at t5",
+      "kind": "unknown_nonblocking",
+      "task_id": "t5",
+      "resolved": false,
+      "resolution": ""
+    }
+  ],
+  "obligations": []
+}

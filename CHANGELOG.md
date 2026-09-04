@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-09-04
+
+### Added
+
+- On-box verification on NVIDIA Jetson AGX Thor
+  (`docs/verification/2026-09-04-thor-sanity.md`): the six Spark checks run
+  headless on Thor at the same upstream pins — provisioning, the `--fake` live
+  suite (11 passed), the MuJoCo live suite (12 passed, walking still `xfail`),
+  the 64-env train smoke (`ok: true`, 144 s) and the HF Jobs dry run — with
+  the outputs excerpted unchanged (elisions marked), plus the devague frame,
+  spec and plan that drove it (`thor-sanity`).
+
+### Changed
+
+- `env doctor`'s `host_class` remediation on Jetson AGX Thor now states the
+  verified recipe instead of calling the path unverified: torch from NVIDIA's
+  `sbsa/cu130` index plus the `nvpl-blas`, `nvpl-lapack` and
+  `nvidia-cudss-cu13` wheels that wheel links but does not declare, via a
+  local override of the `microduck_rl` clone. `torch_source_applies` stays
+  `False` because upstream's `pytorch-cu129` source was never exercised there.
+  (`env/hosts.py`, `tests/test_hosts.py`).
+- `env doctor`'s `host_class` remediation on Jetson AGX Orin now states the
+  verified outcome from the Orin record instead of "unverified": GPU training
+  is not available there at this pin (the only torch 2.9.1 cp312 CUDA-13 wheel
+  has no `sm_87` kernels), while the sim, the fake body and the rules layer
+  work. Only an unidentified Jetson still reads "unverified".
+- `HostInfo.verified` points a verified host class at its on-box record — GB10
+  at the Spark record, Jetson AGX Thor and Jetson AGX Orin at theirs, every
+  other class `None` — and `env doctor` appends `verified on-box: …` to the
+  `host_class` line. All three boxes the CLI targets locally now carry their
+  evidence.
+- The Spark record's "Jetson Thor / AGX Orin — not attempted" bullet now links
+  the Thor record.
+
 ## [0.9.2] - 2026-09-04
 
 ### Added

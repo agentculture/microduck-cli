@@ -550,6 +550,8 @@ def _host_class_check(host: HostInfo | None) -> dict:
         f"host class: {host.host_class} ({host.display_name}); "
         f"torch source applies: {host.torch_source_applies}"
     )
+    if host.verified:
+        message += f"; verified on-box: {host.verified}"
     remediation = "" if host.torch_source_applies else (host.remediation or "")
     return {
         "id": "host_class",

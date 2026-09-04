@@ -1,0 +1,52 @@
+{
+  "plan_slug": "thor-sanity",
+  "schema_version": 2,
+  "created": "2026-09-04T05:31:24Z",
+  "updated": "2026-09-04T06:16:01Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "Tier 1 (t3, the --fake live suite) cannot run before t2: 'env up --fake' exits 2 with 'no onnxruntime shared object under microduck_rl/.venv' because robotd dlopens libonnxruntime from the RL venv for the ONNX policies even on the fake body. t3 now depends on t2 (serial after the sync), and spec claim c3's 'fake needs only cargo-built robotd' is wrong on this evidence; the record states the real prerequisite",
+      "task_ref": "t3",
+      "reason": "Observed on Thor at CLI 2b00480: first tier-1 run gave 1 failed, 10 errors, all from the bring-up refusal quoted above",
+      "affects": [
+        "t3",
+        "t2"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 1
+    },
+    {
+      "id": "d2",
+      "what": "Tiers 2 and 3 ran with lobes still up: 'free -g' showed 45-46 GB available before each, which the MuJoCo body (one env) and the 64-env smoke fit in, so the operator was not asked to lower lobes; the record states the free-RAM figures instead of a lowered-lobes figure",
+      "task_ref": "t4",
+      "reason": "Decision c20 planned for lobes to be lowered; on the box the headroom sufficed and pausing an autonomous run to ask would have blocked without need",
+      "affects": [
+        "t4",
+        "t5"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 2
+    },
+    {
+      "id": "d3",
+      "what": "hosts.py's _classify() is not byte-identical as honesty h8 required: one line inside it changed, the Thor branch now returns the new _THOR_VERIFIED_REMEDIATION constant instead of _UNVERIFIED_REMEDIATION (the Orin branch keeps the old one). No condition, host class, display name or torch_source_applies verdict changed; the diff's only other hunks are the module docstring and the new constant",
+      "task_ref": "t7",
+      "reason": "A per-board remediation needs the Thor branch to name a different constant; keeping the function byte-identical would have meant lying in the shared text or leaving Thor marked unverified after a passing smoke",
+      "affects": [
+        "t7"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 3
+    }
+  ],
+  "evidence": [],
+  "deltas": [],
+  "supersessions": []
+}
