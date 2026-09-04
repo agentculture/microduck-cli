@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-04T18:47:17Z",
-  "updated": "2026-09-04T19:03:13Z",
+  "updated": "2026-09-04T19:10:59Z",
   "claims": [
     {
       "id": "c1",
@@ -721,5 +721,123 @@
     }
   ],
   "lapses": [],
-  "obligations": []
+  "obligations": [
+    {
+      "id": "o1",
+      "claim_id": "c6",
+      "seam": "README.md mermaid fences",
+      "behavior": "each node and edge names something that exists in the code or the pins table",
+      "source_text": "README.md gains mermaid diagrams of what the CLI actually is: at minimum one topology diagram (agent or human -> microduck-cli -> JSON-RPC over a unix socket -> robotd -> fake / MuJoCo sim / real body) and one of the ONE 50 Hz tick seam (sense -> rules -> arbitrate -> compose -> sink, with the human gate withholding motion)",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o2",
+      "claim_id": "c7",
+      "seam": "every fenced microduck command",
+      "behavior": "resolves against the shipped --help at the version README names",
+      "source_text": "Prose gives way to commands: every section leads with a runnable block, and every command in every block is checked against the shipped --help output at the version README names",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o3",
+      "claim_id": "c8",
+      "seam": "every fenced capture block",
+      "behavior": "is byte-identical to its source record modulo the marked ~ substitution, and carries box + CLI commit",
+      "source_text": "README.md carries live proofs \u2014 short verbatim captures copied from docs/verification/, each stamped with the box, the upstream pins, the CLI commit and the microduck-cli version it was recorded at, so a reader can tell when a capture has aged",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o4",
+      "claim_id": "c9",
+      "seam": "the what-it-is-not section",
+      "behavior": "states all five limits, each traceable to the file that records it",
+      "source_text": "README.md states what microduck-cli is and is not in one place a skimmer cannot miss: sim-first with no physical duck ever driven from it, locomotion NOT achieved at the current pin, the API-16 deviation d1 that leaves the policy channel unavailable, neurosymbolic-system named as a future import and not a dependency, and zero third-party runtime dependencies",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o5",
+      "claim_id": "c10",
+      "seam": "every repo link and the citation tables",
+      "behavior": "resolves, and upstream commits are linked through docs/upstream-pins.md rather than duplicated",
+      "source_text": "README.md cites its sources in two tables: the upstream pins it is validated against (pollen-robotics/microduck sim-remote-io, microduck_rl develop, with commits) and the AgentCulture siblings it composes (neurosymbolic-system, reachy-mini-cli, arm101-cli, teken, devague), each with the one thing taken from it and the cite-don't-import policy stated once",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o6",
+      "claim_id": "c11",
+      "seam": "the install block",
+      "behavior": "the named package installs from PyPI and the named entry point runs",
+      "source_text": "Install leads with the published package (uv tool install microduck-cli, or uvx microduck-cli) since 0.9.3 is on PyPI today, with the from-source uv sync path second for contributors",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o7",
+      "claim_id": "c12",
+      "seam": "the branch diff",
+      "behavior": "lists README.md, CHANGELOG.md and pyproject.toml and nothing else",
+      "source_text": "This work changes README.md only, plus the version bump and CHANGELOG entry CI requires; no module under microduck_cli/, no test, no skill and no docs/verification record is touched",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o8",
+      "claim_id": "c21",
+      "seam": "the three-box table",
+      "behavior": "names Thor override with microduck_rl#39 open, and Orin missing sm_87 kernels",
+      "source_text": "The proof section names all three boxes it was verified on \u2014 DGX Spark (GB10), Jetson AGX Thor and Jetson AGX Orin \u2014 and carries each box's caveat in the same table as its result: Thor's tiers ran on an uncommitted local torch override whose upstream fix is still open as pollen-robotics/microduck_rl#39 (issue #38), so env doctor's rl_pinned_commit fails there by design until it merges and this repo re-pins; Orin's SBSA torch wheel carries no sm_87 kernels, so GPU training is unavailable there and only checks 1-4 pass",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o9",
+      "claim_id": "c22",
+      "seam": "README.md as published text",
+      "behavior": "contains no box home directory and no account name",
+      "source_text": "Captures pasted into README.md are scrubbed of identity before they ship: the three records contain box home directories (/home/spark, /home/thor, /home/orin) and the operator's Hugging Face namespace (--namespace orinachum), and README.md is the PyPI long description, so a verbatim paste republishes them to an external index",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o10",
+      "claim_id": "c26",
+      "seam": "every fenced command form",
+      "behavior": "uses one invocation form, reconciled with docs/operating-the-duck.md",
+      "source_text": "README.md uses one command form throughout and reconciles it with docs/operating-the-duck.md, which writes every command as 'uv run microduck ...' while an install-first README would write bare 'microduck ...'",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o11",
+      "claim_id": "c27",
+      "seam": "README what-it-is-not vs the CLI own learn/explain text",
+      "behavior": "makes no contradictory claim about what has been driven",
+      "source_text": "README.md's honesty section may extend but must not contradict the CLI's own sim-first statements, which already ship inside the binary (microduck_cli/cli/_commands/learn.py line 25 and explain/catalog.py line 79)",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o12",
+      "claim_id": "c16",
+      "seam": "README.md rendered by readme_renderer (the PyPI path)",
+      "behavior": "the flow stays legible when the mermaid fences render as plain code",
+      "source_text": "GitHub renders mermaid fences and the repo's .markdownlint-cli2.yaml (default true, MD013 off, no MD040 override) accepts one, so a diagram adds no lint exception \u2014 but pyproject.toml line 5 makes README.md the PyPI long description and PyPI's renderer shows a mermaid fence as a plain code block, so every diagram needs a text equivalent beside it",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o13",
+      "claim_id": "c19",
+      "seam": "README.md as a standalone artifact",
+      "behavior": "answers the four reader questions; markdownlint clean; command check zero misses",
+      "source_text": "A reader given only README.md can name what the CLI talks to and how, run one command block start to finish without opening another file, point at one verbatim capture and say which box and pin it came from, and list what is not verified; markdownlint-cli2 exits 0 on README.md; a script matches every fenced command against --help with zero misses",
+      "origin": "llm",
+      "status": "proposed"
+    }
+  ]
 }

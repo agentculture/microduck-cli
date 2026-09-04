@@ -16,7 +16,8 @@ flowchart LR
 The CLI opens **one** unix socket, speaks the daemon's JSON-RPC protocol, and never
 links a robotics SDK: `dependencies = []` in `pyproject.toml` is the whole runtime
 dependency list. Everything below was run at **microduck-cli 0.9.4** and checked
-against that version's own `--help`.
+against that version's own `--help`, against the real daemon and the MuJoCo
+simulation on three machines.
 
 ## Install
 
@@ -54,19 +55,17 @@ environment error.
 
 **Is not.**
 
-- **No physical MicroDuck has ever been driven from this CLI.** Every verb is
-  exercised against `robotd --fake`, the MuJoCo body, and an in-process fake daemon
-  (`tests/fake_robotd.py`). The CLI says so itself: `microduck learn`.
+- **No physical MicroDuck has ever been driven from this CLI.** What every verb *is*
+  exercised against is the **MuJoCo simulation** — the real `robotd --sim` daemon
+  driving `microduck_rl`'s `duck-body`, a duck that stands, holds 50 Hz and runs
+  skills — plus a `robotd --fake` body and an in-process fake daemon
+  (`tests/fake_robotd.py`) for the unit suite. The CLI says so itself: `microduck learn`.
 - **Locomotion is not achieved at the current pin.** `duck move` reaches the daemon
   and the walk network is selected, but its joint targets are static — the duck
   stands where it is. Recorded in full below.
 - **The policy channel is unavailable on this daemon** (approved deviation `d1`):
   `robot.policies` / `robot.loadPolicy` / `robot.setSkill` need API ≥ 18, the pinned
   `sim-remote-io` build answers API 16, and those verbs exit 2 saying exactly that.
-- **[`neurosymbolic-system`](https://github.com/agentculture/neurosymbolic-system) is
-  not a dependency.** The runtime this CLI is meant to import is still a bare
-  scaffold, so the tick engine lives in `microduck_cli/behavior/` for now, written
-  behind the seams that extraction will need ([`CLAUDE.md`](CLAUDE.md), decision c20).
 
 **If you do have a duck:** motion verbs are gated. On a pipe without `--apply` they
 print a dry-run plan and move nothing; on a TTY they ask. And `duck relax` drops
@@ -87,11 +86,12 @@ microduck env doctor      # 13 checks: clone pins, cargo, daemons built, RL venv
 Then, in order — this numbered walkthrough is the plain-text equivalent of the
 diagrams above and below, for readers whose renderer shows a `mermaid` fence as code:
 
-1. **Bring up a duck.** `--fake` needs no simulator; swap in `--sim --headless` for
-   the MuJoCo body.
+1. **Bring up a duck.** `--sim` is the path the verification records below cover —
+   the real daemon driving the MuJoCo body. Drop `--headless` to watch it in the
+   viewer, or use `--fake` for a body that needs no simulator at all.
 
    ```bash
-   microduck env up --fake
+   microduck env up --sim --headless
    ```
 
 2. **Ask the robot for its own verdict.**
@@ -225,15 +225,21 @@ second process would be two authors fighting over every channel — hence one lo
 one seam, riders composed onto it:
 
 ```mermaid
-flowchart LR
-  P["sense providers"] --> SN["ONE Sense<br/>snapshot per tick"]
-  SN --> B["behaviours + rules<br/>one contribution each"]
-  B --> AR["arbitrate<br/>one owner per channel"]
-  AR --> CO["compose the pose"]
-  CO --> HG{"is a human<br/>driving?"}
-  HG -- "yes" --> WH["MOTION withheld"]
-  HG -- "no" --> SK["TargetSink<br/>→ robotd, exactly once"]
-  SK --> TS["tick_seam riders<br/>(after the write)"]
+flowchart TB
+  subgraph read ["1 · read — ONE snapshot per tick"]
+    direction LR
+    P["sense providers"] --> SN["Sense"]
+  end
+  subgraph decide ["2 · decide — pure, no I/O"]
+    direction LR
+    B["behaviours + rules<br/>one contribution each"] --> AR["arbitrate<br/>one owner per channel"] --> CO["compose the pose"]
+  end
+  subgraph write ["3 · write — exactly once"]
+    direction LR
+    HG{"human<br/>driving?"} -- "yes" --> WH["MOTION withheld"]
+    HG -- "no" --> SK["TargetSink → robotd"]
+  end
+  read --> decide --> write --> TS["4 · tick_seam riders — after the write"]
 ```
 
 Per tick, in this order: read one `Sense`; ask each live behaviour once; arbitrate a
@@ -266,7 +272,6 @@ inventing a fourth architecture.
 
 | Repo | Role here |
 |---|---|
-| [`neurosymbolic-system`](https://github.com/agentculture/neurosymbolic-system) | The runtime to **import** once it ships — not a dependency today; `microduck_cli/behavior/` holds the tick engine behind extraction-ready seams. |
 | [`reachy-mini-cli`](https://github.com/agentculture/reachy-mini-cli) | The architecture: noun groups with engine logic in sibling packages, ONE tick seam for every sense, the single-SDK-owner model. |
 | [`arm101-cli`](https://github.com/agentculture/arm101-cli) | The hardware-safety patterns: gated motion (dry-run / TTY confirm / `--apply`), release-on-abnormal-exit, hardware deps behind an extra. |
 | [`teken`](https://github.com/agentculture/teken) | The agent-first rubric (`teken cli doctor . --strict`) that gates CI. |

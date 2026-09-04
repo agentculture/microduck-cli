@@ -1,0 +1,361 @@
+{
+  "plan_slug": "readme-as-proof",
+  "schema_version": 2,
+  "created": "2026-09-04T19:11:29Z",
+  "updated": "2026-09-04T19:18:18Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "Every mention of neurosymbolic-system removed from README.md, contradicting confirmed claims c9 (five limits, one being the not-a-dependency statement) and c10 (the sibling table)",
+      "task_ref": "t3",
+      "reason": "User direction mid-run: \"no need to mention neurosymbolic-system at all\". The README no longer names it, so the what-it-is-not section states four limits rather than the five h7 enumerates, and the sibling table has four rows rather than five",
+      "affects": [
+        "c9",
+        "c10"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 7
+    },
+    {
+      "id": "d2",
+      "what": "The what-it-is-not opener and walkthrough step 1 now lead with the MuJoCo simulation (the real robotd --sim driving microduck_rl duck-body) rather than robotd --fake; the intro names the real daemon and the sim on three machines",
+      "task_ref": "t3",
+      "reason": "User direction mid-run: \"We ran it through the simulation, not just fake. So it was validated against that.\" The prior wording listed the fake body first and read as if only the fake was exercised",
+      "affects": [
+        "c9"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 8
+    },
+    {
+      "id": "d3",
+      "what": "The tick-engine diagram redrawn from a wide flowchart LR into a vertical flowchart TB of four labelled layers (read / decide / write / after the write); the topology diagram reverted to and left exactly as committed",
+      "task_ref": "t1",
+      "reason": "User direction mid-run: the tick-engine diagram was \"too long to read (Appears small) vertical, and maybe layers could work\". Rendered and checked at mermaid.live before and after; the user explicitly kept the committed topology diagram",
+      "affects": [
+        "c6"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 9
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e1",
+      "obligation_ref": "o2",
+      "test_ref": "scratchpad script: extract every fenced microduck path, run `uv run microduck <path> --help`",
+      "behavior_text": "asserts each of the 9 fenced command paths exits 0 under its own --help",
+      "contract_text": "every fenced command resolves against the shipped --help at the version README names",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "ran at HEAD: paths=9 misses=0. NOTE: this repo has no @pytest.mark.behavioral marker and no tests/behavioral/ folder, so this and every check below is an ad-hoc agent-side script, not a committed suite \u2014 it will not re-run on a future PR",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:10:17+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 1
+    },
+    {
+      "id": "e2",
+      "obligation_ref": "o3",
+      "test_ref": "scratchpad script: diff each fenced text block line-by-line against the three docs/verification records",
+      "behavior_text": "asserts every capture line appears verbatim in a record, allowing only the ~ home-directory substitution",
+      "contract_text": "every capture is byte-identical to its source modulo marked elision and carries box, CLI commit and version",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "ran at HEAD: blocks=4 differing_lines=0; each block is captioned with its box and CLI commit (420dc5c Spark, 3c09fb0 Orin, 2b00480 Thor)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:10:17+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 2
+    },
+    {
+      "id": "e3",
+      "obligation_ref": "o5",
+      "test_ref": "curl -o /dev/null -w %{http_code} over every https link, plus a filesystem existence test for every relative link",
+      "behavior_text": "asserts all 10 external repo/issue links answer 200 and all 12 relative paths exist",
+      "contract_text": "every repo link resolves and upstream commits are linked through docs/upstream-pins.md rather than duplicated",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "ran at HEAD: 10/10 external links 200, 12/12 relative targets exist, and no upstream commit sha is duplicated in README (the pins table is linked)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:10:17+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 3
+    },
+    {
+      "id": "e4",
+      "obligation_ref": "o6",
+      "test_ref": "uvx --from microduck-cli==0.9.3 microduck --version && microduck whoami",
+      "behavior_text": "asserts the published package installs from PyPI and the named console script runs",
+      "contract_text": "install leads with the published package and the command shown works",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "ran at HEAD in a clean uvx env: printed \"microduck-cli 0.9.3\" and a whoami payload. CAVEAT: verified against 0.9.3, the currently published release; 0.9.4 (this PR) is not on PyPI until merge, and README names 0.9.4",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:10:17+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 4
+    },
+    {
+      "id": "e5",
+      "obligation_ref": "o9",
+      "test_ref": "grep -n \"/home/\\|orinachum\" README.md",
+      "behavior_text": "asserts no box home directory and no account name appears in the published text",
+      "contract_text": "captures are scrubbed of identity before they ship, because README is the PyPI long description",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "ran at HEAD: 0 hits",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:10:17+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 5
+    },
+    {
+      "id": "e6",
+      "obligation_ref": "o12",
+      "test_ref": "uv run --with readme-renderer[md] python -m readme_renderer README.md, then read the HTML with tags stripped",
+      "behavior_text": "asserts the six-step walkthrough is legible when the mermaid fences degrade to plain code blocks",
+      "contract_text": "the numbered walkthrough is the single text fallback for the PyPI render",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "ran at HEAD: 21088 bytes rendered; the numbered walkthrough and its commands read correctly with the diagrams stripped; both mermaid fences do render as raw source on PyPI, which is the accepted cost of the q1 decision",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:10:17+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 6
+    },
+    {
+      "id": "e7",
+      "obligation_ref": "o7",
+      "test_ref": "git diff --name-only origin/main..HEAD",
+      "behavior_text": "asserts the branch touches only the files the boundary named",
+      "contract_text": "the branch diff lists README.md, CHANGELOG.md and pyproject.toml and nothing else",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "ran at HEAD and FAILED as h10 is literally worded: the diff also carries uv.lock (the version bump propagating), .devague/current, .devague/frames/readme-as-proof.json and docs/specs/2026-09-04-readme-as-proof.md. No module, test, skill or verification record is touched, so c12 as written holds; h10 enumerated three paths and four more are present",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-04T22:18:02+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 10
+    },
+    {
+      "id": "e8",
+      "obligation_ref": "o1",
+      "test_ref": "manual read of each mermaid node against microduck_cli/behavior/engine.py, duck/addressing.py, ipc/proto.py and docs/upstream-pins.md; both fences rendered at mermaid.live",
+      "behavior_text": "asserts every node and edge names something that exists in the code or the pins table, and that both diagrams render",
+      "contract_text": "each diagram transcribes the code rather than inventing a topology",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "read node by node: the socket path matches DEFAULT_STATE_DIR in duck/addressing.py, API 16 matches the pins table, and the tick order matches engine.py. Both fences rendered clean at mermaid.live v11.17.2 and were screenshotted. NOT machine-checked - no test asserts a diagram against the code, so this ages like the captures",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:18:02+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 11
+    },
+    {
+      "id": "e9",
+      "obligation_ref": "o4",
+      "test_ref": "manual read of the what-it-is-not section against learn.py, the d1 note and docs/verification",
+      "behavior_text": "asserts each stated limit traces to the file that records it",
+      "contract_text": "the section states its limits, each traceable to the file that records it",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "AMENDED by deviation d1: the section now states four limits, not the five h7 enumerated - the neurosymbolic-system item was removed on user direction. The four that remain (no physical duck, no locomotion at the pin, API-16 deviation d1, and the gate/relax warning) each trace to a file",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:18:02+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 12
+    },
+    {
+      "id": "e10",
+      "obligation_ref": "o8",
+      "test_ref": "manual diff of the three-box table against the box tables and What-was-NOT-verified sections of the three records; gh view of microduck_rl#39",
+      "behavior_text": "asserts each box row carries the caveat its record states, and that the linked upstream PR is still open",
+      "contract_text": "the table names Thor override with microduck_rl#39 open, and Orin missing sm_87 kernels",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "each caveat matches its record verbatim in substance; microduck_rl#39 answered 200 and is open at check time. It may merge at any point, which would make the row stale",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:18:02+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 13
+    },
+    {
+      "id": "e11",
+      "obligation_ref": "o10",
+      "test_ref": "grep of every fenced command plus a read of docs/operating-the-duck.md",
+      "behavior_text": "asserts one invocation form throughout, with the uv run form reconciled once",
+      "contract_text": "README uses one command form and reconciles it with the walkthrough doc",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "every fenced command uses the bare microduck form; the Install section states once that uv run microduck is the checkout equivalent and names docs/operating-the-duck.md as the doc that uses it",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:18:02+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 14
+    },
+    {
+      "id": "e12",
+      "obligation_ref": "o11",
+      "test_ref": "read of learn.py _PURPOSE (lines 20-26) and explain/catalog.py (lines 79-83) in full against the README section",
+      "behavior_text": "asserts the README makes no claim the CLI own text contradicts",
+      "contract_text": "README may extend but must not contradict the CLI own sim-first statements",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "both in-CLI texts say sim-first, no physical MicroDuck driven, exercised against robotd --fake/--sim and the in-process fake; the README says the same and adds the sim emphasis from deviation d2. No contradiction",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:18:02+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 15
+    },
+    {
+      "id": "e13",
+      "obligation_ref": "o13",
+      "test_ref": "markdownlint-cli2 README.md, the command check, the capture diff, and the readme_renderer probe",
+      "behavior_text": "asserts the mechanical half of the success signal",
+      "contract_text": "a reader answers the four questions; markdownlint clean; command check zero misses",
+      "evidence_type": "observation",
+      "strength": "coverage",
+      "strength_basis": "the mechanical assertions all pass. The human half - a reader with no other context answering the four questions - was NOT performed: no reader was asked. Filed at coverage strength for that reason, not execution",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:18:02+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 16
+    },
+    {
+      "id": "e14",
+      "obligation_ref": "o2",
+      "test_ref": "the command check, capture diff, identity grep, markdownlint and readme_renderer probe, all re-run after the d1/d2/d3 amendments",
+      "behavior_text": "asserts the amended README still satisfies every mechanical obligation",
+      "contract_text": "the amendments did not break a previously passing check",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "e1-e6 were filed at commit 6501d27, before the three deviations amended the README; every one of those checks was re-run on the amended working tree with identical results (paths=9 misses=0, blocks=4 differing_lines=0, identity hits=0, neurosymbolic mentions=0, markdownlint 0 errors, readme_renderer exit 0)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:18:18+03:00",
+        "commit": "6501d27"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 17
+    }
+  ],
+  "deltas": [
+    {
+      "id": "b1",
+      "kind": "removed",
+      "behavior_text": "README.md no longer names neurosymbolic-system anywhere: the not-a-dependency limit and the sibling-table row are gone, so the what-it-is-not section states four limits where the confirmed honesty condition h7 enumerated five",
+      "caused_by": [
+        "d1"
+      ],
+      "evidence_refs": [
+        "e9"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b2",
+      "kind": "amended",
+      "behavior_text": "The what-it-is-not opener and the walkthrough step 1 lead with the MuJoCo simulation rather than the fake body, and the intro says the evidence comes from the real daemon and the sim on three machines",
+      "caused_by": [
+        "d2"
+      ],
+      "evidence_refs": [
+        "e9"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b3",
+      "kind": "amended",
+      "behavior_text": "The tick-engine diagram is a vertical four-layer flowchart TB instead of a wide flowchart LR; the topology diagram is byte-identical to the committed version",
+      "caused_by": [
+        "d3"
+      ],
+      "evidence_refs": [
+        "e8"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    }
+  ],
+  "supersessions": []
+}
