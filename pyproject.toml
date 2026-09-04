@@ -1,7 +1,7 @@
 [project]
 name = "microduck-cli"
 version = "0.9.4"
-description = "Agent-agnostic CLI for controlling the MicroDuck robot. Any agent, any human, one CLI. Built on the neurosymbolic-system runtime and following the reachy-mini-cli architecture."
+description = "Agent-agnostic CLI for controlling the MicroDuck robot. Any agent, any human, one CLI. Sim-first: every verb is exercised against the real robotd daemon and the MuJoCo simulation."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"

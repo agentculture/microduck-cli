@@ -2,7 +2,7 @@
   "plan_slug": "readme-as-proof",
   "schema_version": 2,
   "created": "2026-09-04T19:11:29Z",
-  "updated": "2026-09-04T19:18:18Z",
+  "updated": "2026-09-04T19:21:23Z",
   "deviations": [
     {
       "id": "d1",
@@ -43,6 +43,19 @@
       "status": "approved",
       "classification": "acceptable",
       "seq": 9
+    },
+    {
+      "id": "d4",
+      "what": "pyproject.toml description rewritten to drop neurosymbolic-system and name the sim-first evidence, extending d1 beyond README.md and widening boundary c12 by one line",
+      "task_ref": "t3",
+      "reason": "User direction after the validate-delivery report: pyproject.toml description is the subtitle PyPI renders directly above the README, so leaving neurosymbolic-system there would contradict the README on the same page",
+      "affects": [
+        "c12"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 18
     }
   ],
   "evidence": [
@@ -61,7 +74,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 1
     },
@@ -80,7 +93,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 2
     },
@@ -99,7 +112,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 3
     },
@@ -118,7 +131,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 4
     },
@@ -137,7 +150,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 5
     },
@@ -156,7 +169,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 6
     },
@@ -175,7 +188,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 10
     },
@@ -194,7 +207,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 11
     },
@@ -213,7 +226,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 12
     },
@@ -232,7 +245,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 13
     },
@@ -251,7 +264,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 14
     },
@@ -270,7 +283,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 15
     },
@@ -289,7 +302,7 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 16
     },
@@ -308,9 +321,47 @@
         "commit": "6501d27"
       },
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false,
       "seq": 17
+    },
+    {
+      "id": "e15",
+      "obligation_ref": "o4",
+      "test_ref": "recount of the what-it-is-not section after d1, against h7 item by item",
+      "behavior_text": "asserts exactly which of the five enumerated limits survive and where each now lives",
+      "contract_text": "the section states its limits, each traceable to the file that records it",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "CORRECTS e9, whose basis said \"four limits\". Item by item against h7: no-physical-duck (bullet 1), no-locomotion-at-the-pin (bullet 2), API-16 deviation d1 (bullet 3) \u2014 three bullets, not four; the gate/relax warning is a following paragraph; zero third-party runtime dependencies survives but was relocated to the intro paragraph; the neurosymbolic-system item is gone (d1). So four of h7 five survive, one of them outside the section",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:21:23+03:00",
+        "commit": "2777532"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 19
+    },
+    {
+      "id": "e16",
+      "obligation_ref": "o7",
+      "test_ref": "git diff --name-only origin/main..HEAD, re-run after deviation d4",
+      "behavior_text": "asserts the branch touches only the files the boundary named",
+      "contract_text": "the branch diff lists README.md, CHANGELOG.md and pyproject.toml and nothing else",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "RE-VALIDATES e7 after d4 as the staleness check demanded. Still failing, and now wider: README.md, CHANGELOG.md, pyproject.toml, uv.lock, docs/specs/2026-09-04-readme-as-proof.md and five .devague/ paths (frame, plan, delivery, current, current_plan). c12 substance holds \u2014 no module, test, skill or verification record is touched \u2014 but h10 literal enumeration is off by six paths",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-04T22:21:23+03:00",
+        "commit": "2777532"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 20
     }
   ],
   "deltas": [
@@ -325,7 +376,7 @@
         "e9"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -339,7 +390,7 @@
         "e9"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     },
     {
@@ -353,7 +404,7 @@
         "e8"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "superseded": false
     }
   ],
