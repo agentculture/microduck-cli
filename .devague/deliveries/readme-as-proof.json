@@ -2,7 +2,7 @@
   "plan_slug": "readme-as-proof",
   "schema_version": 2,
   "created": "2026-09-04T19:11:29Z",
-  "updated": "2026-09-04T19:21:23Z",
+  "updated": "2026-09-04T19:32:16Z",
   "deviations": [
     {
       "id": "d1",
@@ -362,6 +362,25 @@
       "status": "approved",
       "superseded": false,
       "seq": 20
+    },
+    {
+      "id": "e17",
+      "obligation_ref": "o4",
+      "test_ref": "the full check set re-run after the prose-compression pass",
+      "behavior_text": "asserts the compressed README still satisfies every mechanical obligation",
+      "contract_text": "compressing the prose did not break a previously passing check",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "paths=9 misses=0, blocks=4 differing_lines=0, 0 identity/neurosymbolic hits, markdownlint 0 errors, readme_renderer ok, 287 lines. COST: the compression dropped three traceability anchors the honesty conditions leaned on \u2014 tests/fake_robotd.py, the \"the CLI says so itself: microduck learn\" pointer, and microduck_cli/behavior/release.py. The claims still hold in substance; a reader can no longer follow two of them to the file that records them",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T22:32:16+03:00",
+        "commit": "fab427c"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 21
     }
   ],
   "deltas": [

@@ -124,6 +124,17 @@ every check below is an ad-hoc script run once — none of it re-runs on a futur
 | The branch touches only the three paths `h10` enumerated | **unverified — FAILING** | `e7`, `e16` — six additional paths present; not claimed done |
 | A reader with no other context can answer the four questions | **unverified** | `e13`, coverage strength — the mechanical half passes; **no reader was ever asked** |
 
+## Post-summary amendment
+
+A prose-compression pass (user direction: *"All could be reduced, simplified and
+ease on a reader who just wants an understanding"*) shortened the intro, the
+Install prose and the what-it-is / what-it-is-not sections, and split the latter
+into two headings. Every mechanical check was re-run with identical results
+(`e17`). It cost three traceability anchors the honesty conditions leaned on:
+`tests/fake_robotd.py`, the "the CLI says so itself" pointer to `microduck learn`,
+and `microduck_cli/behavior/release.py`. The claims still hold; two of them are no
+longer followable to the file that records them.
+
 ## Remaining Work / Follow-up
 
 - **`h10`'s enumeration is wrong, not the work.** Either amend it to name the

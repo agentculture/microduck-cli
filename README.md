@@ -13,10 +13,9 @@ flowchart LR
   D -. "not driven yet" .-> R["a real MicroDuck"]
 ```
 
-The CLI opens **one** unix socket, speaks the daemon's JSON-RPC protocol, and never
-links a robotics SDK: `dependencies = []` in `pyproject.toml` is the whole runtime
-dependency list. Everything below was run at **microduck-cli 0.9.4** and checked
-against that version's own `--help`, against the real daemon and the MuJoCo
+One unix socket, the daemon's own JSON-RPC, no robotics SDK — `dependencies = []`
+is the whole runtime dependency list. Everything below was checked at
+**microduck-cli 0.9.4** against its own `--help`, the real daemon, and the MuJoCo
 simulation on three machines.
 
 ## Install
@@ -26,51 +25,41 @@ uv tool install microduck-cli     # or: uvx microduck-cli whoami
 microduck --version
 ```
 
-Two console scripts install and are the same entry point: `microduck` (short) and
-`microduck-cli` (the distribution name, and the name the CLI prints in its own
-output). From a checkout, every command below also works as `uv run microduck …` —
-that is the form [`docs/operating-the-duck.md`](docs/operating-the-duck.md) uses:
+`microduck` and `microduck-cli` are the same entry point. From a checkout, prefix
+with `uv run` — the form [`docs/operating-the-duck.md`](docs/operating-the-duck.md) uses:
 
 ```bash
 git clone https://github.com/agentculture/microduck-cli && cd microduck-cli
 uv sync && uv run microduck whoami
 ```
 
-Python ≥ 3.12. The verified platform is **Linux on aarch64** (see [Proof](#proof--three-boxes));
-no x86_64 or macOS run is on record.
+Python ≥ 3.12, Linux on aarch64 — the only platform on record (see [Proof](#proof--three-boxes)).
 
-## What it is (and is not)
+## What it is
 
-**Is.** Five noun groups, every verb reachable with `--json`, results on stdout and
-diagnostics on stderr, never mixed. Exit codes: `0` success, `1` user error, `2`
-environment error.
+Five noun groups. Every verb takes `--json`; results go to stdout, diagnostics to
+stderr, never mixed. Exit `0` success, `1` your error, `2` the environment's.
 
-| Noun | Verbs |
-|------|-------|
-| `env` | `overview` `doctor` `up` `down` `status` `hosts` — bring up, diagnose and tear down the simulator (`duck-body` + `robotd --sim`) or a `robotd --fake` stand-in. |
-| `duck` | `overview` `health` `version` `monitor` `init` `relax` `enable` `do` `mode` `look` `stop` `move` `quack` `configure` `record` — operate one duck, in `robotctl`'s own words. |
-| `policy` | `overview` `list` `load` `reset` `add` `remove` `search` `check` `update` `pad` `smoke` `train` `play` `export` `publish` `infer` `install` — the policy lifecycle plus the `microduck_rl` train lane. |
-| `rules` | `overview` `list` `check` `engine` `intent` — the data-only rules layer and the one 50 Hz tick engine that evaluates it. |
-| `cli` | `overview` — CLI-surface introspection; the agent front door is `microduck learn` and `microduck explain <path>`. |
+| Noun | What it does | Verbs |
+|------|--------------|-------|
+| `env` | start, check and stop the stack | `overview` `doctor` `up` `down` `status` `hosts` |
+| `duck` | operate one duck, in `robotctl`'s words | `overview` `health` `version` `monitor` `init` `relax` `enable` `do` `mode` `look` `stop` `move` `quack` `configure` `record` |
+| `policy` | the policy lifecycle and the `microduck_rl` train lane | `overview` `list` `load` `reset` `add` `remove` `search` `check` `update` `pad` `smoke` `train` `play` `export` `publish` `infer` `install` |
+| `rules` | the data-only rules layer and its 50 Hz tick engine | `overview` `list` `check` `engine` `intent` |
+| `cli` | introspection — agents start at `microduck learn` / `explain` | `overview` |
 
-**Is not.**
+## What it is not
 
-- **No physical MicroDuck has ever been driven from this CLI.** What every verb *is*
-  exercised against is the **MuJoCo simulation** — the real `robotd --sim` daemon
-  driving `microduck_rl`'s `duck-body`, a duck that stands, holds 50 Hz and runs
-  skills — plus a `robotd --fake` body and an in-process fake daemon
-  (`tests/fake_robotd.py`) for the unit suite. The CLI says so itself: `microduck learn`.
-- **Locomotion is not achieved at the current pin.** `duck move` reaches the daemon
-  and the walk network is selected, but its joint targets are static — the duck
-  stands where it is. Recorded in full below.
-- **The policy channel is unavailable on this daemon** (approved deviation `d1`):
-  `robot.policies` / `robot.loadPolicy` / `robot.setSkill` need API ≥ 18, the pinned
-  `sim-remote-io` build answers API 16, and those verbs exit 2 saying exactly that.
+- **It has never driven a real duck.** Every verb is exercised against the MuJoCo
+  simulation — the real `robotd --sim` daemon driving a duck that stands, holds
+  50 Hz and runs skills — plus a `--fake` body for the unit suite.
+- **It cannot walk yet.** `duck move` reaches the daemon and selects the walk
+  network, but the joint targets come back static. [Details below](#not-verified).
+- **It cannot load policies on this daemon.** `robot.loadPolicy` and friends need
+  API ≥ 18; the pinned build answers API 16, and those verbs say so and exit 2.
 
-**If you do have a duck:** motion verbs are gated. On a pipe without `--apply` they
-print a dry-run plan and move nothing; on a TTY they ask. And `duck relax` drops
-torque — a duck with no torque **falls over**. `microduck_cli/behavior/release.py`
-deliberately never sends `robot.relax`, not even on a crash.
+**If you do have a duck:** motion is gated — no `--apply`, no movement — and
+`duck relax` drops torque, which makes the duck **fall over**.
 
 ## Try it in simulation
 
