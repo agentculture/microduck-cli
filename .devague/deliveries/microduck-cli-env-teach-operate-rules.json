@@ -2,7 +2,7 @@
   "plan_slug": "microduck-cli-env-teach-operate-rules",
   "schema_version": 2,
   "created": "2026-09-03T19:58:22Z",
-  "updated": "2026-09-03T22:16:39Z",
+  "updated": "2026-09-03T23:34:51Z",
   "deviations": [
     {
       "id": "d1",
@@ -611,6 +611,60 @@
       "evidence_refs": [
         "e24"
       ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b10",
+      "kind": "amended",
+      "behavior_text": "Review wave (PR #3): 'rules engine start' and 'rules intent' (spooling into a live engine) go through the same consent gate as every mover (TTY prompt / dry-run on a pipe / --apply); 'engine start' claims <state>/engine.lock, waits for the child's heartbeat, and logs the child to <state>/engine.log",
+      "caused_by": [
+        "c7",
+        "c24",
+        "c32"
+      ],
+      "evidence_refs": [],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b11",
+      "kind": "amended",
+      "behavior_text": "Review wave (PR #3): 'duck record' opens its own links for pad.input and tof.stream (DUCK_PAD_SOCKET / <name>-tof.sock) and writes frames in reader arrival order from a bounded notification queue; absent sources are named drops",
+      "caused_by": [
+        "c41"
+      ],
+      "evidence_refs": [],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b12",
+      "kind": "amended",
+      "behavior_text": "Review wave (PR #3): the smoke gate compares the recorded RL commit with the checkout's HEAD; 'env up' tears down what it started on a failed start; rules refuse non-finite numbers; sense booleans are strict; a mode rule reaches robot.setMode; repeated skills are re-sent after the owner expires",
+      "caused_by": [
+        "c8",
+        "c22",
+        "c12",
+        "c23"
+      ],
+      "evidence_refs": [],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b13",
+      "kind": "amended",
+      "behavior_text": "Review wave (PR #3, SonarCloud): 'duck quack' in text mode crashed on a mis-called emit_result after the sound had gone out (exit 1 for a quack that happened) \u2014 fixed with a regression test; SignalExit now derives from Exception and is re-raised through TickBus isolation so a SIGTERM inside a driver still unwinds the loop",
+      "caused_by": [
+        "c6",
+        "c35"
+      ],
+      "evidence_refs": [],
       "origin": "llm",
       "status": "proposed",
       "superseded": false

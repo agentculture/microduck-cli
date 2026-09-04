@@ -1,6 +1,6 @@
 [project]
 name = "microduck-cli"
-version = "0.9.0"
+version = "0.9.1"
 description = "Agent-agnostic CLI for controlling the MicroDuck robot. Any agent, any human, one CLI. Built on the neurosymbolic-system runtime and following the reachy-mini-cli architecture."
 readme = "README.md"
 license = "Apache-2.0"
