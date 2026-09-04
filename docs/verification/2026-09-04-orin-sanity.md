@@ -7,7 +7,10 @@ record), re-run on a Jetson AGX Orin — the host the Spark record's
 Planned as [`docs/plans/2026-09-04-orin-sanity.md`](../plans/2026-09-04-orin-sanity.md)
 from the challenged spec
 [`docs/specs/2026-09-04-orin-sanity.md`](../specs/2026-09-04-orin-sanity.md).
-Outputs are pasted as produced; nothing here was smoothed.
+Outputs are quoted from the run's logs with every value unchanged; long JSON
+payloads are condensed with explicit `…`/`{...}` elision markers and
+`#`-comments added beside (never inside) the quoted values — nothing was
+smoothed, and the uncondensed logs are in the session ledger named at the end.
 
 ## The box and the pins
 
@@ -206,7 +209,10 @@ not installed on this box (command not found) — not run locally
 ```
 
 **Pass** for every gate present on the box; markdownlint is recorded as not
-installed rather than silently skipped (CI still runs it).
+installed rather than silently skipped (CI still runs it). The gates above
+ran at `3c09fb0` (the CLI state every check operated); after this record and
+the 0.9.2 bump landed on the PR branch, the full suite was re-run at the PR
+head: **1098 passed, 92.99 % coverage** (review finding #1, addressed).
 
 ## The fake-body path (run first, as on Spark)
 
