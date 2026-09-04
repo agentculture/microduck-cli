@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-09-04
+
+### Changed
+
+- Recorded the PR #3 review wave in the devague delivery ledger
+  (`.devague/deliveries/microduck-cli-env-teach-operate-rules.json`): four
+  amended behavioral deltas (`b10`–`b13`) covering the gated `rules engine
+  start` / `rules intent` path, `duck record`'s own pad and ToF links, the
+  smoke-gate commit check and its siblings, and the SonarCloud round (the
+  text-mode `duck quack` crash, `SignalExit` unwinding through `TickBus`).
+
 ## [0.9.0] - 2026-09-04
 
 ### Added
