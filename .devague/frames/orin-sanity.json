@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-04T05:02:12Z",
-  "updated": "2026-09-04T05:16:32Z",
+  "updated": "2026-09-04T06:57:21Z",
   "claims": [
     {
       "id": "c1",
@@ -358,5 +358,51 @@
     }
   ],
   "lapses": [],
-  "obligations": []
+  "obligations": [
+    {
+      "id": "o1",
+      "claim_id": "c11",
+      "seam": "opt-in live suite against the real daemon + MuJoCo body",
+      "behavior": "the CLI operates a real simulated duck end to end on this host: doctor, health at 50 Hz, init/enable/skill, move+stop, rules check, refusal, six-step engine start, record, stand-up",
+      "source_text": "env up --sim yields a standing duck on this box, the live suite passes (MICRODUCK_LIVE=1, walking sentinel still xfail), the gates (check 6) are green, and CI passes on the record PR",
+      "origin": "user",
+      "status": "approved"
+    },
+    {
+      "id": "o2",
+      "claim_id": "c7",
+      "seam": "walking sentinel (test_sim_body_walks_forward_on_move)",
+      "behavior": "locomotion remains expected-fail at this pin; an XPASS would be surfaced, never absorbed",
+      "source_text": "the walking xfail sentinel stays expected-fail on Orin: locomotion-not-achieved is a pin-level defect (walk network selected but joint targets static, ruled out CLI/params/keyframe/RTF on Spark), not host-level \u2014 an Orin walk failure is NOT a regression, and an XPASS would mean the pin question needs revisiting, not the Orin run",
+      "origin": "user",
+      "status": "approved"
+    },
+    {
+      "id": "o3",
+      "claim_id": "c4",
+      "seam": "env/hosts.py classifier (unit + live doctor)",
+      "behavior": "jetson-agx-orin is classified correctly on this box AND the gb10/DGX-Spark class still classifies with torch_source_applies=True \u2014 Orin support is additive, Spark support unchanged",
+      "source_text": "microduck_cli/env/hosts.py needs no change: classify() already returns jetson-agx-orin for this box (tegra_release present, 'orin' in the gpu-name haystack) with torch_source_applies=False and the unverified remediation \u2014 the sanity run confirms the live verdict, it does not touch the classifier",
+      "origin": "user",
+      "status": "approved"
+    },
+    {
+      "id": "o4",
+      "claim_id": "c10",
+      "seam": "PR #6 (docs/orin-sanity, 0.9.2)",
+      "behavior": "the verification record lands via a version-bumped PR with CI green",
+      "source_text": "a dated record docs/verification/<date>-orin-sanity.md exists beside the Spark one, recording the six checks as run on this Orin with outputs pasted verbatim \u2014 including check 5's torch-on-L4T outcome, pass or fail \u2014 and lands via a version-bumped PR",
+      "origin": "user",
+      "status": "approved"
+    },
+    {
+      "id": "o5",
+      "claim_id": "c2",
+      "seam": "policy smoke on the Orin GPU (check 5)",
+      "behavior": "the smoke is attempted under an explicit timeout and its outcome recorded verbatim \u2014 pass, fail, or timeout",
+      "source_text": "re-run the Spark sanity's six success-signal checks on this Jetson AGX Orin and land a sibling record in docs/verification/ \u2014 the Spark record's 'What was NOT verified' names 'Jetson Thor / AGX Orin \u2014 not attempted; the host classifier only' as the gap",
+      "origin": "user",
+      "status": "approved"
+    }
+  ]
 }

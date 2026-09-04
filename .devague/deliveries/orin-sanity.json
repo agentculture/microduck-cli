@@ -1,0 +1,125 @@
+{
+  "plan_slug": "orin-sanity",
+  "schema_version": 2,
+  "created": "2026-09-04T06:57:02Z",
+  "updated": "2026-09-04T07:09:04Z",
+  "deviations": [],
+  "evidence": [
+    {
+      "id": "e1",
+      "obligation_ref": "o1",
+      "test_ref": "MICRODUCK_LIVE=1 MICRODUCK_LIVE_BODY=sim MICRODUCK_LIVE_SIM=1 pytest -m live -n0 (tests/live/test_live_cli.py)",
+      "behavior_text": "12 live checks operate the CLI as subprocesses against the real robotd + MuJoCo body: doctor, version, health at 50 Hz, init dry-run+apply, enable+skill, move+stop, rules check, over-limit refusal, six-step engine start, pure-JSONL record, status/down, sim stand-up \u2014 12 passed",
+      "contract_text": "env up --sim yields a standing duck on this box, the live suite passes (MICRODUCK_LIVE=1, walking sentinel still xfail), the gates are green, and CI passes on the record PR",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "live suite ran green on this Orin during the sanity run; outputs in docs/verification/2026-09-04-orin-sanity.md",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T09:16:00+03:00",
+        "commit": "3c09fb0"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 1
+    },
+    {
+      "id": "e2",
+      "obligation_ref": "o2",
+      "test_ref": "tests/live/test_live_cli.py::test_sim_body_walks_forward_on_move (non-strict xfail sentinel)",
+      "behavior_text": "the walking test reported xfailed (1 xfailed in the suite summary) \u2014 locomotion still absent at this pin, no XPASS",
+      "contract_text": "the walking xfail sentinel stays expected-fail on Orin; an XPASS is reported as news",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "same live run; '12 passed, 1098 deselected, 1 xfailed in 29.79s' quoted in the record",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T09:16:00+03:00",
+        "commit": "3c09fb0"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 2
+    },
+    {
+      "id": "e3",
+      "obligation_ref": "o3",
+      "test_ref": "tests/test_hosts.py (14 tests incl. test_gb10_torch_source_applies_and_no_remediation)",
+      "behavior_text": "the classifier's full matrix passes unchanged: gb10/DGX-Spark still classifies with torch_source_applies=True and no remediation; jetson-agx-orin classifies with the unverified remediation \u2014 re-run fresh on the delivery branch",
+      "contract_text": "hosts.py needs no change; the sanity confirms the live verdict without touching the classifier \u2014 Spark support kept, not replaced",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "14 passed in 0.09s at the delivery branch commit; hosts.py diff empty all run",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T09:45:00+03:00",
+        "commit": "e627cad"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 3
+    },
+    {
+      "id": "e4",
+      "obligation_ref": "o3",
+      "test_ref": "microduck env doctor (live, on-box)",
+      "behavior_text": "live doctor reported '[ok] host_class: jetson-agx-orin (NVIDIA Jetson AGX Orin); torch source applies: False' on this box",
+      "contract_text": "the live classifier verdict matches the code's jetson-agx-orin branch",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "doctor output pasted in the record's bring-up section",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T08:55:00+03:00",
+        "commit": "3c09fb0"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 4
+    },
+    {
+      "id": "e5",
+      "obligation_ref": "o4",
+      "test_ref": "PR #6 CI (lint, test x2, version-check, test-publish, GitGuardian)",
+      "behavior_text": "all required checks pass on the record PR at 0.9.2; Sonar/Qodo clean, zero unresolved threads",
+      "contract_text": "a dated record lands via a version-bumped PR with CI green",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "gh pr checks 6: all pass after the MD014 fix",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T09:40:00+03:00",
+        "commit": "e627cad"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 5
+    },
+    {
+      "id": "e6",
+      "obligation_ref": "o5",
+      "test_ref": "WANDB_MODE=offline microduck policy smoke Mjlab-Velocity-Flat-MicroDuck --json (timeout 900s)",
+      "behavior_text": "the smoke failed cleanly in 37s \u2014 torch SBSA cu130 wheel ships sm_110/sm_121 kernels only, not Orin's sm_87 (cudaErrorNoKernelImageForDevice); jp6 fallback closed (no cp312 torch 2.9.1); recorded verbatim in the record's check-5 section as the finding that settles the parked torch risk",
+      "contract_text": "a torch failure is a finding, not a sanity failure; anything not attempted lands in an explicit NOT-verified section",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "smoke ran on-box under timeout; stderr traceback quoted unchanged; HF half recorded as not attempted (no hf session)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-04T09:17:42+03:00",
+        "commit": "3c09fb0"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 6
+    }
+  ],
+  "deltas": [],
+  "supersessions": []
+}
