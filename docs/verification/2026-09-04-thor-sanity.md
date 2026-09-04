@@ -280,7 +280,10 @@ markdownlint-cli2 "**/*.md" ...          0 error(s)   (markdownlint-cli2@0.13.0 
   upstream's `pytorch-cu129` source was never exercised on Thor. AGX Orin keeps
   the unverified text. `tests/test_hosts.py` pins both. One line inside
   `_classify()` changed to name the new constant (deviation d3); no condition
-  or verdict did.
+  or verdict did. At the user's request the same treatment covers Spark:
+  `HostInfo.verified` now points GB10 at the Spark record and Thor at this one
+  (Orin and every other class stay `None`), and `env doctor` appends
+  `verified on-box: …` to its `host_class` line.
 - The Spark record's Thor bullet links here.
 
 ## What was NOT verified

@@ -24,7 +24,10 @@ index (a build tied to the board's L4T/JetPack release), not from
 linux-aarch64 host that is *not* Jetson. Jetson and unknown hosts get
 `torch_source_applies=False` plus a remediation.
 
-What that remediation says differs per board, on evidence:
+`HostInfo.verified` names the on-box record for a host class the sanity has
+actually run on (GB10 and Thor today, each pointing at its
+`docs/verification/` file); `env doctor` appends it to the `host_class` line.
+What the remediation says differs per board, on evidence:
 
 * **Jetson AGX Thor** — verified on 2026-09-04
   (`docs/verification/2026-09-04-thor-sanity.md`): the 64-env smoke trains
@@ -71,6 +74,16 @@ _UNVERIFIED_REMEDIATION = (
     "actually works here before relying on it."
 )
 
+# The two boxes the sanity has run on, and the records that prove it.
+_GB10_VERIFIED = (
+    "DGX Spark, 2026-09-04, upstream's pytorch-cu129 source as shipped — "
+    "docs/verification/2026-09-04-sim-bringup.md"
+)
+_THOR_VERIFIED = (
+    "Jetson AGX Thor, 2026-09-04, with a local torch-source override of the "
+    "microduck_rl clone — docs/verification/2026-09-04-thor-sanity.md"
+)
+
 _THOR_VERIFIED_REMEDIATION = (
     "torch/warp training verified on Jetson AGX Thor (JetPack 7, L4T R38, "
     "CUDA 13.0) on 2026-09-04 with a LOCAL override of the microduck_rl clone, "
@@ -107,6 +120,9 @@ class HostInfo:
     display_name: str
     torch_source_applies: bool
     remediation: str | None = None
+    # Pointer to the on-box verification record for this host class, when one
+    # exists (docs/verification/). None means nobody has run the sanity there.
+    verified: str | None = None
 
 
 def _safe_run(argv: list[str]) -> str | None:
@@ -225,6 +241,7 @@ def _classify(probe: HostProbe) -> HostInfo:
             host_class="gb10",
             display_name="NVIDIA GB10 (DGX Spark)",
             torch_source_applies=True,
+            verified=_GB10_VERIFIED,
         )
 
     is_jetson = bool(tegra_release) or "tegra" in gpu_name.lower()
@@ -236,6 +253,7 @@ def _classify(probe: HostProbe) -> HostInfo:
                 display_name="NVIDIA Jetson AGX Thor",
                 torch_source_applies=False,
                 remediation=_THOR_VERIFIED_REMEDIATION,
+                verified=_THOR_VERIFIED,
             )
         if "orin" in haystack:
             return HostInfo(

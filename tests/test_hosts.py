@@ -88,6 +88,17 @@ def test_jetson_thor_carries_the_verified_override_remediation():
     assert "unverified" not in info.remediation
     assert "sbsa/cu130" in info.remediation
     assert "2026-09-04-thor-sanity.md" in info.remediation
+    assert info.verified is not None
+    assert "2026-09-04-thor-sanity.md" in info.verified
+
+
+def test_verified_records_point_at_the_two_boxes_that_ran_the_sanity():
+    """GB10 (Spark) and Thor each carry their docs/verification pointer; a host
+    nobody has verified on carries None, never an invented record."""
+    assert "2026-09-04-sim-bringup.md" in classify(GB10_PROBE).verified
+    assert "2026-09-04-thor-sanity.md" in classify(JETSON_THOR_PROBE).verified
+    assert classify(JETSON_AGX_ORIN_PROBE).verified is None
+    assert classify(X86_64_PROBE).verified is None
 
 
 def test_aarch64_non_jetson_torch_source_applies():

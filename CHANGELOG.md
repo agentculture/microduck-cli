@@ -26,6 +26,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   local override of the `microduck_rl` clone. `torch_source_applies` stays
   `False` because upstream's `pytorch-cu129` source was never exercised there.
   AGX Orin keeps the unverified text (`env/hosts.py`, `tests/test_hosts.py`).
+- `HostInfo.verified` points a verified host class at its on-box record — GB10
+  at the Spark record, Jetson AGX Thor at the Thor one, every other class
+  `None` — and `env doctor` appends `verified on-box: …` to the `host_class`
+  line.
 - The Spark record's "Jetson Thor / AGX Orin — not attempted" bullet now links
   the Thor record.
 

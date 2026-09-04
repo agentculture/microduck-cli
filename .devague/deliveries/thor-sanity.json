@@ -2,7 +2,7 @@
   "plan_slug": "thor-sanity",
   "schema_version": 2,
   "created": "2026-09-04T05:31:24Z",
-  "updated": "2026-09-04T05:40:37Z",
+  "updated": "2026-09-04T06:14:52Z",
   "deviations": [
     {
       "id": "d1",
@@ -28,7 +28,7 @@
         "t5"
       ],
       "origin": "llm",
-      "status": "proposed",
+      "status": "approved",
       "classification": "acceptable",
       "seq": 2
     },
