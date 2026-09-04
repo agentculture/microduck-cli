@@ -193,11 +193,16 @@ verbatim). Nothing was submitted, nothing billed.
 Run by a subagent in a disposable worktree at the same commit `3c09fb0`:
 
 ```text
-$ uv run pytest -n auto --cov=microduck_cli    1098 passed, 0 failed; TOTAL 92.80% (gate 60)
-$ uv run black --check / isort --check-only / flake8 / bandit    all clean (13822 LOC, 0 findings)
-$ uv run teken cli doctor . --strict           healthy: 26/26 passed, 0 errors, 0 warnings
-$ python3 -c "..."                             dependencies = []
-$ markdownlint-cli2                            not installed on this box (command not found) — not run
+$ uv run pytest -n auto --cov=microduck_cli
+1098 passed, 0 failed; TOTAL 92.80% (gate 60)
+$ uv run black --check / isort --check-only / flake8 / bandit
+all clean (13822 LOC scanned, 0 findings)
+$ uv run teken cli doctor . --strict
+healthy: 26/26 passed, 0 errors, 0 warnings
+$ python3 -c "import tomllib; ..."
+dependencies = []
+$ markdownlint-cli2
+not installed on this box (command not found) — not run locally
 ```
 
 **Pass** for every gate present on the box; markdownlint is recorded as not
