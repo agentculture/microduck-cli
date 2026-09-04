@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-09-04
+
+### Added
+
+- docs/verification/2026-09-04-orin-sanity.md — the six Spark sanity checks re-run on a Jetson AGX Orin: checks 1-4, the gates, and the live suite (12 passed, walking sentinel xfailed) all pass; check 5 fails with a recorded finding — no torch wheel with sm_87 kernels exists for cp312+2.9.1 on the Jetson indexes, so GPU training on AGX Orin is not available at this pin. Includes the Orin RL-venv recipe (SBSA cu130 index + venv-local nvidia/nvpl libs) and the bare uv-run re-lock gotcha.
+- docs/specs and docs/plans 2026-09-04-orin-sanity.md — the challenged devague spec (scope + think + challenge, vLLM co-tenancy finding) and its converged six-task plan, with the .devague frame/plan state.
+
 ## [0.9.1] - 2026-09-04
 
 ### Changed
