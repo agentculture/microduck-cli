@@ -28,6 +28,8 @@ from pathlib import Path
 DEFAULT_IDENTITIES = ["/home/"]
 
 _FENCE_RE = re.compile(r"^(`{3,}|~{3,})(.*)$")
+_TRAILING_COMMENT_RE = re.compile(r"\s+#.*$")
+_UV_RUN_PREFIX = "uv run "
 
 
 @dataclass(frozen=True)
@@ -124,25 +126,134 @@ def extract_commands(text: str) -> list[str]:
     return commands
 
 
-def _load_record_normalized(path: Path) -> str:
-    stripped_lines = []
-    for raw_line in path.read_text().splitlines():
-        line = raw_line.strip()
-        if line.startswith("$ "):
-            line = line[2:]
-        stripped_lines.append(line)
-    return normalize_ws(" ".join(stripped_lines))
+def _strip_trailing_comment(text: str) -> str:
+    """Strip a trailing `` #comment`` (whitespace then ``#``) — never a quoted ``#``.
+
+    Deliberately simple: this does not attempt to parse quoting, so a ``#`` that
+    happens to sit inside quotes after whitespace is still stripped. That case is
+    rare in the verification records this checks and is treated as out of scope
+    (see the regression test documenting it).
+    """
+    return _TRAILING_COMMENT_RE.sub("", text)
+
+
+def _canonical(command: str) -> str:
+    """Normalise whitespace and drop a leading ``uv run `` for cross-form matching."""
+    normalized = normalize_ws(command)
+    if normalized.startswith(_UV_RUN_PREFIX):
+        normalized = normalized[len(_UV_RUN_PREFIX) :]
+    return normalized
+
+
+def _lines_to_entries(
+    lines: list[str], start_lineno: int, require_prompt: bool
+) -> list[tuple[int, str]]:
+    """Turn raw lines into (line-number, command) entries.
+
+    Mirrors ``_lines_to_commands``'s continuation-joining and prompt-stripping, plus
+    trailing-comment stripping. When ``require_prompt`` is True, only lines that
+    start with a ``$ `` prompt (after stripping leading whitespace) become entries —
+    used for plain record prose and ``text``-fenced transcripts. When False, every
+    non-blank, non-comment-only line becomes an entry — used for ``bash``/``sh``
+    fenced record blocks, which paste raw shell without a prompt.
+    """
+    entries: list[tuple[int, str]] = []
+    pending: str | None = None
+    pending_lineno: int | None = None
+    for offset, raw in enumerate(lines):
+        lineno = start_lineno + offset
+        stripped = raw.strip()
+        if pending is None:
+            if stripped == "" or stripped.startswith("#"):
+                continue
+            if stripped.startswith("$ "):
+                content = stripped[2:].strip()
+            elif stripped == "$":
+                content = ""
+            elif require_prompt:
+                continue
+            else:
+                content = stripped
+            entry_lineno = lineno
+        else:
+            content = pending + " " + stripped
+            entry_lineno = pending_lineno
+            pending = None
+        if content.endswith("\\"):
+            pending = content[:-1].rstrip()
+            pending_lineno = entry_lineno
+            continue
+        content = _strip_trailing_comment(content).strip()
+        entries.append((entry_lineno, content))
+    if pending is not None:
+        entries.append((pending_lineno, _strip_trailing_comment(pending).strip()))
+    return entries
+
+
+def _record_entries(text: str) -> list[tuple[int, str]]:
+    """Parse a verification record into (line-number, command) entries.
+
+    An entry comes from every line that starts with a ``$ `` prompt (anywhere in
+    the file, fenced or not), plus every line inside a fenced code block whose info
+    string starts with ``bash`` or ``sh`` (those paste raw shell with no prompt).
+    """
+    entries: list[tuple[int, str]] = []
+    lines = text.splitlines()
+    n = len(lines)
+    i = 0
+    buffer: list[str] = []
+    buffer_start = 1
+
+    def flush() -> None:
+        if buffer:
+            entries.extend(_lines_to_entries(buffer, buffer_start, require_prompt=True))
+            buffer.clear()
+
+    while i < n:
+        stripped = lines[i].strip()
+        match = _FENCE_RE.match(stripped)
+        if match is None:
+            if not buffer:
+                buffer_start = i + 1
+            buffer.append(lines[i])
+            i += 1
+            continue
+        flush()
+        fence_marker = match.group(1)
+        fence_char = fence_marker[0]
+        fence_len = len(fence_marker)
+        info = match.group(2).strip().lower()
+        i += 1
+        block_start_lineno = i + 1
+        block_lines: list[str] = []
+        while i < n:
+            candidate = lines[i].strip()
+            if candidate.startswith(fence_char * fence_len) and set(candidate) == {fence_char}:
+                i += 1
+                break
+            block_lines.append(lines[i])
+            i += 1
+        require_prompt = not (info.startswith("bash") or info.startswith("sh"))
+        entries.extend(_lines_to_entries(block_lines, block_start_lineno, require_prompt))
+    flush()
+    return [(lineno, entry) for lineno, entry in entries if entry != ""]
 
 
 def check_commands(commands: list[str], record_paths: list[Path]) -> list[CommandCheck]:
-    """Check each command against each record file, in order, first match wins."""
-    normalized_records = [(str(path), _load_record_normalized(path)) for path in record_paths]
+    """Check each command against each record file, in order, first match wins.
+
+    A HIT requires the (whitespace-normalised, uv-run-normalised) tutorial command
+    to EQUAL a parsed record entry — never a substring match — so a shorter command
+    cannot match as a fragment of a longer one, prose cannot match, and tokens split
+    across adjacent record lines cannot combine into a false hit.
+    """
+    per_record_entries = [(str(path), _record_entries(path.read_text())) for path in record_paths]
     results = []
     for command in commands:
-        needle = normalize_ws(command)
+        canonical_command = _canonical(command)
         hit_record = None
-        for record_path, haystack in normalized_records:
-            if needle in haystack:
+        for record_path, entries in per_record_entries:
+            if any(_canonical(entry) == canonical_command for _lineno, entry in entries):
                 hit_record = record_path
                 break
         results.append(CommandCheck(command=command, hit=hit_record is not None, record=hit_record))

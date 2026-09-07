@@ -2,7 +2,7 @@
   "plan_slug": "jetson-retest-and-ai-lab-tutorial",
   "schema_version": 2,
   "created": "2026-09-07T03:46:16Z",
-  "updated": "2026-09-07T03:49:11Z",
+  "updated": "2026-09-07T03:56:39Z",
   "deviations": [
     {
       "id": "d1",
@@ -313,6 +313,25 @@
       "status": "approved",
       "superseded": false,
       "seq": 18
+    },
+    {
+      "id": "e13",
+      "obligation_ref": "o2",
+      "test_ref": "existence of docs/verification/2026-09-07-{thor,orin}-retest.md",
+      "behavior_text": "the Thor and Orin 2026-09-07 records do not exist yet, so the 'all three 2026-09-07 records name 0.9.4' half of h18 cannot be checked; e2 covers the Spark record and the PyPI install only",
+      "contract_text": "the install command names an exact version that appears as the CLI version in all three 2026-09-07 records (h18)",
+      "evidence_type": "observation",
+      "strength": "coverage",
+      "strength_basis": "Qodo review on PR #8 (comment 3946429053): e2's pass overstated the three-record obligation; filed as the unmet half, pending operator task t8",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-07T07:20:00+03:00",
+        "commit": "5e18435"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 19
     }
   ],
   "deltas": [

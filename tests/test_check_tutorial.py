@@ -57,7 +57,7 @@ echo world
 MAIN_RECORD = """\
 $ echo hello
 some other stuff
-foo bar   --baz
+$ foo bar   --baz
 """
 
 
@@ -158,7 +158,7 @@ def test_exit_code_zero_when_all_hit_and_no_identity(tmp_path, capsys):
         tmp_path / "clean.md",
         "# Clean tutorial\n\nNothing sensitive here.\n\n```bash\n$ echo hi\n```\n",
     )
-    record = _write(tmp_path / "record.txt", "echo hi\n")
+    record = _write(tmp_path / "record.txt", "$ echo hi\n")
     exit_code = check_tutorial.main([str(tutorial), "--record", str(record)])
     out = capsys.readouterr().out
     assert exit_code == 0
@@ -190,7 +190,7 @@ def test_exit_code_two_on_missing_record(tmp_path):
 def test_multiple_records_first_match_reported(tmp_path):
     tutorial = _write(tmp_path / "tutorial.md", "```bash\necho hi\n```\n")
     record_a = _write(tmp_path / "a.txt", "nothing relevant\n")
-    record_b = _write(tmp_path / "b.txt", "echo hi\n")
+    record_b = _write(tmp_path / "b.txt", "$ echo hi\n")
     exit_code = check_tutorial.main(
         [str(tutorial), "--record", str(record_a), "--record", str(record_b)]
     )
@@ -201,3 +201,97 @@ def test_module_is_importable_as_script():
     # Ensure the module exposes main() for `python docs/tools/check_tutorial.py`.
     assert hasattr(check_tutorial, "main")
     assert callable(check_tutorial.main)
+
+
+# --- Regression tests for the flattened-substring matching bug -------------------
+
+
+def test_prefix_collision_not_a_hit(tmp_path):
+    # A shorter tutorial command must not match as a prefix/fragment of a longer
+    # recorded command.
+    tutorial = _write(
+        tmp_path / "tutorial.md",
+        "```bash\n$ microduck duck init\n```\n",
+    )
+    record = _write(tmp_path / "record.txt", "$ microduck duck init --apply\n")
+    checks = check_tutorial.check_commands(
+        check_tutorial.extract_commands(tutorial.read_text()), [record]
+    )
+    assert len(checks) == 1
+    assert checks[0].hit is False
+    assert checks[0].record is None
+
+
+def test_prose_occurrence_not_a_hit(tmp_path):
+    # A record sentence mentioning the same words (prose, not a command) must not
+    # match as a substring.
+    tutorial = _write(
+        tmp_path / "tutorial.md",
+        "```bash\n$ microduck duck init\n```\n",
+    )
+    record = _write(
+        tmp_path / "record.txt",
+        "Before you can proceed, remember that microduck duck init is required.\n",
+    )
+    checks = check_tutorial.check_commands(
+        check_tutorial.extract_commands(tutorial.read_text()), [record]
+    )
+    assert checks[0].hit is False
+
+
+def test_cross_line_false_positive_not_a_hit(tmp_path):
+    # Tokens split across two adjacent record lines must not combine into a hit.
+    tutorial = _write(
+        tmp_path / "tutorial.md",
+        "```bash\n$ microduck duck init --apply\n```\n",
+    )
+    record = _write(
+        tmp_path / "record.txt",
+        "$ microduck duck\ninit --apply\n",
+    )
+    checks = check_tutorial.check_commands(
+        check_tutorial.extract_commands(tutorial.read_text()), [record]
+    )
+    assert checks[0].hit is False
+
+
+def test_dollar_prompt_entry_with_trailing_comment_hits(tmp_path):
+    tutorial = _write(
+        tmp_path / "tutorial.md",
+        "```bash\n$ free -g\n```\n",
+    )
+    record = _write(tmp_path / "record.txt", "$ free -g   # 06:34\n")
+    checks = check_tutorial.check_commands(
+        check_tutorial.extract_commands(tutorial.read_text()), [record]
+    )
+    assert checks[0].hit is True
+    assert checks[0].record == str(record)
+
+
+def test_uv_run_prefix_normalization_hits(tmp_path):
+    tutorial = _write(
+        tmp_path / "tutorial.md",
+        "```bash\n$ microduck env doctor\n```\n",
+    )
+    record = _write(tmp_path / "record.txt", "```bash\nuv run microduck env doctor\n```\n")
+    checks = check_tutorial.check_commands(
+        check_tutorial.extract_commands(tutorial.read_text()), [record]
+    )
+    assert checks[0].hit is True
+
+
+def test_fenced_bash_record_entry_without_prompt_hits(tmp_path):
+    # Real records (e.g. operating-the-duck.md, SKILL.md) paste raw shell inside a
+    # ```bash fence with no `$ ` prompt at all.
+    tutorial = _write(
+        tmp_path / "tutorial.md",
+        "```bash\n$ microduck rules intent stop\n```\n",
+    )
+    record = _write(
+        tmp_path / "record.txt",
+        "```bash\nmicroduck rules intent stop\n```\n",
+    )
+    checks = check_tutorial.check_commands(
+        check_tutorial.extract_commands(tutorial.read_text()), [record]
+    )
+    assert checks[0].hit is True

@@ -71,8 +71,11 @@ failures) before this summary. The Thor and Orin re-runs are the operator's
 All checks ran agent-side; **this repo has no `@pytest.mark.behavioral` marker
 or `tests/behavioral/` folder**, so each is an ad-hoc run filed through
 `/validate-delivery` as `o1–o12` / `e1–e12` (all approved; `e11`, `e12` are
-**fail** records, kept as such). Deltas `b1–b4` approved; `b5`, `b6` filed after
-the approval round and still `proposed`.
+**fail** records, kept as such). `e13` (**fail**, `proposed`) was filed after the
+PR #8 review pointed out that `e2`'s `pass` overstated the three-record
+obligation in `h18`: the Spark half holds, the Thor/Orin half is unmet until
+`t8`. Deltas `b1–b4` approved; `b5`, `b6` filed after the approval round and
+still `proposed`.
 
 - tests: `uv run pytest -n auto --cov=microduck_cli` at `61a564c` — 1112 passed, 93 % (gate 60); `tests/test_hosts.py` at `7495769` — 17 passed (`e7`)
 - live: `MICRODUCK_LIVE=1 uv run pytest -m live -n0 -v tests/live` — 11 passed, 2 skipped; with `MICRODUCK_LIVE_BODY=sim MICRODUCK_LIVE_SIM=1 MICRODUCK_LIVE_HEADLESS=0` — 12 passed, 1 xfailed (`e5`)
@@ -90,6 +93,7 @@ the approval round and still `proposed`.
 | Claim | Confidence | Evidence |
 |-------|------------|----------|
 | The tutorial exists, builds, and every checked fenced command is quoted from a record or doc | high | fork `31c2bad`; `e1` (30/30), `e8` (build exit 0) |
+| The install line's version (0.9.4) is the version every 2026-09-07 record ran at | **partial** | `e2` covers Spark and the PyPI install; `e13` (**fail**, filed after Qodo's review of PR #8) records that the Thor/Orin 2026-09-07 records do not exist yet — the three-record half of `h18` is unmet until `t8` |
 | Following the tutorial's Spark path on the PyPI 0.9.4 wheel stands the duck in a visible MuJoCo window, runs skills, rules and the engine at 50 Hz | high | `docs/verification/2026-09-07-spark-retest.md`; PNGs `microduck-spark-stand-{1,2}.png`; `e5`, `e6`, `e9` |
 | The 64-env training smoke passes on Spark | medium | passes only with the GPU free (`d2`); fails OOM beside a resident vLLM engine — the tutorial says so |
 | Steps 2–4 (clone, cargo build, uv sync) work as written | low | verified by result only (`d6`); run from scratch on Thor/Orin on 2026-09-04, not on Spark this run |

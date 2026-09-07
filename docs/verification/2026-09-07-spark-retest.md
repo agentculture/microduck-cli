@@ -52,7 +52,11 @@ torch 2.9.1+cu129 cuda True | onnxruntime 1.24.4 | mujoco 3.10.0
 ```
 
 The tutorial's two exports were set for every later command:
-`export MICRODUCK_CLONE=~/git/microduck` and `export DUCK_SIM_RL=~/git/microduck_rl`.
+
+```text
+$ export MICRODUCK_CLONE=~/git/microduck
+$ export DUCK_SIM_RL=~/git/microduck_rl
+```
 
 ## Step 5 — `env doctor` on the wheel: healthy, with two `[FAIL]` lines
 
@@ -301,11 +305,14 @@ dependencies = []
   row point here (task t6).
 - **The command check.** `docs/tools/check_tutorial.py` greps every fenced
   `bash` line of the tutorial against the records, `docs/operating-the-duck.md`,
-  the `operate-microduck` skill and the README: 30 checked command lines, 30
-  hit, 0 miss. Six fences are marked `nocheck` because they hold provisioning or
+  the `operate-microduck` skill and the README, matching whole command entries
+  (a `$ `-prompt line or a fenced `bash` line, comments stripped, `uv run` prefix
+  ignored), never substrings: 26 checked command lines, 26 hit, 0 miss. Eight
+  fences are marked `nocheck` because they hold provisioning or
   reader-specific placeholders no record quotes verbatim (`mkdir`/`git clone`/
   `git checkout` of the pins, the rustup one-liner, the Thor fork-branch clone,
-  `docker ps`, and the `export DISPLAY=<…>` / `gnome-screenshot` recipe). Two
+  `docker ps`, the two RL-venv `cd` + `uv sync` fences, and the `export DISPLAY=<…>` /
+  `gnome-screenshot` recipe). Two
   `env up` variants lost their trailing `#` comments so the lines match as
   written. Identity scan (`/home/`, the box hostname) over the tutorial and the
   image names: 0 hits.

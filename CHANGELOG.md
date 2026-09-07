@@ -9,7 +9,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `docs/verification/2026-09-07-spark-retest.md` — DGX Spark re-test that followed the Jetson AI Lab tutorial draft step by step on the PyPI 0.9.4 wheel with the MuJoCo viewer windowed: all eleven steps, both live suites (12 passed, 1 xfailed windowed), the 64-env smoke (failed out-of-memory beside a resident vLLM engine, passed in 16 s with it paused), the gates, and the findings that changed the tutorial.
+- `docs/verification/2026-09-07-spark-retest.md` — DGX Spark re-test that followed the Jetson AI Lab tutorial draft step by step on the PyPI 0.9.4 wheel with the MuJoCo viewer windowed: steps 1 and 5–11 executed (steps 2–4 — clone, cargo build, `uv sync` — checked against the pre-existing state, not re-run), both live suites (12 passed, 1 xfailed windowed), the 64-env smoke (failed out-of-memory beside a resident vLLM engine, passed in 16 s with it paused), the gates, and the findings that changed the tutorial.
 - `docs/tools/check_tutorial.py` (+ `tests/test_check_tutorial.py`, 11 tests) — greps every fenced `bash` line of a tutorial against verification records (`nocheck` fences excluded), scans for identity strings in text and image names, lists the tutorial's PNGs; exit 0 only on 0 misses and 0 hits.
 - `docs/specs/2026-09-07-jetson-retest-and-ai-lab-tutorial.md`, `docs/plans/2026-09-07-jetson-retest-and-ai-lab-tutorial.md`, `docs/deliveries/2026-09-07-jetson-retest-and-ai-lab-tutorial.md` — the devague frame (39 claims, 21 honesty conditions, 26 scope entries incl. the rigorous challenge pass), the nine-task plan, and the partial-run delivery summary (t1–t5 delivered; PRs and the operator's Thor/Orin runs pending).
 
