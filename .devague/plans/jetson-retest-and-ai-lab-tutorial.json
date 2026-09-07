@@ -1,0 +1,574 @@
+{
+  "slug": "jetson-retest-and-ai-lab-tutorial",
+  "title": "jetson-retest-and-ai-lab-tutorial",
+  "frame_slug": "jetson-retest-and-ai-lab-tutorial",
+  "schema_version": 5,
+  "status": "exported",
+  "created": "2026-09-07T00:37:06Z",
+  "updated": "2026-09-07T00:39:01Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "microduck-cli re-verified on Jetson AGX Thor (with a visible MuJoCo window) and Jetson AGX Orin, and a Jetson AI Lab tutorial shows a reader how to run the MicroDuck simulation, the CLI and the training smoke on their own Jetson",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "'done' is claimed only when all three 2026-09-07 records are on main, Thor's seat0 session is thor-owned, and the jetson-ai-lab PR URL exists; merge of that PR is not claimed",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "requirement",
+      "text": "Thor's GUI session must auto-login the 'thor' user (or an operator logs in once) so a real DISPLAY/XAUTHORITY/session bus exists for 'env up --sim' and for the screenshot recipe in .claude/skills/operate-microduck/SKILL.md 'Watch it' \u2014 a greeter alone (Orin's state today: gnome-shell owned by gdm, no user session) gives the sim nothing to open a window on",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "after the change, 'loginctl list-sessions' shows a seat0 session owned by thor and DISPLAY/XAUTHORITY/DBUS_SESSION_BUS_ADDRESS can be read from that gnome-shell's /proc environ",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c4",
+      "kind": "boundary",
+      "text": "Re-test at the pinned upstream commits \u2014 pollen-robotics/microduck sim-remote-io @0cd676d and microduck_rl develop @29e887e are still the branch heads (checked 2026-09-07 via gh api) and microduck_rl#39 is still OPEN, so there is nothing to re-pin to; docs/upstream-pins.md stays untouched and locomotion stays 'not achieved' (test_sim_body_walks_forward_on_move remains xfail)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "the record's pins table matches docs/upstream-pins.md byte for byte for the microduck rows, and the walk sentinel result is quoted (xfail) not omitted",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c7",
+      "kind": "requirement",
+      "text": "Each re-test produces a new dated record under docs/verification/ (2026-09-07-thor-retest.md, 2026-09-07-orin-retest.md) in the six-check / three-tier shape of 2026-09-04-thor-sanity.md, with outputs pasted unchanged and elisions marked; this time Thor's tier 2 runs WINDOWED (MICRODUCK_LIVE_HEADLESS=0 / env up --sim without --headless) and carries two screenshots a few seconds apart",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "every quoted line in a record exists in a log kept in the session scratchpad, and each record names the CLI commit it ran at",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c9",
+      "kind": "boundary",
+      "text": "Orin GPU training stays out of scope: at this pin the only torch 2.9.1 cp312 CUDA-13 wheel carries no sm_87 kernels (docs/verification/2026-09-04-orin-sanity.md, microduck_cli/env/hosts.py _ORIN_NO_TRAINING_REMEDIATION). The Orin re-test covers checks 1-4 (sim, fake, rules, gates) and the tutorial routes Orin readers to sim+CLI only, training on Thor/Spark/HF Jobs",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "no 'policy smoke' or 'train' invocation appears in the Orin record or in the tutorial's Orin path",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c11",
+      "kind": "requirement",
+      "text": "The tutorial lands in NVIDIA-AI-IOT/jetson-ai-lab as src/content/tutorials/<subfolder>/<slug>.md plus src/pages/tutorials/<slug>.astro wrapping TutorialLayout; frontmatter needs title, description, category (enum in src/content/config.ts), tags, and authors (name + github); PR from a fork to main with 'npm run build' passing (schema validation), DCO sign-off recommended",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "'npm run build' exits 0 in the fork at the PR head and the page renders at /tutorials/microduck-on-jetson under npm run dev",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c13",
+      "kind": "requirement",
+      "text": "The tutorial states what does not work at the pin, in the site's own voice (admonition warning): the duck stands, holds 50 Hz and runs skills but does not walk; Thor training needs the microduck_rl#39 branch or the SBSA-index override until it merges; Orin cannot train; relax drops the duck. CONTRIBUTING.md requires 'clearly identify anything you did not test' and 'verify commands on the hardware and JetPack you name' \u2014 hence the re-test precedes the tutorial",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "each of the five caveats in the tutorial names the docs/verification record or upstream issue it comes from; none is softened relative to the record",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c18",
+      "kind": "audience",
+      "text": "Two readers: (1) the operator of this repo re-verifying microduck-cli 0.9.4 on Thor and Orin and wanting to SEE the sim; (2) a Jetson AI Lab reader with a Jetson AGX Thor or AGX Orin on JetPack 7 who has never heard of MicroDuck and wants a standing, reacting simulated duck driven from one CLI, plus the training smoke where the board can run it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "the tutorial's prerequisites name only JetPack/L4T versions and boxes the records cover (Spark GB10, Thor L4T R38.2.2, Orin L4T R39); no other Jetson module is implied to work",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c19",
+      "kind": "before_state",
+      "text": "Thor and Orin were verified once (2026-09-04) headless, at CLI 2b00480/3c09fb0, with stale feature-branch checkouts left on both boxes; Thor is console-only with no monitor and Orin shows only a login greeter; the only public write-up is this repo's README, nothing on jetson-ai-lab.com",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "the before-state facts (target, greeter, stale branches, no site page) are each traceable to a probe quoted in the /scope entries s1-s5, s16",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c20",
+      "kind": "after_state",
+      "text": "Both boxes re-verified at 0.9.4 with dated records under docs/verification/, Thor running a graphical session where the MuJoCo duck is visibly standing (two screenshots seconds apart in the record), and a tutorial PR open against NVIDIA-AI-IOT/jetson-ai-lab that a Thor or Orin owner can follow end to end, stating plainly what does not work at the pin",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h11",
+      "kind": "honesty",
+      "text": "the Thor record contains two screenshots of the MuJoCo window taken >=4 s apart and names the JetKVM as the display; if the window did not open, the record says so and the after-state is reported as partial",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c21",
+      "kind": "why_it_matters",
+      "text": "A verification that nobody can watch is a claim, not a proof; a windowed run on Thor is the first time the duck is seen on a Jetson. Publishing on Jetson AI Lab puts the CLI in front of the people who own the hardware it was verified on, and the site's own contribution bar (verify on the hardware you name, mark what you did not test) forces the record to precede the prose",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "the tutorial links each verification record it draws on; no number in the tutorial lacks a record line",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c22",
+      "kind": "success_signal",
+      "text": "Thor: 'systemctl get-default' prints graphical.target, gdm is active, a thor-owned gnome-shell exists, and 'env up --sim' (no --headless) opens a MuJoCo window captured by gnome-screenshot; the live suite with MICRODUCK_LIVE_BODY=sim MICRODUCK_LIVE_SIM=1 MICRODUCK_LIVE_HEADLESS=0 reports 12 passed 1 xfailed; policy smoke exits 0 on the PR-39 venv",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "the Thor success lines (get-default, loginctl, gnome-screenshot, pytest tally, smoke exit) are pasted from the run logs unchanged",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c23",
+      "kind": "success_signal",
+      "text": "Orin: env doctor 13/13 (training remediation as info), the fake-body live suite 11 passed 2 skipped, the sim-body suite 12 passed 1 xfailed, gates green at 0.9.4; a screenshot of the duck on Orin's connected DP-1 monitor if a user session is opened",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "the Orin success lines are pasted from the run logs unchanged; a missing Orin screenshot is stated, not implied",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c24",
+      "kind": "success_signal",
+      "text": "Tutorial: 'npm run build' passes in the fork with the new content + wrapper; every fenced command in the tutorial appears verbatim in one of the two 2026-09-07 records; grep for home paths and account names in the tutorial and images = 0; PR opened to NVIDIA-AI-IOT/jetson-ai-lab main with DCO sign-off",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h15",
+      "kind": "honesty",
+      "text": "a script diffs every fenced command in the tutorial against the three records and reports 0 misses; the identity grep and npm build exit codes are pasted",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c26",
+      "kind": "requirement",
+      "text": "The re-test records update microduck_cli/env/hosts.py HostInfo.verified strings and README's three-box table to point at the 2026-09-07 records (docs-only change to hosts.py constants + tests/test_hosts.py strings), bumped as one docs PR through the cicd lane",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "tests/test_hosts.py passes with the new 'verified' strings and no HostInfo verdict (torch_source_applies, remediation) changes",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c27",
+      "kind": "requirement",
+      "text": "The tutorial covers three boxes \u2014 DGX Spark (GB10), Jetson AGX Thor and Jetson AGX Orin \u2014 as one path with per-box tabs or a matrix: Spark and Thor get sim + CLI + training smoke (Spark on upstream's cu129 source as shipped, Thor on the PR-39/SBSA override), Orin gets sim + CLI only. Spark's evidence is a 2026-09-07 re-run of the six checks at 0.9.4 on this box (windowed, its Spark record already has the screenshot recipe), so all three boxes cite same-day records at the same CLI version",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "each of the three tabs' commands is quoted from that box's 2026-09-07 record, and the Orin tab carries no training command",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c31",
+      "kind": "requirement",
+      "text": "Thor hosts a production docker stack (prod-api, prod-postgres, prod-minio, prod-worker, prod-scheduler, prod-notifier, prod-backup) and three vLLM engines with NO container memory limits, a 60 GB swapfile and overcommit_memory=0 (probed 2026-09-07). Tier 3 (the 64-env smoke) runs only after 'free -g' shows >=20 GB available; the record pastes free -g before and after, and 'docker ps' health of every prod-* container after tier 3; if headroom is short the smoke is skipped and recorded as not run, never forced into swap",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h17",
+      "kind": "honesty",
+      "text": "the Thor record shows free -g immediately before tier 3 and docker ps --format '{{.Names}} {{.Status}}' immediately after, with every prod-* container still Up/healthy",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c32",
+      "kind": "requirement",
+      "text": "The records PR bumps the version and publish.yml pushes that version to PyPI on merge, so 'uv tool install microduck-cli' would install a release the records never ran. The tutorial's install line pins the verified version ('uv tool install microduck-cli==<verified>') and states the version each record ran at; the docs-only bump is noted as behaviour-identical",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "the tutorial's install command names an exact version that appears as the CLI version in all three 2026-09-07 records",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c33",
+      "kind": "requirement",
+      "text": "The tutorial's prerequisites state Python >=3.12 (CLI floor) and name the tested software: Thor JetPack 7 / L4T R38.2.2, Orin L4T R39, Spark DGX OS \u2014 all Python 3.12.3 boxes. JetPack 6 Orin ships Python 3.10; the tutorial tells those readers to 'uv python install 3.12' for the CLI and marks the RL venv (torch 2.9.1 cp312) as untested on JetPack 6. It also lists the Rust toolchain (rustup; 'source ~/.cargo/env' before env doctor, since a non-login shell lacks ~/.cargo/bin) and the cargo build of robotd as prerequisites with rough build times from the records",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h19",
+      "kind": "honesty",
+      "text": "the prerequisites section lists Python 3.12, rustup + 'source ~/.cargo/env', the cargo build, and the tested L4T/JetPack per box; JetPack 6 is marked untested",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c34",
+      "kind": "requirement",
+      "text": "Tutorial screenshots capture the MuJoCo window only (gnome-screenshot -w on the focused viewer, or a crop), never a full desktop \u2014 no terminals, hostnames, browser tabs or other windows appear; the JetKVM web view is not itself screenshotted for the tutorial. The identity grep extends to image file names and alt text",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h20",
+      "kind": "honesty",
+      "text": "every PNG under public/images/tutorials/microduck-on-jetson/ shows a single MuJoCo viewer window; a reviewer can find no terminal, hostname or other window in any of them",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c38",
+      "kind": "success_signal",
+      "text": "The operator can follow the tutorial on Thor and Orin without asking the agent anything the tutorial should have said; every place they had to improvise becomes a tutorial fix before the draft PR is marked ready",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h21",
+      "kind": "honesty",
+      "text": "the operator's Thor/Orin notes list each improvisation; the tutorial diff after step 4 addresses every one or says why not",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "Write the tutorial draft in a fork clone of jetson-ai-lab: src/content/tutorials/applications/microduck-on-jetson.mdx (Applications / Robotics, order 5, authors = the user) + src/pages/tutorials/microduck-on-jetson.astro; shared sim+CLI steps outside Tabs, per-box tabs DGX Spark / AGX Thor / AGX Orin; written from the 2026-09-04 records with Thor/Orin marked 'verified 2026-09-04 headless, operator re-run in progress'",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "frontmatter validates against src/content/config.ts (category Applications, section Robotics, tags, authors)",
+        "five warning admonitions present: no walking at the pin, Thor training via the fork branch OriNachum/microduck_rl fix/jetson-thor-torch-source until #39 merges, Orin cannot train (sm_87), relax makes the duck fall, dry-run on a pipe moved nothing \u2014 each linking its record or PR",
+        "prerequisites name Python 3.12 (uv python install 3.12 for JetPack 6), rustup + 'source ~/.cargo/env', the cargo build of robotd with build time from the records, and the tested L4T/JetPack per box; JetPack 6 marked untested",
+        "install line is 'uv tool install microduck-cli==0.9.4' with the sentence that every record ran at 0.9.4",
+        "the Thor tab carries the memory guard: run 'free -g' and proceed to the smoke only with >=20 GB available, check 'docker ps' health afterwards; the Orin tab has no training command",
+        "no upstream code is copied; microduck, microduck_rl, the pinned commits and #39 are linked"
+      ],
+      "deps": [],
+      "covers": [
+        "c11",
+        "h5",
+        "c13",
+        "h6",
+        "c18",
+        "h9",
+        "c21",
+        "h12",
+        "c27",
+        "h7",
+        "c31",
+        "c32",
+        "h18",
+        "c33",
+        "h19",
+        "c9",
+        "h4"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t2",
+      "summary": "Write docs/tools/check_tutorial.py in this repo: extracts every fenced bash line from a tutorial file and greps each against the named verification records (0 misses required), greps the tutorial + image filenames + alt text for '/home/' and the account name, and lists the PNGs under the tutorial's image dir for the single-window review",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "running it on the tutorial prints per-command hit/miss with the record file that matched and exits non-zero on any miss or identity hit",
+        "unit-tested against a fixture tutorial + fixture record in tests/ (flake8/black/isort clean, no new runtime deps)"
+      ],
+      "deps": [],
+      "covers": [
+        "c24",
+        "c34"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t3",
+      "summary": "Spark pre-flight (read-only except the fork): probe the seat0 session and /tmp/.X11-unix, both clones at the pins (docs/upstream-pins.md), 'uv run microduck env doctor' healthy, free -g; create the user's fork of NVIDIA-AI-IOT/jetson-ai-lab (gh repo fork --clone=false) and clone it to ../jetson-ai-lab (Node 20 + npm ci must work on Spark for 'npm run build')",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "a pre-flight block with the probe outputs is ready to paste at the top of docs/verification/2026-09-07-spark-retest.md",
+        "OriNachum/jetson-ai-lab exists and 'npm ci && npm run build' passes on the untouched fork clone (exit code pasted)"
+      ],
+      "deps": [],
+      "covers": [
+        "c19",
+        "h10"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t4",
+      "summary": "Spark dry-run of the tutorial, windowed: follow the tutorial's Spark path literally on this box (DISPLAY=:1, XAUTHORITY of the seat0 session), run the six checks + both live suites (fake; sim with MICRODUCK_LIVE_HEADLESS=0) + the 64-env smoke, take two MuJoCo-window-only screenshots >=4 s apart (gnome-screenshot -w, then verify no other window/terminal in the PNG), write docs/verification/2026-09-07-spark-retest.md in the 2026-09-04 record shape, and fix the tutorial wherever it misled \u2014 every fix listed in the record",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "record has the pins table matching docs/upstream-pins.md byte for byte, the CLI version (0.9.4), pasted outputs with marked elisions, 'What was NOT verified', and the walk sentinel quoted as xfail",
+        "two PNGs at ../jetson-ai-lab/public/images/tutorials/microduck-on-jetson/ each showing a single MuJoCo viewer window, referenced from the tutorial with alt text",
+        "every quoted line traces to a log kept in the session scratchpad; the record names the log files"
+      ],
+      "deps": [
+        "t1",
+        "t3"
+      ],
+      "covers": [
+        "c4",
+        "h2",
+        "c7",
+        "h3",
+        "c27",
+        "h7",
+        "c34",
+        "h20"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t5",
+      "summary": "Run the tutorial checks: docs/tools/check_tutorial.py against the tutorial and the 2026-09-04 Thor/Orin + 2026-09-07 Spark records (0 misses, 0 identity hits), 'npm run build' in the fork at the branch head (exit 0), and 'npm run dev' page render at /tutorials/microduck-on-jetson (screenshot of the rendered page kept in scratch, not committed)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "the three exit codes and the check script's summary are pasted into the Spark record's gates section"
+      ],
+      "deps": [
+        "t2",
+        "t4"
+      ],
+      "covers": [
+        "c24",
+        "h15",
+        "c34",
+        "h20"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t6",
+      "summary": "Repo PR in microduck-cli: add the Spark record, point _GB10_VERIFIED in microduck_cli/env/hosts.py at it (Thor/Orin pointers unchanged until the operator runs), update tests/test_hosts.py and README's three-box Spark row, commit docs/tools/check_tutorial.py + tests, version-bump patch with CHANGELOG entry, cicd open, ask-colleague review, merge when green",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "pytest -n auto, teken cli doctor --strict, black/isort/flake8/bandit, markdownlint all green at the PR head; HostInfo verdicts (torch_source_applies, remediation) unchanged",
+        "PR merged on main; the spec and frame from commits 50c16a0..6084c65 are in it"
+      ],
+      "deps": [
+        "t5"
+      ],
+      "covers": [
+        "c26",
+        "h16",
+        "c19",
+        "h10",
+        "c32",
+        "h18"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t7",
+      "summary": "Open a DRAFT PR from OriNachum/jetson-ai-lab branch docs/microduck-on-jetson to NVIDIA-AI-IOT/jetson-ai-lab main: commits signed off (-s) under the user's identity, body lists tested hardware (Spark GB10 windowed 2026-09-07; Thor/Orin 2026-09-04 headless, operator re-run in progress), the build exit code, and is signed '- Claude'",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "gh pr view shows isDraft=true against NVIDIA-AI-IOT/jetson-ai-lab:main and the site CI build passes on it"
+      ],
+      "deps": [
+        "t5",
+        "t6"
+      ],
+      "covers": [
+        "c1",
+        "h8",
+        "c11",
+        "h5",
+        "c24",
+        "h15"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t8",
+      "summary": "OPERATOR: repeat the tutorial on Thor and AGX Orin. Thor: log in as thor through the JetKVM console (no gdm config change), export the session's DISPLAY/XAUTHORITY/DBUS address, follow the Thor tab windowed, free -g before the smoke (>=20 GB or skip), docker ps prod-* health after; two MuJoCo-window screenshots >=4 s apart. Orin: log in on the DP-1 monitor, announce on the mesh, stop model-gear-vllm-associate, follow the Orin tab (checks 1-4 + gates, no training), restart the container and confirm healthy. Keep every improvisation in a notes file; the agent transcribes notes + logs into docs/verification/2026-09-07-thor-retest.md and -orin-retest.md",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "Thor record: loginctl shows a thor seat0 session; get-default graphical.target; live suite 12 passed 1 xfailed windowed; smoke exit code or 'skipped: N GB available'; prod-* all Up/healthy after; two screenshots; connector reading noted vs the JetKVM view",
+        "Orin record: env doctor 13/13 with the sm_87 info line; fake suite 11 passed 2 skipped; sim suite 12 passed 1 xfailed; gates green; vLLM stop/start timestamps and healthy status; no train/smoke invocation anywhere",
+        "the operator's notes list each improvisation (or state there were none)"
+      ],
+      "deps": [
+        "t7"
+      ],
+      "covers": [
+        "c3",
+        "h1",
+        "c4",
+        "h2",
+        "c7",
+        "h3",
+        "c9",
+        "h4",
+        "c20",
+        "h11",
+        "c22",
+        "h13",
+        "c23",
+        "h14",
+        "c31",
+        "h17",
+        "c38",
+        "h21"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t9",
+      "summary": "Fold the operator runs back: every improvisation from t8 becomes a tutorial fix (or a stated reason not to), replace the Thor/Orin 'operator re-run in progress' labels with the 2026-09-07 records, add the Thor/Orin screenshots, re-run check_tutorial.py and npm run build, second microduck-cli PR (Thor/Orin records, hosts.py _THOR_VERIFIED/_ORIN_VERIFIED, README rows, version-bump), then mark the jetson-ai-lab PR ready for review",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "tutorial diff after t8 addresses each listed improvisation; check_tutorial.py 0 misses against all three 2026-09-07 records; npm run build exit 0",
+        "gh pr view on the jetson-ai-lab PR shows isDraft=false; the second microduck-cli PR is merged"
+      ],
+      "deps": [
+        "t8"
+      ],
+      "covers": [
+        "c38",
+        "h21",
+        "c13",
+        "h6",
+        "c26",
+        "h16",
+        "c1",
+        "h8"
+      ],
+      "instruction": ""
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "MuJoCo's GLFW viewer has never been observed on a Jetson Xorg session; the Thor windowed proof (t8) rests on it opening. Fallback: Thor headless + duck monitor --json, windowed proof from Spark only, said so in the record and tutorial",
+      "kind": "unknown_nonblocking",
+      "task_id": "t8",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "Thor has ~28 GB available beside an unlimited-memory production stack and a 60 GB swapfile; the 64-env smoke may be skipped by the >=20 GB guard",
+      "kind": "unknown_nonblocking",
+      "task_id": "t8",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r3",
+      "text": "Jetson AI Lab maintainers may not accept a training step that depends on a personal fork branch (#39 unmerged); mitigation: the draft PR states it, and t9 can swap to upstream once merged",
+      "kind": "unknown_nonblocking",
+      "task_id": "t7",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r4",
+      "text": "Spark has ~19 GB available today with vLLM lobes resident; the smoke ran with far more headroom on 2026-09-04 \u2014 t4 may need the same >=20 GB guard or a lobe pause with the user's go-ahead",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r5",
+      "text": "gdm's Xorg on Thor may restart when the JetKVM's EDID appears (hotplug); the operator re-checks loginctl after logging in",
+      "kind": "unknown_nonblocking",
+      "task_id": "t8",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r6",
+      "text": "Node 20 / npm availability on Spark for 'npm run build' is unverified until t3",
+      "kind": "unknown_nonblocking",
+      "task_id": "t3",
+      "resolved": false,
+      "resolution": ""
+    }
+  ],
+  "obligations": []
+}
