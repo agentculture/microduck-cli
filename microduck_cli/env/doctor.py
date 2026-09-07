@@ -2,7 +2,8 @@
 
 Diagnoses whether this box is ready to run the simulation stack (t13) and
 the training lane (t14): the upstream clones checked out at the pinned
-commits recorded in ``docs/upstream-pins.md``, a cargo toolchain new enough
+commits recorded in ``docs/upstream-pins.md`` (carried inside the package as
+``PACKAGED_PINS`` too, so a wheel install can verify them), a cargo toolchain new enough
 to build ``robotd``/``robotctl``/``tof``/``sounds``, the built daemons
 themselves, the ``microduck_rl`` virtualenv with ``onnxruntime`` installed,
 a state directory short enough for unix sockets, a free port for
@@ -64,6 +65,18 @@ _MICRODUCK_RL_README_URL = (
 _MICRODUCK_RL_HF_README_URL = (
     "https://github.com/pollen-robotics/microduck_rl/blob/develop/scripts/hf/README.md"
 )
+
+# --- the pinned upstream commits, carried inside the wheel -------------
+# docs/upstream-pins.md is the authoritative ledger, but a wheel does not
+# ship docs/, so a `uv tool install` used to report both pin checks as
+# "unknown" (a [FAIL] line under a healthy verdict — the 2026-09-07 Spark
+# re-test, defect d5). These are the same commits, hardcoded on purpose;
+# tests/test_env_doctor.py asserts they equal the table so a re-pin that
+# forgets one of the two fails CI rather than drifting.
+PACKAGED_PINS: dict[str, str] = {
+    "pollen-robotics/microduck": "0cd676d6fbb6e90a762c84aa63abe7a02dbc9495",
+    "pollen-robotics/microduck_rl": "29e887ecfbf5d37144759e5a9f8a176dfb83d547",
+}
 
 _MIN_CARGO_VERSION = (1, 89)
 
@@ -181,6 +194,17 @@ def _parse_pins(pins_path: Path) -> dict[str, str]:
     return pins
 
 
+def load_pins(pins_path: Path) -> dict[str, str]:
+    """The pinned commits: the docs table when it is readable, else the packaged copy.
+
+    A checkout reads ``docs/upstream-pins.md`` (so an in-flight re-pin is seen
+    before the constant is updated); a wheel, which does not ship ``docs/``,
+    falls back to :data:`PACKAGED_PINS` row by row. Either way the result
+    carries both repos whenever either source knows them.
+    """
+    return {**PACKAGED_PINS, **_parse_pins(pins_path)}
+
+
 def _find_onnxruntime(rl_clone: str) -> str | None:
     venv = Path(rl_clone) / ".venv"
     if not venv.is_dir():
@@ -296,7 +320,7 @@ def default_probe() -> EnvProbe:
     env = _probe_environ()
 
     pins_path = Path(__file__).resolve().parents[2] / "docs" / "upstream-pins.md"
-    pins = _parse_pins(pins_path)
+    pins = load_pins(pins_path)
 
     microduck_clone, rl_clone = resolve_clone_paths(env)
     microduck_clone_commit = _git_head(microduck_clone) if microduck_clone else None
@@ -377,9 +401,9 @@ def _pinned_commit_check(
             check_id,
             False,
             "warning",
-            f"pinned commit for {label} is unknown (docs/upstream-pins.md unreadable or the "
-            "row is missing)",
-            "check that docs/upstream-pins.md is present and its table is well-formed",
+            f"pinned commit for {label} is unknown (no row in docs/upstream-pins.md and none "
+            "packaged)",
+            "add the repo's row to docs/upstream-pins.md and PACKAGED_PINS in env/doctor.py",
         )
     if not clone_commit:
         return _check(
@@ -621,17 +645,25 @@ def diagnose(probe: EnvProbe) -> dict[str, object]:
     return {"healthy": healthy, "checks": checks}
 
 
+def _mark(check: Mapping[str, object]) -> str:
+    if check["passed"]:
+        return "ok"
+    return "WARN" if check["severity"] == "warning" else "FAIL"
+
+
 def render_text(report: Mapping[str, object]) -> str:
     """Render `report` the way `microduck-cli doctor`'s text output looks.
 
-    ``"[ok] id: message"`` / ``"[FAIL] id: message"``, with a ``"  hint:
-    remediation"`` line under any failing check that carries one.
+    ``"[ok] id: message"`` for a passing check, ``"[WARN] id: message"`` for a
+    failing ``warning``-severity one (surfaced, never blocking the verdict) and
+    ``"[FAIL] id: message"`` for a failing ``error``, with a ``"  hint:
+    remediation"`` line under any failing check that carries one. The prefix
+    agrees with the verdict line: a healthy report never shows ``[FAIL]``.
     """
     status = "healthy" if report["healthy"] else "unhealthy"
     lines = [f"microduck-cli env doctor: {status}", ""]
     for check in report["checks"]:  # type: ignore[union-attr]
-        mark = "ok" if check["passed"] else "FAIL"
-        lines.append(f"[{mark}] {check['id']}: {check['message']}")
+        lines.append(f"[{_mark(check)}] {check['id']}: {check['message']}")
         if not check["passed"] and check["remediation"]:
             lines.append(f"  hint: {check['remediation']}")
     return "\n".join(lines)

@@ -107,7 +107,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         status = "healthy" if report["healthy"] else "unhealthy"
         lines = [f"microduck-cli doctor: {status}", ""]
         for check in report["checks"]:
-            mark = "ok" if check["passed"] else "FAIL"
+            if check["passed"]:
+                mark = "ok"
+            else:
+                mark = "WARN" if check["severity"] == "warning" else "FAIL"
             lines.append(f"[{mark}] {check['id']}: {check['message']}")
             if not check["passed"] and check["remediation"]:
                 lines.append(f"  hint: {check['remediation']}")
