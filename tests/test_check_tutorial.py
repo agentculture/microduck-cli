@@ -66,7 +66,7 @@ def _write(path: Path, content: str) -> Path:
     return path
 
 
-@pytest.fixture()
+@pytest.fixture
 def main_fixture(tmp_path):
     tutorial = _write(tmp_path / "tutorial.md", MAIN_TUTORIAL)
     record = _write(tmp_path / "record.txt", MAIN_RECORD)
