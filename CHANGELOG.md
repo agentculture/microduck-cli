@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] - 2026-09-07
+
+### Added
+
+- `docs/verification/2026-09-07-spark-retest.md` — DGX Spark re-test that followed the Jetson AI Lab tutorial draft step by step on the PyPI 0.9.4 wheel with the MuJoCo viewer windowed: all eleven steps, both live suites (12 passed, 1 xfailed windowed), the 64-env smoke (failed out-of-memory beside a resident vLLM engine, passed in 16 s with it paused), the gates, and the findings that changed the tutorial.
+- `docs/tools/check_tutorial.py` (+ `tests/test_check_tutorial.py`, 11 tests) — greps every fenced `bash` line of a tutorial against verification records (`nocheck` fences excluded), scans for identity strings in text and image names, lists the tutorial's PNGs; exit 0 only on 0 misses and 0 hits.
+- `docs/specs/2026-09-07-jetson-retest-and-ai-lab-tutorial.md`, `docs/plans/2026-09-07-jetson-retest-and-ai-lab-tutorial.md`, `docs/deliveries/2026-09-07-jetson-retest-and-ai-lab-tutorial.md` — the devague frame (39 claims, 21 honesty conditions, 26 scope entries incl. the rigorous challenge pass), the nine-task plan, and the partial-run delivery summary (t1–t5 delivered; PRs and the operator's Thor/Orin runs pending).
+
+### Changed
+
+- `microduck_cli/env/hosts.py`: the GB10 `verified` pointer names the 2026-09-07 record beside the 2026-09-04 one; `tests/test_hosts.py` pins it. No verdict or remediation changed.
+- `README.md`: the proof table gains the Spark re-test row, with its two caveats (the wheel's `env doctor` prints `[FAIL]` pin lines under a `healthy` verdict; the smoke needs the GPU free).
+
+### Fixed
+
+- Nothing in the CLI. One defect was found and deferred to its own PR: on a wheel install `env doctor` reads `docs/upstream-pins.md` from a path the wheel does not ship, so both pin checks degrade to "unknown" and print `[FAIL]` although their severity is `warning` and the verdict stays `healthy`.
+
 ## [0.9.4] - 2026-09-04
 
 ### Added

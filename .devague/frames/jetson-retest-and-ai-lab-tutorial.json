@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-07T00:02:44Z",
-  "updated": "2026-09-07T00:36:42Z",
+  "updated": "2026-09-07T03:49:10Z",
   "claims": [
     {
       "id": "c1",
@@ -865,5 +865,114 @@
     }
   ],
   "lapses": [],
-  "obligations": []
+  "obligations": [
+    {
+      "id": "o1",
+      "claim_id": "c27",
+      "seam": "tutorial fenced commands vs records",
+      "behavior": "every checked fenced command appears verbatim in a record/doc; Orin tab has no training command",
+      "source_text": "The tutorial covers three boxes \u2014 DGX Spark (GB10), Jetson AGX Thor and Jetson AGX Orin \u2014 as one path with per-box tabs or a matrix: Spark and Thor get sim + CLI + training smoke (Spark on upstream's cu129 source as shipped, Thor on the PR-39/SBSA override), Orin gets sim + CLI only. Spark's evidence is a 2026-09-07 re-run of the six checks at 0.9.4 on this box (windowed, its Spark record already has the screenshot recipe), so all three boxes cite same-day records at the same CLI version",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o2",
+      "claim_id": "c32",
+      "seam": "install line version pin",
+      "behavior": "the install command pins the exact version every record ran at",
+      "source_text": "The records PR bumps the version and publish.yml pushes that version to PyPI on merge, so 'uv tool install microduck-cli' would install a release the records never ran. The tutorial's install line pins the verified version ('uv tool install microduck-cli==<verified>') and states the version each record ran at; the docs-only bump is noted as behaviour-identical",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o3",
+      "claim_id": "c33",
+      "seam": "prerequisites section",
+      "behavior": "Python 3.12, uv python install 3.12, rustup + source ~/.cargo/env, cargo build, per-box tested L4T/JetPack; JetPack 6 untested",
+      "source_text": "The tutorial's prerequisites state Python >=3.12 (CLI floor) and name the tested software: Thor JetPack 7 / L4T R38.2.2, Orin L4T R39, Spark DGX OS \u2014 all Python 3.12.3 boxes. JetPack 6 Orin ships Python 3.10; the tutorial tells those readers to 'uv python install 3.12' for the CLI and marks the RL venv (torch 2.9.1 cp312) as untested on JetPack 6. It also lists the Rust toolchain (rustup; 'source ~/.cargo/env' before env doctor, since a non-login shell lacks ~/.cargo/bin) and the cargo build of robotd as prerequisites with rough build times from the records",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o4",
+      "claim_id": "c13",
+      "seam": "five caveat admonitions",
+      "behavior": "each caveat links the record or PR that proved it; none softened",
+      "source_text": "The tutorial states what does not work at the pin, in the site's own voice (admonition warning): the duck stands, holds 50 Hz and runs skills but does not walk; Thor training needs the microduck_rl#39 branch or the SBSA-index override until it merges; Orin cannot train; relax drops the duck. CONTRIBUTING.md requires 'clearly identify anything you did not test' and 'verify commands on the hardware and JetPack you name' \u2014 hence the re-test precedes the tutorial",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o5",
+      "claim_id": "c4",
+      "seam": "pins table byte match",
+      "behavior": "the record's pins match docs/upstream-pins.md and the walk sentinel is quoted as xfail",
+      "source_text": "Re-test at the pinned upstream commits \u2014 pollen-robotics/microduck sim-remote-io @0cd676d and microduck_rl develop @29e887e are still the branch heads (checked 2026-09-07 via gh api) and microduck_rl#39 is still OPEN, so there is nothing to re-pin to; docs/upstream-pins.md stays untouched and locomotion stays 'not achieved' (test_sim_body_walks_forward_on_move remains xfail)",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o6",
+      "claim_id": "c7",
+      "seam": "Spark record shape",
+      "behavior": "record in the 2026-09-04 shape, outputs unchanged, elisions marked, logs named, CLI version stated, windowed with two screenshots",
+      "source_text": "Each re-test produces a new dated record under docs/verification/ (2026-09-07-thor-retest.md, 2026-09-07-orin-retest.md) in the six-check / three-tier shape of 2026-09-04-thor-sanity.md, with outputs pasted unchanged and elisions marked; this time Thor's tier 2 runs WINDOWED (MICRODUCK_LIVE_HEADLESS=0 / env up --sim without --headless) and carries two screenshots a few seconds apart",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o7",
+      "claim_id": "c26",
+      "seam": "hosts.py verified pointer",
+      "behavior": "GB10 pointer names the 2026-09-07 record; no verdict changes",
+      "source_text": "The re-test records update microduck_cli/env/hosts.py HostInfo.verified strings and README's three-box table to point at the 2026-09-07 records (docs-only change to hosts.py constants + tests/test_hosts.py strings), bumped as one docs PR through the cicd lane",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o8",
+      "claim_id": "c11",
+      "seam": "site build + page",
+      "behavior": "npm run build exits 0 and the page renders",
+      "source_text": "The tutorial lands in NVIDIA-AI-IOT/jetson-ai-lab as src/content/tutorials/<subfolder>/<slug>.md plus src/pages/tutorials/<slug>.astro wrapping TutorialLayout; frontmatter needs title, description, category (enum in src/content/config.ts), tags, and authors (name + github); PR from a fork to main with 'npm run build' passing (schema validation), DCO sign-off recommended",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o9",
+      "claim_id": "c34",
+      "seam": "screenshots single window",
+      "behavior": "every PNG shows one MuJoCo viewer window and nothing else",
+      "source_text": "Tutorial screenshots capture the MuJoCo window only (gnome-screenshot -w on the focused viewer, or a crop), never a full desktop \u2014 no terminals, hostnames, browser tabs or other windows appear; the JetKVM web view is not itself screenshotted for the tutorial. The identity grep extends to image file names and alt text",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o10",
+      "claim_id": "c9",
+      "seam": "Orin tab has no training",
+      "behavior": "no policy smoke/train command in the Orin path",
+      "source_text": "Orin GPU training stays out of scope: at this pin the only torch 2.9.1 cp312 CUDA-13 wheel carries no sm_87 kernels (docs/verification/2026-09-04-orin-sanity.md, microduck_cli/env/hosts.py _ORIN_NO_TRAINING_REMEDIATION). The Orin re-test covers checks 1-4 (sim, fake, rules, gates) and the tutorial routes Orin readers to sim+CLI only, training on Thor/Spark/HF Jobs",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o11",
+      "claim_id": "c18",
+      "seam": "wheel-install reader experience",
+      "behavior": "a reader following Step 5 on the PyPI wheel sees what the tutorial says",
+      "source_text": "Two readers: (1) the operator of this repo re-verifying microduck-cli 0.9.4 on Thor and Orin and wanting to SEE the sim; (2) a Jetson AI Lab reader with a Jetson AGX Thor or AGX Orin on JetPack 7 who has never heard of MicroDuck and wants a standing, reacting simulated duck driven from one CLI, plus the training smoke where the board can run it",
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "o12",
+      "claim_id": "c1",
+      "seam": "done condition",
+      "behavior": "records on main, Thor session, jetson-ai-lab PR URL exists",
+      "source_text": "microduck-cli re-verified on Jetson AGX Thor (with a visible MuJoCo window) and Jetson AGX Orin, and a Jetson AI Lab tutorial shows a reader how to run the MicroDuck simulation, the CLI and the training smoke on their own Jetson",
+      "origin": "llm",
+      "status": "approved"
+    }
+  ]
 }
