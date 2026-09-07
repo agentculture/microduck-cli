@@ -306,7 +306,7 @@ dependencies = []
 - **The command check.** `docs/tools/check_tutorial.py` greps every fenced
   `bash` line of the tutorial against the records, `docs/operating-the-duck.md`,
   the `operate-microduck` skill and the README, matching whole command entries
-  (a `$ `-prompt line or a fenced `bash` line, comments stripped, `uv run` prefix
+  (a `$`-prompt line or a fenced `bash` line, comments stripped, `uv run` prefix
   ignored), never substrings: 26 checked command lines, 26 hit, 0 miss. Eight
   fences are marked `nocheck` because they hold provisioning or
   reader-specific placeholders no record quotes verbatim (`mkdir`/`git clone`/
