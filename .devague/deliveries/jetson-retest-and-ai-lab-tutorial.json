@@ -1,0 +1,424 @@
+{
+  "plan_slug": "jetson-retest-and-ai-lab-tutorial",
+  "schema_version": 2,
+  "created": "2026-09-07T03:46:16Z",
+  "updated": "2026-09-07T03:56:39Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "Validate-delivery and summarize-delivery run after t5 and BEFORE any PR (t6, t7), with t8/t9 pending as operator work; the plan had the delivery legs after the merges",
+      "task_ref": "t6",
+      "reason": "user direction 2026-09-07: 'when Tutorial is done, and before any PR'; Thor/Orin operator runs count as the tutorial's validation afterwards",
+      "affects": [
+        "t6",
+        "t7"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 1
+    },
+    {
+      "id": "d2",
+      "what": "The Spark training smoke needed model-gear-vllm-primary stopped for 4.5 min (06:34:22-06:38:55+03:00) and restarted healthy; beside it Warp saw 0 GiB and failed OOM",
+      "task_ref": "t4",
+      "reason": "plan risk r4 materialised; operator chose 'stop vllm-primary for the smoke, restart after'",
+      "affects": [
+        "t4"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 2
+    },
+    {
+      "id": "d3",
+      "what": "For the windowed run the Spark desktop session was unlocked and idle-delay/lock-enabled set to 0/false, then restored to 300/true at 06:40:04; the first attempt died when the session locked",
+      "task_ref": "t4",
+      "reason": "GNOME lock closed the viewer and the body exited; the tutorial now warns about it",
+      "affects": [
+        "t4"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 3
+    },
+    {
+      "id": "d4",
+      "what": "The jetson-ai-lab fork already existed as OriNachum/jetson-generative-ai-playground (upstream renamed); it was cloned to ../jetson-ai-lab instead of creating a new fork",
+      "task_ref": "t3",
+      "reason": "gh repo fork reported the existing fork; a second fork is impossible",
+      "affects": [
+        "t3",
+        "t7"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 4
+    },
+    {
+      "id": "d5",
+      "what": "CLI defect found by the dry-run, deferred to its own PR per spec c10: env doctor on a wheel install reads docs/upstream-pins.md from a path the wheel does not ship, prints [FAIL] for two warning-severity pin checks under a healthy verdict",
+      "task_ref": "t4",
+      "reason": "tutorial step 5 documents the symptom; fixing it changes CLI code, outside this plan's docs-only scope",
+      "affects": [
+        "t6"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "classification": "needs-follow-up",
+      "seq": 5
+    },
+    {
+      "id": "d6",
+      "what": "Steps 2-4 of the tutorial (git clone, cargo build, uv sync) were not re-run on Spark; clones, daemons and venv pre-existed at the pins and were verified by result",
+      "task_ref": "t4",
+      "reason": "re-running would have cost an hour for no new evidence; Thor/Orin operator runs exercise them from scratch",
+      "affects": [
+        "t4"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 6
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e1",
+      "obligation_ref": "o1",
+      "test_ref": "docs/tools/check_tutorial.py --record docs/verification/*.md docs/operating-the-duck.md SKILL.md README.md",
+      "behavior_text": "30 checked bash lines, 30 hit, 0 miss; 6 nocheck fences (provisioning/placeholders) listed in the record",
+      "contract_text": "each tab's commands are quoted from that box's record (h7)",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "checker ran at 7495769, exit 0; totals commands=30 hit=30 miss=0",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 7
+    },
+    {
+      "id": "e2",
+      "obligation_ref": "o2",
+      "test_ref": "grep 'uv tool install microduck-cli==' tutorial; grep 0.9.4 record",
+      "behavior_text": "install line is microduck-cli==0.9.4; the Spark record names 0.9.4 five times; PyPI wheel 0.9.4 installed and answered --version",
+      "contract_text": "the install command names an exact version that appears as the CLI version in all three 2026-09-07 records (h18)",
+      "evidence_type": "manual",
+      "strength": "execution",
+      "strength_basis": "Thor/Orin 2026-09-07 records do not exist yet (operator); Spark record and the 2026-09-04 records agree on 0.9.4",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 8
+    },
+    {
+      "id": "e3",
+      "obligation_ref": "o3",
+      "test_ref": "grep counts on the tutorial",
+      "behavior_text": "Python 3.12 x5, 'uv python install 3.12' x1, rustup x3, 'source ~/.cargo/env' x3, JetPack 6 x1 marked 'not tested'",
+      "contract_text": "prerequisites list Python 3.12, rustup + source, the cargo build, tested L4T/JetPack per box; JetPack 6 untested (h19)",
+      "evidence_type": "automated",
+      "strength": "coverage",
+      "strength_basis": "string presence only; wording reviewed by hand",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 9
+    },
+    {
+      "id": "e4",
+      "obligation_ref": "o4",
+      "test_ref": "grep '<Warning title=' + link counts",
+      "behavior_text": "8 Warning blocks incl. the five required (no walk, Thor fork branch until #39, Orin no training, --apply dry-run, relax falls) plus three from the dry-run (lock screen, GPU must be free, no training on Orin); 7 evidence links to records/PR",
+      "contract_text": "each of the five caveats names the record or upstream issue it comes from (h6)",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "read each block against its record",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 10
+    },
+    {
+      "id": "e5",
+      "obligation_ref": "o5",
+      "test_ref": "grep of both shas across tutorial, record, upstream-pins; grep xfail record",
+      "behavior_text": "both shas present in tutorial (2 each), record (2 each), upstream-pins; record quotes XFAIL 3 times; upstream heads unchanged per gh api on 2026-09-07",
+      "contract_text": "the record's pins table matches docs/upstream-pins.md; walk sentinel quoted xfail (h2)",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "live suite windowed: 12 passed, 1 xfailed at 61a564c",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 11
+    },
+    {
+      "id": "e6",
+      "obligation_ref": "o6",
+      "test_ref": "docs/verification/2026-09-07-spark-retest.md + scratchpad logs 00-10",
+      "behavior_text": "record names 11 log files, CLI 0.9.4 wheel + repo 61a564c, two window PNGs 1468x1026, 'What was NOT verified'; markdownlint 0 errors",
+      "contract_text": "every quoted line traces to a kept log; record names the CLI commit (h3)",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "lines pasted from the logs by the author of both",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 12
+    },
+    {
+      "id": "e7",
+      "obligation_ref": "o7",
+      "test_ref": "uv run pytest tests/test_hosts.py; git diff 61a564c HEAD -- microduck_cli/env/hosts.py",
+      "behavior_text": "17 passed; diff touches only the _GB10_VERIFIED string (0 changed lines mention torch_source_applies or remediation)",
+      "contract_text": "tests/test_hosts.py passes with the new verified strings and no HostInfo verdict changes (h16)",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest green at 7495769",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 13
+    },
+    {
+      "id": "e8",
+      "obligation_ref": "o8",
+      "test_ref": "npm run build in ../jetson-ai-lab @31c2bad",
+      "behavior_text": "exit 0; dist/tutorials/microduck-on-jetson/index.html emitted; 'nocheck' marker absent from the HTML; both PNGs referenced",
+      "contract_text": "npm run build exits 0 at the PR head and the page renders (h5)",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "build log 09-npm-build.txt",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 14
+    },
+    {
+      "id": "e9",
+      "obligation_ref": "o9",
+      "test_ref": "visual review of microduck-spark-stand-1.png and -2.png",
+      "behavior_text": "both 1468x1026 captures show the 'MuJoCo : scene' window only, duck standing in the same place; identity scan of names 0 hits",
+      "contract_text": "every PNG shows a single MuJoCo viewer window; no terminal/hostname/other window (h20)",
+      "evidence_type": "manual",
+      "strength": "fidelity",
+      "strength_basis": "images viewed by the agent; a reviewer should look too",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 15
+    },
+    {
+      "id": "e10",
+      "obligation_ref": "o10",
+      "test_ref": "read of the Orin tab in Step 4 and Step 10",
+      "behavior_text": "Orin Step-10 tab contains only the 'No training step on Orin' warning; Orin Step-4 tab has UV_INDEX uv sync only",
+      "contract_text": "no policy smoke or train invocation in the Orin path (h4, tutorial half)",
+      "evidence_type": "manual",
+      "strength": "coverage",
+      "strength_basis": "the Orin record half is the operator's run (t8)",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 16
+    },
+    {
+      "id": "e11",
+      "obligation_ref": "o11",
+      "test_ref": "microduck env doctor on the uv tool install (02-steps2-5.txt)",
+      "behavior_text": "prints 'healthy' exit 0 but two '[FAIL] \u2026 pinned commit \u2026 unknown (docs/upstream-pins.md unreadable)' lines: the wheel lacks the pins file; the original tutorial text promised thirteen ok checks",
+      "contract_text": "the tutorial's prerequisites/steps name only what the records cover (h9)",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "reproduced on Spark; CLI defect deferred to its own PR (d5)",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 17
+    },
+    {
+      "id": "e12",
+      "obligation_ref": "o12",
+      "test_ref": "gh pr list (none opened yet); git branch state",
+      "behavior_text": "no PR exists on either repo by design (d1: validate/summarize before any PR); Thor/Orin records do not exist yet (t8)",
+      "contract_text": "done when all three records are on main, Thor's seat0 session is thor-owned, and the jetson-ai-lab PR URL exists (h8)",
+      "evidence_type": "observation",
+      "strength": "coverage",
+      "strength_basis": "not yet checkable; reported unmet, not pending-as-pass",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-07T06:45:00+03:00",
+        "commit": "7495769"
+      },
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false,
+      "seq": 18
+    },
+    {
+      "id": "e13",
+      "obligation_ref": "o2",
+      "test_ref": "existence of docs/verification/2026-09-07-{thor,orin}-retest.md",
+      "behavior_text": "the Thor and Orin 2026-09-07 records do not exist yet, so the 'all three 2026-09-07 records name 0.9.4' half of h18 cannot be checked; e2 covers the Spark record and the PyPI install only",
+      "contract_text": "the install command names an exact version that appears as the CLI version in all three 2026-09-07 records (h18)",
+      "evidence_type": "observation",
+      "strength": "coverage",
+      "strength_basis": "Qodo review on PR #8 (comment 3946429053): e2's pass overstated the three-record obligation; filed as the unmet half, pending operator task t8",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-07T07:20:00+03:00",
+        "commit": "5e18435"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 19
+    }
+  ],
+  "deltas": [
+    {
+      "id": "b1",
+      "kind": "amended",
+      "behavior_text": "Spark training tab cites 16 s on a warm cache beside the 58.6 s cold figure and names the out-of-memory signature beside a resident GPU tenant",
+      "caused_by": [
+        "d2"
+      ],
+      "evidence_refs": [
+        "e6"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b2",
+      "kind": "added",
+      "behavior_text": "docs/tools/check_tutorial.py: fenced-command vs record checker with nocheck fences, identity scan, image listing; 11 tests",
+      "caused_by": [
+        "c24"
+      ],
+      "evidence_refs": [
+        "e1"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b3",
+      "kind": "amended",
+      "behavior_text": "Step 9's sample output replaced with the CLI's real stderr lines and JSON metrics summary; Step 8 documents record's two expected record-source-absent drops",
+      "caused_by": [
+        "c21"
+      ],
+      "evidence_refs": [
+        "e6"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b4",
+      "kind": "removed",
+      "behavior_text": "Two env up variant lines lost their trailing # comments so they match the records verbatim",
+      "caused_by": [
+        "c27"
+      ],
+      "evidence_refs": [
+        "e1"
+      ],
+      "origin": "llm",
+      "status": "approved",
+      "superseded": false
+    },
+    {
+      "id": "b5",
+      "kind": "amended",
+      "behavior_text": "Tutorial Step 5 documents the wheel doctor's two [FAIL] pin lines under a healthy verdict instead of promising thirteen ok checks",
+      "caused_by": [
+        "d5"
+      ],
+      "evidence_refs": [
+        "e11"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b6",
+      "kind": "added",
+      "behavior_text": "Tutorial warns that a locking desktop session kills the simulator body, tells readers env up returns before the IMU is ready, and adds two troubleshooting entries (monitor hang / bus write failed; smoke OOM)",
+      "caused_by": [
+        "d3"
+      ],
+      "evidence_refs": [
+        "e6"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    }
+  ],
+  "supersessions": []
+}

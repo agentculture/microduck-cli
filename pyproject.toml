@@ -1,6 +1,6 @@
 [project]
 name = "microduck-cli"
-version = "0.9.4"
+version = "0.9.5"
 description = "Agent-agnostic CLI for controlling the MicroDuck robot. Any agent, any human, one CLI. Sim-first: every verb is exercised against the real robotd daemon and the MuJoCo simulation."
 readme = "README.md"
 license = "Apache-2.0"

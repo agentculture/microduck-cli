@@ -133,6 +133,7 @@ before trusting a number here.
 | Box | Reached | Result | Caveat |
 |---|---|---|---|
 | **DGX Spark** (GB10, aarch64) | all six checks + train smoke | pass; live suite **12 passed, 0 failed** | walking `xfail` |
+| **DGX Spark**, re-test 2026-09-07 following the [Jetson AI Lab tutorial](docs/verification/2026-09-07-spark-retest.md) on the **PyPI 0.9.4 wheel**, viewer **windowed** | tutorial steps 1 and 5–11 executed on the wheel (steps 2–4, clone/build/venv, checked against pre-existing state, not re-run) + both live suites + smoke | pass; **12 passed, 1 xfailed** windowed | the wheel's `env doctor` prints two `[FAIL]` pin lines under a `healthy` verdict (pins file not shipped, filed); the smoke needs the GPU free — it failed OOM beside a resident vLLM engine and passed with it paused |
 | **Jetson AGX Thor** (JetPack 7) | all six checks, three tiers, headless | pass; **12 passed, 1 xfailed** | ran on an *uncommitted* local torch override; the upstream fix is still open as [microduck_rl#39](https://github.com/pollen-robotics/microduck_rl/pull/39) (issue [#38](https://github.com/pollen-robotics/microduck_rl/issues/38)), so `env doctor`'s `rl_pinned_commit` fails there **by design** until it merges and this repo re-pins |
 | **Jetson AGX Orin** (L4T R39) | checks 1–4 | pass | the SBSA torch wheel carries no `sm_87` kernels — GPU training is **not available** on Orin at this pin |
 
