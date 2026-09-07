@@ -82,8 +82,9 @@ _UNVERIFIED_REMEDIATION = (
 
 # The two boxes the sanity has run on, and the records that prove it.
 _GB10_VERIFIED = (
-    "DGX Spark, 2026-09-04, upstream's pytorch-cu129 source as shipped — "
-    "docs/verification/2026-09-04-sim-bringup.md"
+    "DGX Spark, 2026-09-04 and 2026-09-07 (windowed, PyPI wheel), upstream's "
+    "pytorch-cu129 source as shipped — docs/verification/2026-09-04-sim-bringup.md, "
+    "docs/verification/2026-09-07-spark-retest.md"
 )
 _THOR_VERIFIED = (
     "Jetson AGX Thor, 2026-09-04, with a local torch-source override of the "

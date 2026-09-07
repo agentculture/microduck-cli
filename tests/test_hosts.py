@@ -113,6 +113,7 @@ def test_verified_records_point_at_the_three_boxes_that_ran_the_sanity():
     """GB10 (Spark), Thor and Orin each carry their docs/verification pointer;
     a host nobody has verified on carries None, never an invented record."""
     assert "2026-09-04-sim-bringup.md" in classify(GB10_PROBE).verified
+    assert "2026-09-07-spark-retest.md" in classify(GB10_PROBE).verified
     assert "2026-09-04-thor-sanity.md" in classify(JETSON_THOR_PROBE).verified
     assert "2026-09-04-orin-sanity.md" in classify(JETSON_AGX_ORIN_PROBE).verified
     assert classify(X86_64_PROBE).verified is None
