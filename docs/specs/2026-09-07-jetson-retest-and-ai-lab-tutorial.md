@@ -31,10 +31,19 @@
   - instruction: Tutorial carries admonition-warning blocks for: no walking at the pin (link sim-bringup record), Thor training via the PR-39 branch until it merges, Orin cannot train (`sm_87`), relax makes the duck fall, dry-run on a pipe moved nothing; each links the record that proved it
   - honesty: each of the five caveats in the tutorial names the docs/verification record or upstream issue it comes from; none is softened relative to the record
 - The re-test records update `microduck_cli`/env/hosts.py HostInfo.verified strings and README's three-box table to point at the 2026-09-07 records (docs-only change to hosts.py constants + tests/`test_hosts.py` strings), bumped as one docs PR through the cicd lane
+  - instruction: Edit `_GB10_VERIFIED`/`_THOR_VERIFIED`/`_ORIN_VERIFIED` strings in `microduck_cli`/env/hosts.py to name the 2026-09-07 records, update the matching asserts in tests/`test_hosts.py` and README's three-box table; version-bump patch; cicd open
   - honesty: tests/`test_hosts.py` passes with the new 'verified' strings and no HostInfo verdict (`torch_source_applies`, remediation) changes
 - The tutorial covers three boxes — DGX Spark (GB10), Jetson AGX Thor and Jetson AGX Orin — as one path with per-box tabs or a matrix: Spark and Thor get sim + CLI + training smoke (Spark on upstream's cu129 source as shipped, Thor on the PR-39/SBSA override), Orin gets sim + CLI only. Spark's evidence is a 2026-09-07 re-run of the six checks at 0.9.4 on this box (windowed, its Spark record already has the screenshot recipe), so all three boxes cite same-day records at the same CLI version
   - instruction: Run the six checks on Spark at 0.9.4 exactly as docs/verification/2026-09-04-sim-bringup.md did (windowed via DISPLAY=:1, gnome-screenshot), write docs/verification/2026-09-07-spark-retest.md; in the tutorial use a Tabs block (.mdx) labelled DGX Spark / AGX Thor / AGX Orin for the box-specific steps (torch source, training availability), with the shared sim + CLI steps outside the tabs
   - honesty: each of the three tabs' commands is quoted from that box's 2026-09-07 record, and the Orin tab carries no training command
+- Thor hosts a production docker stack (prod-api, prod-postgres, prod-minio, prod-worker, prod-scheduler, prod-notifier, prod-backup) and three vLLM engines with NO container memory limits, a 60 GB swapfile and `overcommit_memory`=0 (probed 2026-09-07). Tier 3 (the 64-env smoke) runs only after 'free -g' shows >=20 GB available; the record pastes free -g before and after, and 'docker ps' health of every prod-\* container after tier 3; if headroom is short the smoke is skipped and recorded as not run, never forced into swap
+  - honesty: the Thor record shows free -g immediately before tier 3 and docker ps --format '{{.Names}} {{.Status}}' immediately after, with every prod-\* container still Up/healthy
+- The records PR bumps the version and publish.yml pushes that version to PyPI on merge, so 'uv tool install microduck-cli' would install a release the records never ran. The tutorial's install line pins the verified version ('uv tool install microduck-cli==<verified>') and states the version each record ran at; the docs-only bump is noted as behaviour-identical
+  - honesty: the tutorial's install command names an exact version that appears as the CLI version in all three 2026-09-07 records
+- The tutorial's prerequisites state Python >=3.12 (CLI floor) and name the tested software: Thor JetPack 7 / L4T R38.2.2, Orin L4T R39, Spark DGX OS — all Python 3.12.3 boxes. JetPack 6 Orin ships Python 3.10; the tutorial tells those readers to 'uv python install 3.12' for the CLI and marks the RL venv (torch 2.9.1 cp312) as untested on JetPack 6. It also lists the Rust toolchain (rustup; 'source ~/.cargo/env' before env doctor, since a non-login shell lacks ~/.cargo/bin) and the cargo build of robotd as prerequisites with rough build times from the records
+  - honesty: the prerequisites section lists Python 3.12, rustup + 'source ~/.cargo/env', the cargo build, and the tested L4T/JetPack per box; JetPack 6 is marked untested
+- Tutorial screenshots capture the MuJoCo window only (gnome-screenshot -w on the focused viewer, or a crop), never a full desktop — no terminals, hostnames, browser tabs or other windows appear; the JetKVM web view is not itself screenshotted for the tutorial. The identity grep extends to image file names and alt text
+  - honesty: every PNG under public/images/tutorials/microduck-on-jetson/ shows a single MuJoCo viewer window; a reviewer can find no terminal, hostname or other window in any of them
 
 ## Honesty conditions
 
@@ -53,7 +62,9 @@
 
 - Thor: 'systemctl get-default' prints graphical.target, gdm is active, a thor-owned gnome-shell exists, and 'env up --sim' (no --headless) opens a MuJoCo window captured by gnome-screenshot; the live suite with `MICRODUCK_LIVE_BODY`=sim `MICRODUCK_LIVE_SIM`=1 `MICRODUCK_LIVE_HEADLESS`=0 reports 12 passed 1 xfailed; policy smoke exits 0 on the PR-39 venv
 - Orin: env doctor 13/13 (training remediation as info), the fake-body live suite 11 passed 2 skipped, the sim-body suite 12 passed 1 xfailed, gates green at 0.9.4; a screenshot of the duck on Orin's connected DP-1 monitor if a user session is opened
+  - instruction: On Orin: env doctor --json; `MICRODUCK_LIVE`=1 live suite twice (fake body; then `MICRODUCK_LIVE_BODY`=sim `MICRODUCK_LIVE_SIM`=1); run the six gates; if a user session is opened on DP-1, env up --sim windowed + gnome-screenshot, else record 'no user session, headless'
 - Tutorial: 'npm run build' passes in the fork with the new content + wrapper; every fenced command in the tutorial appears verbatim in one of the two 2026-09-07 records; grep for home paths and account names in the tutorial and images = 0; PR opened to NVIDIA-AI-IOT/jetson-ai-lab main with DCO sign-off
+  - instruction: In the fork: npm ci && npm run build (paste exit code); scripts/check-tutorial-commands.py (new, in this repo's scratch or docs/tools) extracts fenced bash lines from the tutorial and greps them in the three 2026-09-07 records; grep -rn '/home/\|orinachum' on the tutorial + image names; gh pr create against NVIDIA-AI-IOT/jetson-ai-lab main with commit -s
 
 ## Scope / boundaries
 
@@ -114,12 +125,26 @@
   - seeds: `c17`
 - `s17` — `jetson-ai-lab: grep 'DGX Spark|GB10' — setup/intro-to-jetson.md, applications/live-vlm-webui.md, model-optimization/finetune-on-jetson.mdx, src/data/benchmarks.json; this box: nvidia-smi GB10, 19 GB free of 121`: the site already treats DGX Spark as a first-class target (device matrix rows, a fine-tuning playbook link, benchmark entries), so a Spark column in the tutorial fits house style; the Spark box has 19 GB free today (vLLM lobes resident), a fraction of the 2026-09-04 headroom
   - seeds: `c27`
+- `s18` — `challenge pass / lifecycle lens: thor systemctl/loginctl/drm re-probe after the user's restore`: the target flip is done; what remains for a windowed run is a thor-owned session (login via JetKVM or AutomaticLogin=thor) and a connected sink
+  - seeds: `c30`
+- `s19` — `challenge pass / adjacent-systems lens: thor docker inspect HostConfig.Memory, swapon, /proc/sys/vm/overcommit_memory`: an unlimited-memory production stack shares the box; a memory-hungry training smoke would degrade it through swap before any OOM — a containment threshold is needed spec-side
+  - seeds: `c31`
+- `s20` — `challenge pass / hidden-dependency lens: gh pr view microduck_rl#39 headRepositoryOwner`: the only working Thor training recipe lives on a personal fork; a public tutorial that depends on it needs an explicit choice
+- `s21` — `challenge pass / unstated-assumptions lens: orin loginctl (greeter only) vs claim c17 and instruction c23`: c23 says 'if a user session is opened' without saying by whom; c17 forbids the change that would open it — the frame contradicted itself here
+- `s22` — `challenge pass / data-flow lens: tests/live/test_live_cli.py (env = dict(os.environ), MICRODUCK_LIVE_HEADLESS) and env/stack.py base_env=os.environ`: clean — DISPLAY/XAUTHORITY exported in the ssh shell reach duck-body through both the live suite and env up; no code change needed for a windowed run
+- `s23` — `challenge pass / concurrency lens: thor ~/git/actions-runner, pgrep Runner.Listener`: clean — the runner is installed but no listener process is running, so no CI job can land on Thor mid-run; re-check pgrep before tier 3
+- `s24` — `challenge pass / operations lens: spark loginctl seat0 tty2, /tmp/.X11-unix/X1`: clean — the Spark record's DISPLAY=:1 recipe still matches the live session
+- `s25` — `challenge pass / reversibility lens: orin docker ps model-gear-vllm-associate (healthy), 2026-09-04 record's stop/start timestamps`: the stop/start is reversible and was rehearsed; residual: the colleague backend (ask-colleague) is unavailable to the whole mesh while it is down — announce on the mesh channel before stopping
+- `s26` — `challenge pass / observability lens: thor /sys/class/drm (all cards), xrandr on :0 refused without the gdm cookie, JetKVM view (user)`: the sysfs connector state disagrees with what the JetKVM shows; use loginctl + the JetKVM view as the observable, and read xrandr with the session owner's XAUTHORITY once thor is logged in
+  - seeds: `c35`
 
 ## Decisions
 
 - Order of work: (1) Thor GUI restore, (2) Thor re-test windowed, (3) Orin re-test, (4) records + hosts.py 'verified' pointers PR in this repo, (5) tutorial PR on jetson-ai-lab. The tutorial is written from the records, never before them
 - Thor's display is a JetKVM (KVM-over-IP with an HDMI input that presents an EDID sink): plug its HDMI into Thor so card2-HDMI-A-1 reads 'connected', run gdm on that output, and watch the MuJoCo window in the JetKVM browser view as well as via gnome-screenshot. No virtual display work
 - The JetKVM is already cabled to Thor's HDMI but its USB power may be off (user, 2026-09-07) — hence the 0-byte EDID. Step 1 of the run is: power the JetKVM, re-read /sys/class/drm/card2-HDMI-A-1/status until 'connected', then set-default graphical.target + start gdm
+- Thor GUI restore was done by the user before the run (probed 2026-09-07): graphical.target, gdm active, Xorg on :0 with the gdm greeter's gnome-shell; no thor seat0 session yet (AutomaticLogin commented out) and HDMI-A-1 still shows no EDID while the JetKVM's USB power is being checked. Plan step 1 becomes verify + log in, not flip
+- Thor's kernel DRM connector status is NOT the readiness signal: with the JetKVM powered and the user watching the greeter through it, card2-DP-1 and card2-HDMI-A-1 still read 'disconnected' with no EDID (only card0/1/2 exist, no other connector nodes). Readiness for the windowed run = a thor-owned seat0 session in loginctl plus the JetKVM view; the record quotes both and notes the connector reading
 
 ## Open parks
 
@@ -127,3 +152,5 @@
 - [unknown_nonblocking] Whether the 64-env training smoke still passes on Thor with only ~28 GB available beside three vLLM engines (it had 46 GB on 2026-09-04) — decided by the run, not now
 - [unknown_nonblocking] Whether Jetson AI Lab maintainers accept a tutorial whose training tier depends on an unmerged upstream PR (`microduck_rl`#39); mitigations: wait for the merge and re-pin, or document the override as an explicit 'until #39 merges' step
 - [unknown_nonblocking] The JetKVM is not currently cabled to Thor: both DRM connectors show status 'disconnected' with a 0-byte EDID (probed 2026-09-07), and no JetKVM answered mDNS from Spark. Step 1 needs the operator to plug its HDMI into Thor and share its web address before the GUI can be verified
+- [unknown_nonblocking] Whether gdm's Xorg on Thor keeps running once the JetKVM's EDID appears (hotplug on the tegra driver may restart the session), and whether AutomaticLogin is needed at all if the user logs in once through the JetKVM console — settled by the run
+- [unknown_nonblocking] Residual after the pass: the MuJoCo viewer's behaviour on Thor's Xorg has never been observed on any Jetson; the whole windowed proof rests on it opening. Fallback recorded in v1
