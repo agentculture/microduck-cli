@@ -291,6 +291,48 @@ dependencies = []
 
 **Pass.**
 
+## Addendum — the skills-listing verb (07:06+03:00, `--fake` body)
+
+A review of the tutorial pointed out that `rules check --duck` does not list
+skills in its text output (only `- ok`), so the tutorial's "ask the live daemon
+what it has" step now uses `policy list --duck`. Captured on the fake body so
+the command is on record:
+
+```text
+$ microduck env up --fake
+microduck-cli env up: healthy (fake)
+$ microduck policy list --duck duck-a
+# policy list (robot.subscribe)
+duck: duck-a
+
+## slots
+- walk: alpha_walking.onnx
+- stand: alpha_stand.onnx
+- unavailable: None
+
+## skills
+- ground_pick: alpha_ground_pick.onnx
+- kick_left: ball_kick_left.onnx
+- kick_right: ball_kick_right.onnx
+- roulade: roulade.onnx
+- sitstand: alpha_sitstand.onnx
+$ microduck duck do --help
+usage: microduck-cli duck do [-h] [--duck NAME] [--socket PATH] [--state DIR]
+                             [--json] [--apply]
+                             {ground-pick,kick-left,kick-right,roulade,sit}
+$ microduck env down
+microduck-cli env down: state dir /home/spark/.cache/duck-sim
+  duck-a: terminated
+```
+
+`duck do` accepts a fixed set of five spellings (`ground-pick`, `kick-left`,
+`kick-right`, `roulade`, `sit`) regardless of what the daemon lists; the
+tutorial says so. The same review found seven more wording defects in the
+tutorial (a Thor clone-path collision with Step 2, an over-broad "verified at
+0.9.4", "only failing check" statements contradicting Step 5, two false Orin
+claims about `uv`, "the only process on the socket", a 3× disk figure), all
+fixed in the fork branch; none changed this record's measurements.
+
 ## What changed because of this run
 
 - **The tutorial** (fork branch `docs/microduck-on-jetson`): Step 5 says what a
