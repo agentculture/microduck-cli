@@ -57,6 +57,7 @@
 - the Thor success lines (get-default, loginctl, gnome-screenshot, pytest tally, smoke exit) are pasted from the run logs unchanged
 - the Orin success lines are pasted from the run logs unchanged; a missing Orin screenshot is stated, not implied
 - a script diffs every fenced command in the tutorial against the three records and reports 0 misses; the identity grep and npm build exit codes are pasted
+- the operator's Thor/Orin notes list each improvisation; the tutorial diff after step 4 addresses every one or says why not
 
 ## Success signals
 
@@ -65,6 +66,7 @@
   - instruction: On Orin: env doctor --json; `MICRODUCK_LIVE`=1 live suite twice (fake body; then `MICRODUCK_LIVE_BODY`=sim `MICRODUCK_LIVE_SIM`=1); run the six gates; if a user session is opened on DP-1, env up --sim windowed + gnome-screenshot, else record 'no user session, headless'
 - Tutorial: 'npm run build' passes in the fork with the new content + wrapper; every fenced command in the tutorial appears verbatim in one of the two 2026-09-07 records; grep for home paths and account names in the tutorial and images = 0; PR opened to NVIDIA-AI-IOT/jetson-ai-lab main with DCO sign-off
   - instruction: In the fork: npm ci && npm run build (paste exit code); scripts/check-tutorial-commands.py (new, in this repo's scratch or docs/tools) extracts fenced bash lines from the tutorial and greps them in the three 2026-09-07 records; grep -rn '/home/\|orinachum' on the tutorial + image names; gh pr create against NVIDIA-AI-IOT/jetson-ai-lab main with commit -s
+- The operator can follow the tutorial on Thor and Orin without asking the agent anything the tutorial should have said; every place they had to improvise becomes a tutorial fix before the draft PR is marked ready
 
 ## Scope / boundaries
 
@@ -140,11 +142,12 @@
 
 ## Decisions
 
-- Order of work: (1) Thor GUI restore, (2) Thor re-test windowed, (3) Orin re-test, (4) records + hosts.py 'verified' pointers PR in this repo, (5) tutorial PR on jetson-ai-lab. The tutorial is written from the records, never before them
 - Thor's display is a JetKVM (KVM-over-IP with an HDMI input that presents an EDID sink): plug its HDMI into Thor so card2-HDMI-A-1 reads 'connected', run gdm on that output, and watch the MuJoCo window in the JetKVM browser view as well as via gnome-screenshot. No virtual display work
 - The JetKVM is already cabled to Thor's HDMI but its USB power may be off (user, 2026-09-07) — hence the 0-byte EDID. Step 1 of the run is: power the JetKVM, re-read /sys/class/drm/card2-HDMI-A-1/status until 'connected', then set-default graphical.target + start gdm
 - Thor GUI restore was done by the user before the run (probed 2026-09-07): graphical.target, gdm active, Xorg on :0 with the gdm greeter's gnome-shell; no thor seat0 session yet (AutomaticLogin commented out) and HDMI-A-1 still shows no EDID while the JetKVM's USB power is being checked. Plan step 1 becomes verify + log in, not flip
 - Thor's kernel DRM connector status is NOT the readiness signal: with the JetKVM powered and the user watching the greeter through it, card2-DP-1 and card2-HDMI-A-1 still read 'disconnected' with no EDID (only card0/1/2 exist, no other connector nodes). Readiness for the windowed run = a thor-owned seat0 session in loginctl plus the JetKVM view; the record quotes both and notes the connector reading
+- Order of work (user, 2026-09-07, supersedes c25): (1) write the tutorial first, from the existing 2026-09-04 records and this spec; (2) the agent tests the tutorial on Spark by following it literally, windowed, producing docs/verification/2026-09-07-spark-retest.md and fixing the tutorial where it misled; (3) merge the PR in this repo (spec, Spark record, hosts.py pointer, README row) and open a DRAFT PR on NVIDIA-AI-IOT/jetson-ai-lab; (4) the operator (user) repeats the tutorial on Thor (windowed via JetKVM) and AGX Orin, and their runs are the Thor/Orin records; the draft is marked ready after step 4
+- The tutorial's Thor and Orin sections are written from the 2026-09-04 records and labelled 'verified 2026-09-04 (headless), operator re-run in progress' until step 4 lands; Spark is the only box the agent re-verifies at the pinned CLI version before the draft PR opens. This replaces c7's agent-run Thor/Orin records with operator-run ones and makes the operator's run the usability test of the tutorial itself
 
 ## Open parks
 

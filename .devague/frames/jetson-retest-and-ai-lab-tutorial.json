@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-07T00:02:44Z",
-  "updated": "2026-09-07T00:35:06Z",
+  "updated": "2026-09-07T00:36:42Z",
   "claims": [
     {
       "id": "c1",
@@ -397,7 +397,7 @@
       "kind": "decision",
       "text": "Order of work: (1) Thor GUI restore, (2) Thor re-test windowed, (3) Orin re-test, (4) records + hosts.py 'verified' pointers PR in this repo, (5) tutorial PR on jetson-ai-lab. The tutorial is written from the records, never before them",
       "origin": "llm",
-      "status": "confirmed",
+      "status": "rejected",
       "honesty_conditions": [],
       "hard_questions": [],
       "links": [],
@@ -561,6 +561,49 @@
       "origin": "user",
       "status": "confirmed",
       "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c36",
+      "kind": "decision",
+      "text": "Order of work (user, 2026-09-07, supersedes c25): (1) write the tutorial first, from the existing 2026-09-04 records and this spec; (2) the agent tests the tutorial on Spark by following it literally, windowed, producing docs/verification/2026-09-07-spark-retest.md and fixing the tutorial where it misled; (3) merge the PR in this repo (spec, Spark record, hosts.py pointer, README row) and open a DRAFT PR on NVIDIA-AI-IOT/jetson-ai-lab; (4) the operator (user) repeats the tutorial on Thor (windowed via JetKVM) and AGX Orin, and their runs are the Thor/Orin records; the draft is marked ready after step 4",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c37",
+      "kind": "decision",
+      "text": "The tutorial's Thor and Orin sections are written from the 2026-09-04 records and labelled 'verified 2026-09-04 (headless), operator re-run in progress' until step 4 lands; Spark is the only box the agent re-verifies at the pinned CLI version before the draft PR opens. This replaces c7's agent-run Thor/Orin records with operator-run ones and makes the operator's run the usability test of the tutorial itself",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c38",
+      "kind": "success_signal",
+      "text": "The operator can follow the tutorial on Thor and Orin without asking the agent anything the tutorial should have said; every place they had to improvise becomes a tutorial fix before the draft PR is marked ready",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h21",
+          "text": "the operator's Thor/Orin notes list each improvisation; the tutorial diff after step 4 addresses every one or says why not",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
       "hard_questions": [],
       "links": [],
       "instruction": "",
