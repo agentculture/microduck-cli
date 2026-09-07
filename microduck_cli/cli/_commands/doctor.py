@@ -98,23 +98,30 @@ def _diagnose() -> dict[str, object]:
     return {"healthy": healthy, "checks": checks}
 
 
+def _mark(check: dict) -> str:
+    """`ok` for a pass, `WARN` for a failing warning, `FAIL` for a failing error."""
+    if check["passed"]:
+        return "ok"
+    return "WARN" if check["severity"] == "warning" else "FAIL"
+
+
+def _render_text(report: dict) -> str:
+    status = "healthy" if report["healthy"] else "unhealthy"
+    lines = [f"microduck-cli doctor: {status}", ""]
+    for check in report["checks"]:
+        lines.append(f"[{_mark(check)}] {check['id']}: {check['message']}")
+        if not check["passed"] and check["remediation"]:
+            lines.append(f"  hint: {check['remediation']}")
+    return "\n".join(lines)
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     report = _diagnose()
     json_mode = bool(getattr(args, "json", False))
     if json_mode:
         emit_result(report, json_mode=True)
     else:
-        status = "healthy" if report["healthy"] else "unhealthy"
-        lines = [f"microduck-cli doctor: {status}", ""]
-        for check in report["checks"]:
-            if check["passed"]:
-                mark = "ok"
-            else:
-                mark = "WARN" if check["severity"] == "warning" else "FAIL"
-            lines.append(f"[{mark}] {check['id']}: {check['message']}")
-            if not check["passed"] and check["remediation"]:
-                lines.append(f"  hint: {check['remediation']}")
-        emit_result("\n".join(lines), json_mode=False)
+        emit_result(_render_text(report), json_mode=False)
     return 0 if report["healthy"] else 1
 
 
