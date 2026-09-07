@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.9.6] - 2026-09-08
 
+### Added
+
+- `docs/verification/2026-09-08-thor-orin-tutorial-run.md` — the tutorial's operator run on Jetson AGX Thor (PyPI 0.9.4 wheel): the first smoke failed on a torch the clone had re-synced to `+cu129` after slipping back to the pin, the second passed in 26 s beside the production stack; the simulation's memory footprint on Thor (`duck-body` 933 MB, `robotd` 34 MB) and Orin (590 MB / 41 MB, +0.9 GB box-wide, headless); Orin's clone at `a30a9e4` resolves torch from the SBSA index with a plain `uv sync`.
+
 ### Changed
 
 - `README.md`: the Spark re-test row's `[FAIL]`-under-healthy caveat now points at this fix.
