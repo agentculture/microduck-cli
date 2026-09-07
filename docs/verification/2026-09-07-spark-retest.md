@@ -53,9 +53,9 @@ torch 2.9.1+cu129 cuda True | onnxruntime 1.24.4 | mujoco 3.10.0
 
 The tutorial's two exports were set for every later command:
 
-```text
-$ export MICRODUCK_CLONE=~/git/microduck
-$ export DUCK_SIM_RL=~/git/microduck_rl
+```bash
+export MICRODUCK_CLONE=~/git/microduck
+export DUCK_SIM_RL=~/git/microduck_rl
 ```
 
 ## Step 5 — `env doctor` on the wheel: healthy, with two `[FAIL]` lines
