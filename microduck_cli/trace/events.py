@@ -557,6 +557,34 @@ def _read_text_or_raise(path: Path, what: str) -> str:
         ) from exc
 
 
+def _load_import_meta(src_path: Path) -> dict[str, Any] | None:
+    """The source's ``meta.json`` as a dict, or ``None`` when it has none.
+
+    Raises :class:`CliError` on an unreadable file, invalid JSON, or a JSON
+    value that is not an object — all before the caller touches the
+    destination, so a bad source leaves it untouched.
+    """
+    meta_src = src_path / META_NAME
+    if not meta_src.is_file():
+        return None
+    meta_text = _read_text_or_raise(meta_src, META_NAME)
+    try:
+        meta = json.loads(meta_text)
+    except json.JSONDecodeError as exc:
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{meta_src}: invalid JSON ({exc})",
+            "fix or remove meta.json before importing",
+        ) from exc
+    if not isinstance(meta, dict):
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{meta_src}: not a JSON object",
+            "meta.json must contain a single JSON object",
+        )
+    return meta
+
+
 def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
     """Adopt an external run directory (``src``) into ``dst``.
 
@@ -595,24 +623,7 @@ def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
     events_text = _read_text_or_raise(events_src, "events")
     events = _parse_events(events_text)
 
-    meta_src = src_path / META_NAME
-    meta: dict[str, Any] | None = None
-    if meta_src.is_file():
-        meta_text = _read_text_or_raise(meta_src, META_NAME)
-        try:
-            meta = json.loads(meta_text)
-        except json.JSONDecodeError as exc:
-            raise CliError(
-                EXIT_USER_ERROR,
-                f"{meta_src}: invalid JSON ({exc})",
-                "fix or remove meta.json before importing",
-            ) from exc
-        if not isinstance(meta, dict):
-            raise CliError(
-                EXIT_USER_ERROR,
-                f"{meta_src}: not a JSON object",
-                "meta.json must contain a single JSON object",
-            )
+    meta = _load_import_meta(src_path)
 
     if redact_home:
         for event in events:

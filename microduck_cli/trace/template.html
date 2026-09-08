@@ -350,8 +350,8 @@
     },
     operator(e, on) { on.add("op"); },
   };
-  function computeActivity(t) {
-    const a = {on:new Set(), warm:new Set(), edgesOn:new Set(), states:{}, last:{}, active:[]};
+  // What is merely *up* at t (warm, not driving), from the daemon/sim windows.
+  function activityWarmth(t, a) {
     for (const [w0, w1, kind] of upWindows) {
       if (t < w0 || t > w1) continue;
       a.warm.add("robotd"); a.states.robotd = "up · 50 Hz";
@@ -362,11 +362,18 @@
         a.states.body = "gone";
       }
     }
+  }
+  // What the commands running at t light up.
+  function activityFromSpans(t, a) {
     a.active = spans.filter(s => s.t0 <= t && t <= s.t1 + 0.35);
     for (const s of a.active) {
       spanNodes(s).forEach(n => a.on.add(n));
       spanEdges(s).forEach(e => a.edgesOn.add(e));
     }
+  }
+  // Replay every event up to t: the last one per lane, plus the brief glow a
+  // recent one leaves behind.
+  function activityFromEvents(t, a) {
     for (const e of events) {
       if (e.t > t) break;
       const key = e.lane === "cli" && e.kind === "stderr" ? "cliErr" : e.lane;
@@ -375,6 +382,12 @@
       if (recent && REACTIONS[e.lane]) REACTIONS[e.lane](e, a.on, a.edgesOn);
       if (e.lane === "viewer" && t - e.t <= 2.2) { a.on.add("viewer"); a.edgesOn.add("viewer-op"); a.on.add("op"); }
     }
+  }
+  function computeActivity(t) {
+    const a = {on:new Set(), warm:new Set(), edgesOn:new Set(), states:{}, last:{}, active:[]};
+    activityWarmth(t, a);
+    activityFromSpans(t, a);
+    activityFromEvents(t, a);
     return a;
   }
   function applyActivity(a) {
@@ -407,15 +420,28 @@
     setCap("c-cli", curCmd.label, true, suffix);
     setCap("c-out", running ? errText : (curCmd.first || errText));
   }
+  // The step caption and the clock's step field: numbered steps read
+  // "Step 3 — title", named phases read as their own title, and "0" (pre-flight)
+  // has no number to show on the clock.
+  function stepCaption(step) {
+    const title = STEP_TITLES[step];
+    if (isStep(step)) return "Step " + step + (title ? " — " + title : "");
+    return title || step;
+  }
+  function stepClock(step) {
+    if (isStep(step)) return step;
+    return step === "0" ? "—" : step;
+  }
+  function checksCaption(t, a) {
+    const chk = a.active.find(s => s.lane === "checks") || [...spans].reverse().find(s => s.lane === "checks" && s.t1 <= t);
+    if (!chk) return null;
+    const first = chk.first ? " · " + chk.first : "";
+    return chk.label + (chk.t1 > t ? "" : ` · exit ${chk.rc}${first}`);
+  }
   function updateCaptions(t, a) {
-    const step = stepAt(t), title = STEP_TITLES[step];
-    let stepText;
-    if (isStep(step)) stepText = "Step " + step + (title ? " — " + title : "");
-    else stepText = title || step;
-    setCap("c-step", stepText);
-    let clock = step;
-    if (!isStep(step)) clock = step === "0" ? "—" : step;
-    $("t-step").textContent = clock;
+    const step = stepAt(t);
+    setCap("c-step", stepCaption(step));
+    $("t-step").textContent = stepClock(step);
     setCap("c-op", a.last.operator ? a.last.operator.label : null);
     commandCaption(t, a);
     const eng = a.last.engine;
@@ -423,13 +449,7 @@
     setCap("c-robotd", a.last.robotd ? a.last.robotd.label : null);
     setCap("c-body", a.last.body ? a.last.body.label : null);
     setCap("c-train", trainLine(t));
-    const chk = a.active.find(s => s.lane === "checks") || [...spans].reverse().find(s => s.lane === "checks" && s.t1 <= t);
-    let chkText = null;
-    if (chk) {
-      const first = chk.first ? " · " + chk.first : "";
-      chkText = chk.label + (chk.t1 > t ? "" : ` · exit ${chk.rc}${first}`);
-    }
-    setCap("c-checks", chkText);
+    setCap("c-checks", checksCaption(t, a));
     document.querySelectorAll("#ladder button").forEach(b => b.classList.toggle("cur", b.dataset.step === step));
   }
   function placeFrame(img, sh) {
@@ -518,22 +538,30 @@
     tl.appendChild(el("line", {x1:x, x2:x, y1:Y0, y2:AXY, stroke:"var(--line2)", "stroke-width":.7, "stroke-dasharray":"2 3"}));
     tl.appendChild(el("text", {class:"stepmark", x:x+3, y:AXY+13}, text));
   }
-  function buildTimeline() {
+  // One drawing pass per layer, back to front: rows, then the up-window bands,
+  // then command bars, event ticks, step marks and finally the axis.
+  function drawLaneRows() {
     LANES.forEach(([id, name], i) => {
       const y = Y0 + i * LH;
       tl.appendChild(el("line", {x1:X0, x2:X1, y1:y+LH, y2:y+LH, stroke:"var(--line)", "stroke-width":.6}));
       tl.appendChild(el("text", {class:"lane-name", x:X0-8, y:y+LH/2+4, "text-anchor":"end"}, name));
     });
+  }
+  function drawUpWindows() {
     for (const [w0, w1, kind] of upWindows) {
       const rows = kind === "sim" ? [3, 4, 6] : [3];
       for (const r of rows) tl.appendChild(el("rect", {x:xOf(w0), y:Y0+r*LH+3, width:Math.max(1, xOf(w1)-xOf(w0)), height:LH-6, fill:LANES[r][2], opacity:.14}));
     }
+  }
+  function drawSpanBars() {
     for (const s of spans) {
       const li = laneIdx[laneOf(s.lane)];
       if (li == null) continue;
       const w = Math.max(2.5, xOf(s.t1) - xOf(s.t0));
       tl.appendChild(el("rect", {x:xOf(s.t0), y:Y0+li*LH+6, width:w, height:LH-12, rx:1.5, fill:s.rc === 0 ? LANES[li][2] : "var(--bad)", opacity:.85}));
     }
+  }
+  function drawEventTicks() {
     for (const e of events) {
       const li = laneIdx[laneOf(e.lane)];
       if (li == null) continue;
@@ -541,6 +569,8 @@
       const h = e.lane === "engine" && e.n ? Math.min(LH-8, 3 + e.n) : LH-10;
       tl.appendChild(el("rect", {x:xOf(e.t)-.5, y:Y0+li*LH+LH/2-h/2, width:1, height:h, fill:LANES[li][2], opacity:e.n ? .5 : .9}));
     }
+  }
+  function drawStepMarks() {
     const seenSteps = new Set();
     for (const s of spans) {
       if (!isStep(s.step) || seenSteps.has(s.step) || s.step === "0") continue;
@@ -549,10 +579,20 @@
     }
     const chk = spans.find(x => x.lane === "checks");
     if (chk) stepMark(xOf(chk.t0), "checks");
+  }
+  function drawAxis() {
     for (let t = 0; t <= T_END; t += 60) {
       tl.appendChild(el("line", {x1:xOf(t), x2:xOf(t), y1:AXY, y2:AXY+4, stroke:"var(--dim)"}));
       tl.appendChild(el("text", {class:"tick", x:xOf(t), y:AXY+26, "text-anchor":"middle"}, fmt(t).slice(0, 5)));
     }
+  }
+  function buildTimeline() {
+    drawLaneRows();
+    drawUpWindows();
+    drawSpanBars();
+    drawEventTicks();
+    drawStepMarks();
+    drawAxis();
   }
   buildTimeline();
   const playhead = el("line", {class:"playhead", x1:X0, x2:X0, y1:Y0-4, y2:AXY+2}); tl.appendChild(playhead);
@@ -563,15 +603,22 @@
   scrub.addEventListener("pointermove", ev => { if (dragging) seekFromPointer(ev); });
   scrub.addEventListener("pointerup", () => { dragging = false; });
   // ---- ladder + checks table + notes ---------------------------------------
-  function buildLadder() {
-    const ladder = $("ladder"), jump = $("jump"), ladderSteps = [];
+  // One entry per step, at its first span's time. A step whose spans include a
+  // nonzero exit is marked retry — the failed attempt is kept, not overwritten,
+  // so the ladder says "pass on 2nd attempt" rather than a bare "pass".
+  function ladderEntries() {
+    const ladderSteps = [];
     for (const s of spans) {
       if (s.step === "0") continue;
       let e = ladderSteps.find(x => x.step === s.step);
       if (!e) { e = {step:s.step, t0:s.t0, retry:false}; ladderSteps.push(e); }
       if (s.rc !== 0) e.retry = true;
     }
-    for (const e of ladderSteps) {
+    return ladderSteps;
+  }
+  function buildLadder() {
+    const ladder = $("ladder"), jump = $("jump");
+    for (const e of ladderEntries()) {
       const b = document.createElement("button");
       b.dataset.step = e.step;
       const title = stepTitle(e.step), label = isStep(e.step) ? "step " + e.step : e.step;
@@ -600,8 +647,8 @@
       const nd = $("notes");
       for (const n of META.notes) {
         const p = document.createElement("p");
-        const m = /^\*\*([^*]+)\*\*\s*([\s\S]*)$/.exec(n);
-        p.innerHTML = m ? `<b>${esc(m[1])}</b> ${esc(m[2])}` : esc(n);
+        const m = /^\*\*([^*]+)\*\*([\s\S]*)$/.exec(n);
+        p.innerHTML = m ? `<b>${esc(m[1])}</b> ${esc(m[2].trimStart())}` : esc(n);
         nd.appendChild(p);
       }
     }

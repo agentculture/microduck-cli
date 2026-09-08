@@ -13,6 +13,7 @@ import json
 import math
 import re
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from microduck_cli.cli._errors import EXIT_USER_ERROR, CliError
@@ -92,47 +93,61 @@ def _is_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+#: Every step field's check and failure wording, in the order they are applied.
+#: The first failing row is the one reported, so this order *is* the error
+#: contract; the wording is a ``str.format`` template given the step as ``step``.
+#: Field names match :data:`_FIELD_REMEDIATION` one for one.
+_STEP_CHECKS: tuple[tuple[str, Callable[[Step], bool], str], ...] = (
+    ("cmd", lambda s: isinstance(s.cmd, str) and bool(s.cmd), "must be a non-empty string"),
+    ("label", lambda s: isinstance(s.label, str), _NOT_A_STRING),
+    ("step", lambda s: isinstance(s.step, str), _NOT_A_STRING),
+    ("lane", lambda s: s.lane in LANES, f"'{{step.lane}}' is not one of: {', '.join(LANES)}"),
+    (
+        "sleep_before",
+        lambda s: _is_number(s.sleep_before) and s.sleep_before >= 0,
+        "must be a number >= 0",
+    ),
+    (
+        "sleep_after",
+        lambda s: _is_number(s.sleep_after) and s.sleep_after >= 0,
+        "must be a number >= 0",
+    ),
+    (
+        "retry",
+        lambda s: not isinstance(s.retry, bool) and isinstance(s.retry, int) and s.retry >= 0,
+        "must be an integer >= 0",
+    ),
+    (
+        "timeout_s",
+        lambda s: s.timeout_s is None or (_is_number(s.timeout_s) and s.timeout_s > 0),
+        "must be a number > 0",
+    ),
+    (
+        "shot",
+        lambda s: s.shot is None
+        or (isinstance(s.shot, str) and _SHOT_NAME_RE.match(s.shot) is not None),
+        "'{step.shot}' is not a plain filename stem",
+    ),
+    ("note", lambda s: s.note is None or isinstance(s.note, str), _NOT_A_STRING),
+)
+
+
 def _validate_step(step_obj: Step, index: int, origin: str) -> None:
     """Reject an out-of-shape step, naming the field and the problem.
 
-    Raises :class:`CliError` on the first field that fails, so a caller sees
-    one problem at a time rather than a pile of them.
+    Walks :data:`_STEP_CHECKS` in order and raises :class:`CliError` on the
+    first field that fails, so a caller sees one problem at a time rather than
+    a pile of them.
     """
     cmd_display = step_obj.cmd if isinstance(step_obj.cmd, str) and step_obj.cmd else "?"
-
-    def fail(field_name: str, problem: str) -> None:
-        raise CliError(
-            EXIT_USER_ERROR,
-            f"{origin} step {index} ({cmd_display}): {field_name} {problem}",
-            _FIELD_REMEDIATION[field_name],
-        )
-
-    if not isinstance(step_obj.cmd, str) or not step_obj.cmd:
-        fail("cmd", "must be a non-empty string")
-    if not isinstance(step_obj.label, str):
-        fail("label", _NOT_A_STRING)
-    if not isinstance(step_obj.step, str):
-        fail("step", _NOT_A_STRING)
-    if step_obj.lane not in LANES:
-        fail("lane", f"'{step_obj.lane}' is not one of: {', '.join(LANES)}")
-    if not _is_number(step_obj.sleep_before) or step_obj.sleep_before < 0:
-        fail("sleep_before", "must be a number >= 0")
-    if not _is_number(step_obj.sleep_after) or step_obj.sleep_after < 0:
-        fail("sleep_after", "must be a number >= 0")
-    if (
-        isinstance(step_obj.retry, bool)
-        or not isinstance(step_obj.retry, int)
-        or step_obj.retry < 0
-    ):
-        fail("retry", "must be an integer >= 0")
-    if step_obj.timeout_s is not None:
-        if not _is_number(step_obj.timeout_s) or step_obj.timeout_s <= 0:
-            fail("timeout_s", "must be a number > 0")
-    if step_obj.shot is not None:
-        if not isinstance(step_obj.shot, str) or not _SHOT_NAME_RE.match(step_obj.shot):
-            fail("shot", f"'{step_obj.shot}' is not a plain filename stem")
-    if step_obj.note is not None and not isinstance(step_obj.note, str):
-        fail("note", _NOT_A_STRING)
+    for field_name, is_ok, problem in _STEP_CHECKS:
+        if not is_ok(step_obj):
+            raise CliError(
+                EXIT_USER_ERROR,
+                f"{origin} step {index} ({cmd_display}): "
+                f"{field_name} {problem.format(step=step_obj)}",
+                _FIELD_REMEDIATION[field_name],
+            )
 
 
 # --------------------------------------------------------------------------
@@ -244,6 +259,35 @@ def _toml_value(value: object) -> str:
     )
 
 
+def _dump_step(step: Step) -> list[str]:
+    """One ``[[step]]`` block's lines: the three required keys, then whatever
+    differs from the default. A key at its default is omitted, so a round-trip
+    through :func:`load_plan` and back is stable rather than ever-growing.
+    """
+    lines = [
+        "",
+        "[[step]]",
+        f"step = {_toml_str(step.step)}",
+        f"label = {_toml_str(step.label)}",
+        f"cmd = {_toml_str(step.cmd)}",
+    ]
+    if step.lane != "cli":
+        lines.append(f"lane = {_toml_str(step.lane)}")
+    if step.sleep_before:
+        lines.append(f"sleep_before = {_toml_number(step.sleep_before)}")
+    if step.sleep_after:
+        lines.append(f"sleep_after = {_toml_number(step.sleep_after)}")
+    if step.shot is not None:
+        lines.append(f"shot = {_toml_str(step.shot)}")
+    if step.retry:
+        lines.append(f"retry = {step.retry}")
+    if step.note is not None:
+        lines.append(f"note = {_toml_str(step.note)}")
+    if step.timeout_s is not None:
+        lines.append(f"timeout_s = {_toml_number(step.timeout_s)}")
+    return lines
+
+
 def dump_plan(plan: Plan) -> str:
     """Render plan as plan TOML text (stdlib has no TOML writer)."""
     lines: list[str] = [f"title = {_toml_str(plan.title)}"]
@@ -255,25 +299,7 @@ def dump_plan(plan: Plan) -> str:
             lines.append(f"{key} = {_toml_value(value)}")
 
     for step in plan.steps:
-        lines.append("")
-        lines.append("[[step]]")
-        lines.append(f"step = {_toml_str(step.step)}")
-        lines.append(f"label = {_toml_str(step.label)}")
-        lines.append(f"cmd = {_toml_str(step.cmd)}")
-        if step.lane != "cli":
-            lines.append(f"lane = {_toml_str(step.lane)}")
-        if step.sleep_before:
-            lines.append(f"sleep_before = {_toml_number(step.sleep_before)}")
-        if step.sleep_after:
-            lines.append(f"sleep_after = {_toml_number(step.sleep_after)}")
-        if step.shot is not None:
-            lines.append(f"shot = {_toml_str(step.shot)}")
-        if step.retry:
-            lines.append(f"retry = {step.retry}")
-        if step.note is not None:
-            lines.append(f"note = {_toml_str(step.note)}")
-        if step.timeout_s is not None:
-            lines.append(f"timeout_s = {_toml_number(step.timeout_s)}")
+        lines.extend(_dump_step(step))
 
     return "\n".join(lines) + "\n"
 

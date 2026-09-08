@@ -260,6 +260,26 @@ def _read_png_size(path: str) -> list[int] | None:
     return [width, height]
 
 
+def _resolve_shot_path(shots_dir: str, name: str) -> str | None:
+    """The ``.png`` path *name* names inside *shots_dir*, or ``None`` if it escapes.
+
+    Two independent gates, because either alone is bypassable: *name* must match
+    :data:`_SHOT_NAME_RE`, **and** the resolved path must still land inside the
+    resolved ``shots_dir`` (symlinks are followed before the check, so a linked
+    ``shots/`` cannot redirect a write outside the run directory).
+    """
+    if not _SHOT_NAME_RE.match(name):
+        return None
+    path = os.path.join(shots_dir, f"{name}.png")
+    resolved_dir = os.path.realpath(shots_dir)
+    resolved_path = os.path.realpath(path)
+    try:
+        contained = os.path.commonpath([resolved_dir, resolved_path]) == resolved_dir
+    except ValueError:  # different drives on Windows-style paths
+        contained = False
+    return path if contained else None
+
+
 def capture_frame(
     run_dir,
     name: str,
@@ -288,17 +308,8 @@ def capture_frame(
         return ShotOutcome(ok=False, reason="headless")
 
     shots_dir = run_dir.shots
-    if not _SHOT_NAME_RE.match(name):
-        return ShotOutcome(ok=False, reason=f"invalid frame name: {name!r}")
-
-    path = os.path.join(shots_dir, f"{name}.png")
-    resolved_dir = os.path.realpath(shots_dir)
-    resolved_path = os.path.realpath(path)
-    try:
-        contained = os.path.commonpath([resolved_dir, resolved_path]) == resolved_dir
-    except ValueError:  # different drives on Windows-style paths
-        contained = False
-    if not contained:
+    path = _resolve_shot_path(shots_dir, name)
+    if path is None:
         return ShotOutcome(ok=False, reason=f"invalid frame name: {name!r}")
 
     proc_env = env.as_env(os.environ)
@@ -364,6 +375,65 @@ def _discard(path: str) -> None:
         pass
 
 
+def _gsettings_set(runner, proc_env, field: str, value: str) -> bool:
+    """One ``gsettings set``; ``False`` when it fails or raises. Never propagates."""
+    schema, key = _GSETTINGS_KEYS[field]
+    try:
+        result = runner(
+            ["gsettings", "set", schema, key, value],
+            capture_output=True,
+            text=True,
+            env=proc_env,
+        )
+    except Exception:  # noqa: BLE001 - best-effort; the other key still gets a try
+        return False
+    return result.returncode == 0
+
+
+def _gsettings_read_all(runner, proc_env) -> dict[str, str]:
+    """Every autolock setting's current string, or ``{}`` if any read fails.
+
+    All-or-nothing on purpose: a partial read cannot be restored faithfully, so
+    a single failure (nonzero exit or a raised call — no ``gsettings`` at all)
+    means the pause does not happen and nothing is touched.
+    """
+    original: dict[str, str] = {}
+    try:
+        for field, (schema, key) in _GSETTINGS_KEYS.items():
+            result = runner(
+                ["gsettings", "get", schema, key],
+                capture_output=True,
+                text=True,
+                env=proc_env,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr or f"gsettings get {schema} {key} failed")
+            original[field] = result.stdout.strip()
+    except Exception:  # noqa: BLE001 - no gsettings means nothing to pause
+        return {}
+    return original
+
+
+def _gsettings_turn_off(runner, proc_env, original: dict[str, str]) -> dict[str, str]:
+    """Switch each setting off; returns the originals of the ones that moved.
+
+    Per-key, not all-or-nothing: a key whose ``set`` failed is left out, so the
+    restore never puts back a value that was never changed.
+    """
+    changed: dict[str, str] = {}
+    if original:
+        for field in _GSETTINGS_KEYS:
+            if _gsettings_set(runner, proc_env, field, _AUTOLOCK_OFF[field]):
+                changed[field] = original[field]
+    return changed
+
+
+def _gsettings_restore(runner, proc_env, changed: dict[str, str]) -> None:
+    """Put every changed setting back to its exact original string."""
+    for field, value in changed.items():
+        _gsettings_set(runner, proc_env, field, value)
+
+
 @contextmanager
 def pause_autolock(runner=subprocess.run, *, env: DisplayEnv | None = None):
     """Pause the desktop's idle-lock while a trace run is capturing frames.
@@ -391,50 +461,10 @@ def pause_autolock(runner=subprocess.run, *, env: DisplayEnv | None = None):
     failed is never "restored" to a value it was never moved from.
     """
     proc_env = env.as_env(os.environ) if env is not None else None
-    original: dict[str, str] = {}
-    try:
-        for field, (schema, key) in _GSETTINGS_KEYS.items():
-            result = runner(
-                ["gsettings", "get", schema, key],
-                capture_output=True,
-                text=True,
-                env=proc_env,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(result.stderr or f"gsettings get {schema} {key} failed")
-            original[field] = result.stdout.strip()
-    except Exception:  # noqa: BLE001 - no gsettings means nothing to pause
-        original = {}
-
-    changed: dict[str, str] = {}
-    if original:
-        for field, (schema, key) in _GSETTINGS_KEYS.items():
-            applied = False
-            try:
-                result = runner(
-                    ["gsettings", "set", schema, key, _AUTOLOCK_OFF[field]],
-                    capture_output=True,
-                    text=True,
-                    env=proc_env,
-                )
-                applied = result.returncode == 0
-            except Exception:  # noqa: BLE001 - best-effort pause; the other key still gets a try
-                applied = False
-            if applied:
-                changed[field] = original[field]
-
+    original = _gsettings_read_all(runner, proc_env)
+    changed = _gsettings_turn_off(runner, proc_env, original)
     paused = dict(original) if len(changed) == len(_GSETTINGS_KEYS) else {}
     try:
         yield paused
     finally:
-        for field, value in changed.items():
-            schema, key = _GSETTINGS_KEYS[field]
-            try:
-                runner(
-                    ["gsettings", "set", schema, key, value],
-                    capture_output=True,
-                    text=True,
-                    env=proc_env,
-                )
-            except Exception:  # nosec B110 - restore is best-effort per key, never fatal
-                pass
+        _gsettings_restore(runner, proc_env, changed)
