@@ -228,7 +228,8 @@ def test_script_close_tag_in_labels_is_escaped(tmp_path):
 def test_write_emits_both_files(tmp_path):
     run = _write_run(tmp_path, _basic_events(), shots=["s0.png"])
     trace_path, index_path = write(run)
-    assert Path(trace_path).name == "trace.html" and Path(index_path).name == "index.html"
+    assert Path(trace_path).name == "trace.html"
+    assert Path(index_path).name == "index.html"
     assert Path(trace_path).read_text().lstrip().startswith("<title>")
     assert Path(index_path).read_text().startswith("<!doctype html>")
 
@@ -255,7 +256,7 @@ def test_bad_event_line_names_the_line(tmp_path):
     (run / "events.jsonl").write_text(json.dumps(_event(0.1, "cli", "note", "ok")) + "\n{oops\n")
     with pytest.raises(CliError) as exc:
         render(run)
-    assert ":2:" in exc.value.message
+    assert "line 2" in exc.value.message
 
 
 def test_rundir_like_object_is_accepted(tmp_path):
@@ -272,3 +273,59 @@ def test_rundir_like_object_is_accepted(tmp_path):
 
     out = render(FakeRunDir())
     assert '"title":"via RunDir"' in out.trace_html
+
+
+def _meta_of(html: str) -> dict:
+    return json.loads(re.search(r"const META=(\{.*?\});$", html, re.M).group(1))
+
+
+MALFORMED_META = {
+    "checks": [None, ["only", "two"], ["a", "b", "c"], "str"],
+    "iterations": [[0, "x"], [1, 0.8], "junk", [True, 1.0]],
+    "step_titles": 5,
+    "notes": "one bare note",
+    "smoke": [],
+    "open_at": "abc",
+    "pins": {"microduck": "0cd676d", "bad": 3},
+    "engine": "nope",
+    "totally_unknown": {"deep": [1, 2]},
+}
+
+
+def test_malformed_optional_meta_is_normalised_not_fatal(tmp_path):
+    out = render(_write_run(tmp_path, _basic_events(), meta=MALFORMED_META))
+    meta = _meta_of(out.trace_html)
+    assert meta["checks"] == [["a", "b", "c"]]
+    assert meta["iterations"] == [[1, 0.8]]
+    assert "step_titles" not in meta
+    assert meta["notes"] == ["one bare note"]
+    assert "smoke" not in meta
+    assert "open_at" not in meta
+    assert meta["pins"] == {"microduck": "0cd676d"}
+    assert "engine" not in meta
+    assert "totally_unknown" not in meta
+    assert meta["headless"] is False
+
+
+def test_malformed_meta_page_scripts_still_parse(tmp_path):
+    out = render(_write_run(tmp_path, _basic_events(), meta=MALFORMED_META))
+    for block in re.findall(r"<script>([\s\S]*?)</script>", out.index_html):
+        # the data block is plain JSON literals; the page block must be syntactically whole
+        assert block.count("{") == block.count("}")
+    data = re.search(r"<script>\n(const EVENTS=.*?)\n?</script>", out.index_html, re.S).group(1)
+    for line in data.strip().splitlines():
+        json.loads(line.split("=", 1)[1].rstrip(";").replace("<\\/", "</"))
+
+
+def test_t0_wall_must_be_numeric(tmp_path):
+    run = _write_run(tmp_path, _basic_events())
+    (run / "meta.json").write_text(json.dumps({"t0_wall": "soon"}))
+    with pytest.raises(CliError) as exc:
+        render(run)
+    assert "t0_wall" in exc.value.message
+
+
+def test_page_keeps_its_structural_ids(tmp_path):
+    out = render(_write_run(tmp_path, _basic_events(), shots=["s0.png"]))
+    for anchor in ('id="map"', 'id="tlsvg"', 'id="frame"', 'id="ladder"'):
+        assert anchor in out.index_html

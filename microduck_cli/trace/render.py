@@ -18,7 +18,8 @@ What the page needs from ``meta.json`` is optional except ``t0_wall``: ``title``
 ``box``, ``date``, ``subtitle``, ``step_titles`` (step -> label), ``checks``
 (rows of ``[name, result, status]``), ``notes`` (strings; a leading ``**bold**``
 marker renders bold), ``smoke``, ``iterations``, ``headless``, ``open_at``. A
-run directory holding only ``t0_wall`` and events still renders.
+run directory holding only ``t0_wall`` and events still renders; a malformed optional
+field is dropped or coerced (``_page_meta``), never a blank page.
 """
 
 from __future__ import annotations
@@ -113,42 +114,83 @@ def _as_dict(event: Any) -> dict[str, Any]:
 
 
 def _load_events(run_dir: Any, events_path: Path) -> list[dict[str, Any]]:
-    """Prefer the events module's loader (its validation); fall back to plain JSONL."""
-    try:
-        from microduck_cli.trace.events import load_events  # type: ignore[import-not-found]
-    except ImportError:
-        load_events = None
-    if load_events is not None and hasattr(run_dir, "events_path"):
-        return [_as_dict(e) for e in load_events(run_dir)]
+    """Load through the events module's validator — one set of rules for every reader."""
     if not events_path.exists():
         raise CliError(
             code=EXIT_USER_ERROR,
             message=f"{events_path}: no events.jsonl to render",
             remediation="point trace render at a run directory (trace run / exec / import)",
         )
-    out: list[dict[str, Any]] = []
-    for lineno, line in enumerate(events_path.read_text("utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise CliError(
-                code=EXIT_USER_ERROR,
-                message=f"{events_path}:{lineno}: not JSON ({exc.msg})",
-                remediation="every line of events.jsonl must be one JSON object",
-            ) from exc
-        if not isinstance(obj, dict) or "t" not in obj or "lane" not in obj or "kind" not in obj:
-            raise CliError(
-                code=EXIT_USER_ERROR,
-                message=f"{events_path}:{lineno}: an event needs t, lane, kind and label",
-                remediation="see docs/plans/2026-09-08-run-trace-tool.contract.md",
-            )
-        out.append(obj)
+    from microduck_cli.trace.events import RunDir, load_events
+
+    if isinstance(run_dir, RunDir):
+        loaded = load_events(run_dir)
+    else:
+        loaded = load_events(RunDir(events_path.parent))
+    return [_as_dict(e) for e in loaded]
+
+
+def _sorted_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(events, key=lambda x: (float(x.get("t", 0.0)), x.get("lane", "")))
+
+
+def _step_of(e: dict[str, Any]) -> str | None:
+    step = e.get("step")
+    return None if step is None else str(step)
+
+
+def _span(lane: str, label: str, step: str | None, t0: float, t1: float, end: dict | None) -> dict:
+    end = end or {}
+    return {
+        "t0": t0,
+        "t1": t1,
+        "lane": lane,
+        "step": step,
+        "label": label,
+        "rc": end.get("rc"),
+        "first": str(end.get("stdout_first", "") or "")[:FIRST_LINE_MAX],
+        "outn": end.get("stdout_lines"),
+        "errn": end.get("stderr_lines"),
+    }
+
+
+def _closed_span(e: dict[str, Any], start: dict[str, Any] | None, lane: str, label: str) -> dict:
+    t1 = round(float(e.get("t", 0.0)), 2)
+    elapsed = float(e.get("elapsed", 0.0) or 0.0)
+    t0 = round(float(start["t"]), 2) if start else round(t1 - elapsed, 2)
+    return _span(lane, label, _step_of(e), t0, t1, e)
+
+
+def _engine_fields(e: dict[str, Any], label: str) -> dict[str, Any]:
+    ev = e.get("ev")
+    stage = e.get("stage")
+    if ev is None:
+        m = re.search(r"event=([a-z-]+)", label)
+        ev = m.group(1) if m else None
+    if stage is None:
+        m = re.search(r"stage=([a-z]+)", label)
+        stage = m.group(1) if m else None
+    out: dict[str, Any] = {"ev": ev, "stage": stage}
+    if e.get("n") is not None:
+        out["n"] = int(e["n"])
     return out
 
 
-# --- the data the page consumes ------------------------------------------------
+def _event_record(e: dict[str, Any], lane: str, kind: str, label: str) -> dict[str, Any]:
+    rec: dict[str, Any] = {
+        "t": round(float(e.get("t", 0.0)), 2),
+        "lane": lane,
+        "kind": kind,
+        "label": label,
+    }
+    step = _step_of(e)
+    if step is not None:
+        rec["step"] = step
+    if kind == "shot":
+        rec["shot"] = str(e.get("file", ""))
+    if kind == "stderr" and lane == "engine":
+        rec.update(_engine_fields(e, label))
+    return rec
 
 
 def _spans_and_events(
@@ -158,73 +200,19 @@ def _spans_and_events(
     spans: list[dict[str, Any]] = []
     open_cmds: dict[tuple[str, str], dict[str, Any]] = {}
     kept: list[dict[str, Any]] = []
-    for e in sorted(events, key=lambda x: (float(x.get("t", 0.0)), x.get("lane", ""))):
+    for e in _sorted_events(events):
         lane, kind = str(e.get("lane", "")), str(e.get("kind", ""))
         label = str(e.get("label", ""))[:LABEL_MAX]
-        step = e.get("step")
-        step_s = None if step is None else str(step)
         if kind == "cmd-start":
             open_cmds[(lane, label)] = e
-            continue
-        if kind == "cmd-end":
-            start = open_cmds.pop((lane, label), None)
-            t1 = round(float(e.get("t", 0.0)), 2)
-            elapsed = float(e.get("elapsed", 0.0) or 0.0)
-            t0 = round(float(start["t"]), 2) if start else round(t1 - elapsed, 2)
-            spans.append(
-                {
-                    "t0": t0,
-                    "t1": t1,
-                    "lane": lane,
-                    "step": step_s,
-                    "label": label,
-                    "rc": e.get("rc"),
-                    "first": str(e.get("stdout_first", "") or "")[:FIRST_LINE_MAX],
-                    "outn": e.get("stdout_lines"),
-                    "errn": e.get("stderr_lines"),
-                }
-            )
-            continue
-        rec: dict[str, Any] = {
-            "t": round(float(e.get("t", 0.0)), 2),
-            "lane": lane,
-            "kind": kind,
-            "label": label,
-        }
-        if step_s is not None:
-            rec["step"] = step_s
-        if kind == "shot":
-            rec["shot"] = str(e.get("file", ""))
-        if kind == "stderr" and lane == "engine":
-            ev = e.get("ev")
-            stage = e.get("stage")
-            if ev is None:
-                m = re.search(r"event=([a-z-]+)", label)
-                ev = m.group(1) if m else None
-            if stage is None:
-                m = re.search(r"stage=([a-z]+)", label)
-                stage = m.group(1) if m else None
-            rec["ev"] = ev
-            rec["stage"] = stage
-            if e.get("n") is not None:
-                rec["n"] = int(e["n"])
-        kept.append(rec)
+        elif kind == "cmd-end":
+            spans.append(_closed_span(e, open_cmds.pop((lane, label), None), lane, label))
+        else:
+            kept.append(_event_record(e, lane, kind, label))
     # every span carries a start, so an unterminated command still shows up
     for (lane, label), start in sorted(open_cmds.items(), key=lambda kv: float(kv[1]["t"])):
         t0 = round(float(start["t"]), 2)
-        spans.append(
-            {
-                "t0": t0,
-                "t1": t0,
-                "lane": lane,
-                "step": None if start.get("step") is None else str(start["step"]),
-                "label": label,
-                "rc": None,
-                "first": "",
-                "outn": None,
-                "errn": None,
-            }
-        )
+        spans.append(_span(lane, label, _step_of(start), t0, t0, None))
     spans.sort(key=lambda s: (s["t0"], s["t1"], s["lane"], s["label"]))
     return spans, _thin(kept)
 
@@ -290,16 +278,121 @@ def _data_js(
     )
 
 
+def _text(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _str_map(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(k): v for k, v in value.items() if isinstance(v, str)}
+
+
+def _check_rows(value: Any) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for row in value if isinstance(value, list) else []:
+        if isinstance(row, list) and len(row) == 3 and all(isinstance(x, str) for x in row):
+            rows.append(list(row))
+    return rows
+
+
+def _notes(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    return [n for n in value if isinstance(n, str)] if isinstance(value, list) else []
+
+
+def _iterations(value: Any) -> list[list[float]]:
+    out: list[list[float]] = []
+    for item in value if isinstance(value, list) else []:
+        if not (isinstance(item, list) and len(item) == 2):
+            continue
+        idx, dur = item
+        if isinstance(idx, bool) or not isinstance(idx, int) or _number(dur) is None:
+            continue
+        out.append([idx, float(dur)])
+    return out
+
+
+_SMOKE_KEYS = {
+    "ok": lambda v: v if isinstance(v, bool) else None,
+    "elapsed_s": _number,
+    "maxrss_gb": _number,
+    "warp": _text,
+    "envs": _number,
+    "iters": _number,
+}
+
+
+def _smoke(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key, coerce in _SMOKE_KEYS.items():
+        if key in value:
+            got = coerce(value[key])
+            if got is not None:
+                out[key] = got
+    return out
+
+
+def _t_end(meta: dict[str, Any], events: list[dict[str, Any]], spans: list) -> float:
+    given = _number(meta.get("t_end"))
+    if given is not None:
+        return given
+    last = 0.0
+    for e in events:
+        last = max(last, float(e["t"]))
+    for s in spans:
+        last = max(last, float(s["t1"]))
+    return round(last, 1) or 1.0
+
+
+#: Optional meta fields the page reads, each with the normaliser that fixes its shape.
+#: A malformed known field is dropped or coerced, never fatal; unknown fields never
+#: reach the page (they stay in ``meta.json``).
+_PAGE_FIELDS: dict[str, Any] = {
+    "title": _text,
+    "subtitle": _text,
+    "box": _text,
+    "date": _text,
+    "wheel": _text,
+    "api": _number,
+    "open_at": _number,
+    "step_titles": _str_map,
+    "pins": _str_map,
+    "checks": _check_rows,
+    "notes": _notes,
+    "iterations": _iterations,
+    "smoke": _smoke,
+    "engine": lambda v: dict(v) if isinstance(v, dict) else {},
+}
+
+
 def _page_meta(meta: dict[str, Any], events: list[dict[str, Any]], spans: list) -> dict[str, Any]:
-    """Only what the page reads, plus a computed ``t_end`` when meta has none."""
-    out = dict(meta)
-    if "t_end" not in out:
-        last = 0.0
-        for e in events:
-            last = max(last, float(e["t"]))
-        for s in spans:
-            last = max(last, float(s["t1"]))
-        out["t_end"] = round(last, 1) or 1.0
+    """Only what the page reads, every field in the shape the template destructures."""
+    t0_wall = _number(meta.get("t0_wall"))
+    if t0_wall is None:
+        raise CliError(
+            code=EXIT_USER_ERROR,
+            message="meta.json: t0_wall must be a number (the run's start, epoch seconds)",
+            remediation='write meta.json with {"t0_wall": <epoch seconds>} or re-import the run',
+        )
+    out: dict[str, Any] = {"t0_wall": t0_wall, "t_end": _t_end(meta, events, spans)}
+    out["headless"] = meta.get("headless") is True
+    for key, normalise in _PAGE_FIELDS.items():
+        if key not in meta:
+            continue
+        got = normalise(meta[key])
+        if got is None or got == {} or got == []:
+            continue
+        out[key] = got
     return out
 
 
