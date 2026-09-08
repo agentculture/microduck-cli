@@ -73,6 +73,7 @@ __all__ = [
     "remove_empty_run_dir",
     "RunSummary",
     "TRACE_SUBDIR",
+    "META_NAME",
     "append_note",
     "count_events",
     "count_shots",
@@ -85,6 +86,9 @@ __all__ = [
 
 #: The subdirectory of a state directory that holds run directories.
 TRACE_SUBDIR = "trace"
+
+#: The run directory's metadata file, by name (see :attr:`RunDir.meta_path`).
+META_NAME = "meta.json"
 
 #: Every legal ``lane`` tag, in the contract's documented order.
 LANES: tuple[str, ...] = (
@@ -196,7 +200,7 @@ class RunDir:
 
     @property
     def meta_path(self) -> Path:
-        return self.path / "meta.json"
+        return self.path / META_NAME
 
     def ensure(self) -> None:
         """Create the run dir and its two subdirectories, idempotently."""
@@ -214,7 +218,7 @@ class RunDir:
         """
         if not self.meta_path.exists():
             return {}
-        text = _read_text_or_raise(self.meta_path, "meta.json")
+        text = _read_text_or_raise(self.meta_path, META_NAME)
         try:
             meta = json.loads(text)
         except json.JSONDecodeError as exc:
@@ -591,10 +595,10 @@ def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
     events_text = _read_text_or_raise(events_src, "events")
     events = _parse_events(events_text)
 
-    meta_src = src_path / "meta.json"
+    meta_src = src_path / META_NAME
     meta: dict[str, Any] | None = None
     if meta_src.is_file():
-        meta_text = _read_text_or_raise(meta_src, "meta.json")
+        meta_text = _read_text_or_raise(meta_src, META_NAME)
         try:
             meta = json.loads(meta_text)
         except json.JSONDecodeError as exc:
@@ -684,7 +688,7 @@ def _stage_import(
             handle.write(json.dumps(event.to_json(), separators=(",", ":"), sort_keys=True))
             handle.write("\n")
 
-    meta_tmp = staging / "meta.json"
+    meta_tmp = staging / META_NAME
     with meta_tmp.open("w", encoding="utf-8") as handle:
         json.dump(meta, handle, indent=2, sort_keys=True)
         handle.write("\n")
@@ -715,7 +719,7 @@ def _swap_staged_import(dst: RunDir, staging: Path) -> None:
     shutil.rmtree(old_shots, ignore_errors=True)
 
     os.replace(staging / _EVENTS_FILENAME, dst.events_path)
-    os.replace(staging / "meta.json", dst.meta_path)
+    os.replace(staging / META_NAME, dst.meta_path)
 
     shutil.rmtree(staging, ignore_errors=True)
 

@@ -18,6 +18,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- SonarCloud triage on the trace noun: the redundant `OSError` subclasses in `runner._signal_group` collapsed to one clause, `dict.fromkeys` for the log-tail buffers, a tuple `startswith` for fence infostrings, the repeated `"meta.json"` and `"must be a string"` literals hoisted to constants, and in `template.html` the `Number.parseFloat` namespace, a dead `|| {}` spread guard, an extracted nested ternary, a braced one-line `if`, and a notes regex with no backtracking. The committed example is re-rendered against the new template.
 - This replaces the hand-run scratch tracer used for the 2026-09-08 Spark trace (`rt.py` plus a hand-written page, PIL cropping) with a stdlib-only, regenerable tool.
 
 ## [0.9.6] - 2026-09-08

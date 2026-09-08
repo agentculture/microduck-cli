@@ -324,7 +324,7 @@
     return out;
   }
   const upWindows = computeUpWindows();
-  const STEP_TITLES = {"0":"pre-flight", ...(META.step_titles || {})};
+  const STEP_TITLES = {"0":"pre-flight", ...META.step_titles};
   const stepTitle = step => STEP_TITLES[step] || (isStep(step) ? "" : step);
   function stepAt(t) {
     let cur = "0";
@@ -425,7 +425,10 @@
     setCap("c-train", trainLine(t));
     const chk = a.active.find(s => s.lane === "checks") || [...spans].reverse().find(s => s.lane === "checks" && s.t1 <= t);
     let chkText = null;
-    if (chk) chkText = chk.label + (chk.t1 > t ? "" : ` · exit ${chk.rc}${chk.first ? " · " + chk.first : ""}`);
+    if (chk) {
+      const first = chk.first ? " · " + chk.first : "";
+      chkText = chk.label + (chk.t1 > t ? "" : ` · exit ${chk.rc}${first}`);
+    }
     setCap("c-checks", chkText);
     document.querySelectorAll("#ladder button").forEach(b => b.classList.toggle("cur", b.dataset.step === step));
   }
@@ -580,7 +583,7 @@
       o.textContent = (isStep(e.step) ? e.step + " " : "") + title;
       jump.appendChild(o);
     }
-    jump.addEventListener("change", () => seek(parseFloat(jump.value)));
+    jump.addEventListener("change", () => seek(Number.parseFloat(jump.value)));
   }
   function buildChecksAndNotes() {
     if (Array.isArray(META.checks) && META.checks.length) {
@@ -597,7 +600,7 @@
       const nd = $("notes");
       for (const n of META.notes) {
         const p = document.createElement("p");
-        const m = /^\*\*(.+?)\*\*\s*([\s\S]*)$/.exec(n);
+        const m = /^\*\*([^*]+)\*\*\s*([\s\S]*)$/.exec(n);
         p.innerHTML = m ? `<b>${esc(m[1])}</b> ${esc(m[2])}` : esc(n);
         nd.appendChild(p);
       }
@@ -615,10 +618,10 @@
   }
   function tick(now) {
     if (!playing) return;
-    if (last != null) { t += (now - last) / 1000 * parseFloat(speedSel.value); if (t >= T_END) { t = T_END; stop(); } }
+    if (last != null) { t += (now - last) / 1000 * Number.parseFloat(speedSel.value); if (t >= T_END) { t = T_END; stop(); } }
     last = now; draw(); if (playing) raf = requestAnimationFrame(tick);
   }
-  function start() { if (t >= T_END) t = 0; playing = true; last = null; playBtn.textContent = "Pause"; raf = requestAnimationFrame(tick); }
+  function start() { if (t >= T_END) { t = 0; } playing = true; last = null; playBtn.textContent = "Pause"; raf = requestAnimationFrame(tick); }
   function stop() { playing = false; playBtn.textContent = "Play"; if (raf) cancelAnimationFrame(raf); }
   playBtn.addEventListener("click", () => playing ? stop() : start());
   $("restart").addEventListener("click", () => { stop(); seek(0); });

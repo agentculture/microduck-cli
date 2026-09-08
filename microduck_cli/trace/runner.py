@@ -224,7 +224,7 @@ class Recorder:
         try:
             os.killpg(os.getpgid(proc.pid), sig)
             return True
-        except (ProcessLookupError, PermissionError, OSError):
+        except OSError:
             return False
 
     def _kill_group(self, proc: subprocess.Popen) -> str:
@@ -322,7 +322,7 @@ class Recorder:
         self.stop_log_tail()
         self._tail_stop.clear()
         offsets = {p: (os.path.getsize(p) if os.path.exists(p) else 0) for p in paths}
-        buffers = {p: b"" for p in paths}
+        buffers = dict.fromkeys(paths, b"")
         self._tail_thread = threading.Thread(
             target=self._tail_loop,
             args=(dict(paths), offsets, buffers),

@@ -83,7 +83,8 @@ def test_trace_overview_json(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["subject"] == "microduck-cli trace"
     titles = [section["title"] for section in payload["sections"]]
-    assert "Audience" in titles and "Verbs" in titles
+    assert "Audience" in titles
+    assert "Verbs" in titles
 
 
 # --- help and the error contract ------------------------------------------
@@ -119,7 +120,8 @@ def test_bad_nested_argument_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert captured.out == ""
     payload = json.loads(captured.err)
     assert payload["code"] == 1
-    assert payload["message"] and payload["remediation"]
+    assert payload["message"]
+    assert payload["remediation"]
 
 
 def test_unknown_trace_verb_errors(capsys: pytest.CaptureFixture[str]) -> None:

@@ -159,7 +159,8 @@ def test_window_true_when_which_finds_xdotool(
     assert outcome.geometry is None
     assert outcome.file == "shots/shot2.png"
     screenshot_calls = [c for c in runner.calls if c[0] == "gnome-screenshot"]
-    assert screenshot_calls and "-w" in screenshot_calls[0]
+    assert screenshot_calls
+    assert "-w" in screenshot_calls[0]
     focus_calls = [c for c in runner.calls if c[0] == "xdotool"]
     assert focus_calls
 
@@ -575,9 +576,11 @@ def test_no_pillow_or_image_import() -> None:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                assert "PIL" not in alias.name and "Image" not in alias.name
+                assert "PIL" not in alias.name
+                assert "Image" not in alias.name
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            assert "PIL" not in module and "Image" not in module
+            assert "PIL" not in module
+            assert "Image" not in module
     assert "PIL" not in source
     assert "Image" not in source

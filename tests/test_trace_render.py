@@ -184,7 +184,8 @@ def test_engine_chatter_is_thinned_into_buckets(tmp_path):
     out = render(_write_run(tmp_path, _basic_events()))
     events = json.loads(re.search(r"const EVENTS=(\[.*?\]);\n", out.trace_html).group(1))
     cool = [e for e in events if e.get("ev") == "cooldown"]
-    assert len(cool) == 1 and cool[0]["n"] == 2
+    assert len(cool) == 1
+    assert cool[0]["n"] == 2
     assert any(e.get("ev") == "fired" for e in events)
 
 

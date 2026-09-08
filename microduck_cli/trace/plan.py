@@ -35,6 +35,9 @@ _SIDECAR_OVERRIDE_FIELDS = (
     "label",
 )
 
+#: The one wording every string-typed plan field fails with.
+_NOT_A_STRING = "must be a string"
+
 _FENCE_RE = re.compile(r"^(`{3,}|~{3,})(.*)$")
 _STEP_HEADING_RE = re.compile(r"^#{1,6}\s*Step\s+(\d+)\b", re.IGNORECASE)
 _HEADING_RE = re.compile(r"^#{1,6}\s")
@@ -107,9 +110,9 @@ def _validate_step(step_obj: Step, index: int, origin: str) -> None:
     if not isinstance(step_obj.cmd, str) or not step_obj.cmd:
         fail("cmd", "must be a non-empty string")
     if not isinstance(step_obj.label, str):
-        fail("label", "must be a string")
+        fail("label", _NOT_A_STRING)
     if not isinstance(step_obj.step, str):
-        fail("step", "must be a string")
+        fail("step", _NOT_A_STRING)
     if step_obj.lane not in LANES:
         fail("lane", f"'{step_obj.lane}' is not one of: {', '.join(LANES)}")
     if not _is_number(step_obj.sleep_before) or step_obj.sleep_before < 0:
@@ -129,7 +132,7 @@ def _validate_step(step_obj: Step, index: int, origin: str) -> None:
         if not isinstance(step_obj.shot, str) or not _SHOT_NAME_RE.match(step_obj.shot):
             fail("shot", f"'{step_obj.shot}' is not a plain filename stem")
     if step_obj.note is not None and not isinstance(step_obj.note, str):
-        fail("note", "must be a string")
+        fail("note", _NOT_A_STRING)
 
 
 # --------------------------------------------------------------------------
@@ -361,7 +364,7 @@ def _extract_commands_with_step(text: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     for info, block_lines, fence_start in _iter_fenced_blocks(lines):
         lowered = info.lower()
-        if not (lowered.startswith("bash") or lowered.startswith("sh")):
+        if not lowered.startswith(("bash", "sh")):
             continue
         if "nocheck" in lowered:
             continue
