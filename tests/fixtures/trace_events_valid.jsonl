@@ -1,0 +1,5 @@
+{"kind":"note","label":"starting tutorial run","lane":"operator","t":0.0,"wall":1000.0}
+{"kind":"cmd-start","label":"microduck env up --sim","lane":"cli","step":"01-env-up","t":0.5,"wall":1000.5}
+{"elapsed":2.75,"kind":"cmd-end","label":"microduck env up --sim","lane":"cli","out":"steps/01-env-up.out","rc":0,"stderr_lines":0,"stdout_first":"sim stack up","stdout_lines":12,"step":"01-env-up","t":3.25,"wall":1003.25}
+{"ev":"chirp","kind":"stderr","label":"[SENSE stage=idle source=self-mute event=chirp] ok","lane":"engine","stage":"idle","t":3.3,"wall":1003.3}
+{"file":"sim-window.jpg","kind":"shot","label":"sim window","lane":"viewer","size":[640,480],"t":3.4,"wall":1003.4,"window":true}

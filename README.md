@@ -121,6 +121,12 @@ first-party [`operate-microduck`](.claude/skills/operate-microduck/SKILL.md) ski
 the same ground for an agent, including the screenshot recipe for watching the MuJoCo
 window from a headless session.
 
+**Watch a run back.** `microduck trace run --plan <plan.toml>` (or `trace exec -- <cmd>`
+for one command) records every command, daemon log line and viewer frame into a run
+directory, then `trace render`/`trace serve` turn it into the same MicroDuck Run Trace
+page every time. `docs/traces/2026-09-08-spark-tutorial/index.html` is a committed
+example — open it locally, or `microduck trace serve docs/traces/2026-09-08-spark-tutorial`.
+
 ## Proof — three boxes
 
 Everything in this section is copied from the verification records in

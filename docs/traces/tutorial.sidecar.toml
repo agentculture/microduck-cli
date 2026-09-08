@@ -1,0 +1,71 @@
+# Sidecar for the Jetson AI Lab tutorial
+# (jetson-ai-lab/src/content/tutorials/applications/microduck-on-jetson.mdx),
+# encoding the timing and frame names from the 2026-09-08 Spark run
+# (docs/traces/2026-09-08-spark-tutorial/) so `trace plan --from-tutorial`
+# regenerates the same plan.
+#
+# Each table header is the *exact* command string extracted from the
+# tutorial's fenced bash blocks (see `microduck trace plan --from-tutorial
+# <mdx> --json` to reproduce the list verbatim). A key that matches no
+# extracted command is reported in `meta.unmatched`, never silently dropped.
+#
+# `Step` supports only an after-command shot (run_plan takes the frame after
+# the command runs, after its `sleep_after`) — there is no before-command
+# shot field. So the "before env down" frame is attached to the
+# `microduck rules intent stop` step instead, which is the last command that
+# runs before `microduck env down` tears the sim down; see its `note` below.
+
+["uv tool install microduck-cli==0.9.4"]
+note = "the tutorial pins 0.9.4; install the current release when re-running"
+
+["microduck env up --sim"]
+retry = 1
+timeout_s = 200
+shot = "s0-after-env-up"
+sleep_after = 4
+
+["microduck duck health"]
+sleep_after = 0
+
+["microduck duck init --apply"]
+sleep_after = 8
+shot = "s1-init"
+
+["microduck duck enable --apply"]
+sleep_after = 1
+shot = "s2-stand"
+
+["microduck duck monitor --frames 5 --json"]
+sleep_after = 4
+shot = "s3-stand-2"
+
+["microduck duck look --x 0.2 --y 0.4 --z -0.1 --apply"]
+sleep_after = 1.5
+shot = "s4-look"
+
+["microduck duck do roulade --apply"]
+sleep_after = 15
+shot = "s5-roulade"
+
+["microduck duck move --vx 0.15 --duration 3 --apply"]
+sleep_after = 1
+shot = "s6-after-move"
+
+["microduck rules engine run --duck duck-a --rules ./my-rules.toml --apply --max-ticks 300 --json"]
+shot = "s7-engine"
+
+["microduck rules intent stop"]
+shot = "s8-before-down"
+note = "frame taken here stands in for 'before env down': Step only supports an after-command shot, and this is the last command that runs before `microduck env down` tears the sim down"
+
+["free -g"]
+lane = "operator"
+
+["WANDB_MODE=offline microduck policy smoke Mjlab-Velocity-Flat-MicroDuck --json"]
+lane = "train"
+timeout_s = 1500
+
+["WANDB_MODE=offline timeout 30m microduck policy smoke Mjlab-Velocity-Flat-MicroDuck --json"]
+lane = "train"
+timeout_s = 1900
+note = "Thor tab variant; on Spark run the tab's own line"

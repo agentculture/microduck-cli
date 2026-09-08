@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.7] - 2026-09-08
+
+### Added
+
+- `trace serve` binds loopback only; `--allow-remote` is the explicit, unauthenticated escape hatch. Plans and sidecars are validated before a run directory exists; imports validate everything before touching the destination and clean up a run directory they created on failure (review fix-ups on the first PR round).
+
+- The `trace` noun (`microduck trace`) — eight verbs: `overview`, `plan` (build a plan from TOML or a tutorial's fenced commands, sidecar-augmented), `run` (execute a plan end to end, tracing every command), `exec` (trace one arbitrary command), `import` (adopt an externally recorded run), `render`, `serve`, `list`.
+- The trace run directory (`<state>/trace/<UTC stamp>/`: `events.jsonl`, `meta.json`, `steps/*.out`/`.err`, `shots/*`) and its two rendered outputs — `trace.html` (an Artifact fragment) and `index.html` (the same fragment wrapped in a skeleton).
+- `docs/traces/2026-09-08-spark-tutorial/` — the committed example run, imported and rendered from the 2026-09-08 Spark tutorial trace, with `tests/test_trace_example.py` re-rendering it and diffing byte-for-byte against the committed pages.
+- `docs/traces/tutorial.sidecar.toml` — the sidecar for the Jetson AI Lab tutorial, encoding the 2026-09-08 Spark run's retries, timeouts, sleeps and frame names; `tests/test_trace_sidecar.py` asserts it parses and merges cleanly.
+
+### Changed
+
+- SonarCloud triage on the trace noun: the redundant `OSError` subclasses in `runner._signal_group` collapsed to one clause, `dict.fromkeys` for the log-tail buffers, a tuple `startswith` for fence infostrings, the repeated `"meta.json"` and `"must be a string"` literals hoisted to constants, and in `template.html` the `Number.parseFloat` namespace, a dead `|| {}` spread guard, an extracted nested ternary, a braced one-line `if`, and a notes regex with no backtracking. The committed example is re-rendered against the new template.
+- The trace noun's nine cognitive-complexity reports cleared by extraction, not by reshuffling: `_resolve_shot_path` out of `capture_frame`; `pause_autolock`'s gsettings read/set/restore into three helpers over one `_gsettings_set`; `_load_import_meta` out of `import_run`; `_validate_step` driven from a `_STEP_CHECKS` table beside the existing `_FIELD_REMEDIATION` one; `_dump_step` out of `dump_plan`; and in `template.html` `computeActivity`, `updateCaptions`, `buildTimeline` and `buildLadder` split along the passes they already had. Behaviour is unchanged: the rendered page was driven through 81 playhead states in a browser before and after, and the captions, node/edge classes, ladder cursor and clock fingerprint identically.
+- This replaces the hand-run scratch tracer used for the 2026-09-08 Spark trace (`rt.py` plus a hand-written page, PIL cropping) with a stdlib-only, regenerable tool.
+
 ## [0.9.6] - 2026-09-08
 
 ### Added
