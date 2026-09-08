@@ -14,21 +14,9 @@ import tomllib
 from dataclasses import dataclass, field
 
 from microduck_cli.cli._errors import EXIT_USER_ERROR, CliError
+from microduck_cli.trace.events import LANES
 
-# Same lane vocabulary as microduck_cli/trace/events.py (LANES). Not imported from
-# there: this module must not depend on a sibling task's module existing yet.
-LANES = (
-    "operator",
-    "cli",
-    "engine",
-    "robotd",
-    "body",
-    "train",
-    "viewer",
-    "checks",
-    "microduck",
-    "rl",
-)
+_SHOT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
 
 # Commands that drive the surrounding host/shell rather than the microduck CLI
 # itself are labelled "operator"; everything else defaults to "cli".
@@ -76,6 +64,73 @@ class Plan:
 
 
 # --------------------------------------------------------------------------
+# Step validation — applied after TOML parsing (load_plan) and after sidecar
+# overrides are merged (from_tutorial), so a bad field is caught before a run
+# dir is ever created rather than blowing up later inside run_plan.
+# --------------------------------------------------------------------------
+
+_FIELD_REMEDIATION = {
+    "cmd": "set cmd to a non-empty string",
+    "label": "set label to a string",
+    "step": "set step to a string",
+    "lane": f"use one of: {', '.join(LANES)}",
+    "sleep_before": "set sleep_before to a number >= 0",
+    "sleep_after": "set sleep_after to a number >= 0",
+    "retry": "set retry to 0 or a positive integer",
+    "timeout_s": "set timeout_s to a number > 0, or omit it",
+    "shot": "use a plain filename stem with no path separators (e.g. 'frame-1')",
+    "note": "set note to a string, or omit it",
+}
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _validate_step(step_obj: Step, index: int, origin: str) -> None:
+    """Reject an out-of-shape step, naming the field and the problem.
+
+    Raises :class:`CliError` on the first field that fails, so a caller sees
+    one problem at a time rather than a pile of them.
+    """
+    cmd_display = step_obj.cmd if isinstance(step_obj.cmd, str) and step_obj.cmd else "?"
+
+    def fail(field_name: str, problem: str) -> None:
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{origin} step {index} ({cmd_display}): {field_name} {problem}",
+            _FIELD_REMEDIATION[field_name],
+        )
+
+    if not isinstance(step_obj.cmd, str) or not step_obj.cmd:
+        fail("cmd", "must be a non-empty string")
+    if not isinstance(step_obj.label, str):
+        fail("label", "must be a string")
+    if not isinstance(step_obj.step, str):
+        fail("step", "must be a string")
+    if step_obj.lane not in LANES:
+        fail("lane", f"'{step_obj.lane}' is not one of: {', '.join(LANES)}")
+    if not _is_number(step_obj.sleep_before) or step_obj.sleep_before < 0:
+        fail("sleep_before", "must be a number >= 0")
+    if not _is_number(step_obj.sleep_after) or step_obj.sleep_after < 0:
+        fail("sleep_after", "must be a number >= 0")
+    if (
+        isinstance(step_obj.retry, bool)
+        or not isinstance(step_obj.retry, int)
+        or step_obj.retry < 0
+    ):
+        fail("retry", "must be an integer >= 0")
+    if step_obj.timeout_s is not None:
+        if not _is_number(step_obj.timeout_s) or step_obj.timeout_s <= 0:
+            fail("timeout_s", "must be a number > 0")
+    if step_obj.shot is not None:
+        if not isinstance(step_obj.shot, str) or not _SHOT_NAME_RE.match(step_obj.shot):
+            fail("shot", f"'{step_obj.shot}' is not a plain filename stem")
+    if step_obj.note is not None and not isinstance(step_obj.note, str):
+        fail("note", "must be a string")
+
+
+# --------------------------------------------------------------------------
 # TOML load / dump
 # --------------------------------------------------------------------------
 
@@ -105,36 +160,20 @@ def load_plan(text: str) -> Plan:
             )
         cmd = raw["cmd"]
 
-        retry = raw.get("retry", 0)
-        if not isinstance(retry, int) or retry < 0:
-            raise CliError(
-                EXIT_USER_ERROR,
-                f"plan step {idx}: 'retry' must be an integer >= 0",
-                "set retry to 0 or a positive integer",
-            )
-
-        lane = raw.get("lane", "cli")
-        if lane not in LANES:
-            raise CliError(
-                EXIT_USER_ERROR,
-                f"plan step {idx}: unknown lane '{lane}'",
-                f"use one of: {', '.join(LANES)}",
-            )
-
-        steps.append(
-            Step(
-                step=str(raw.get("step", "0")),
-                label=raw.get("label", cmd),
-                cmd=cmd,
-                lane=lane,
-                sleep_before=raw.get("sleep_before", 0),
-                sleep_after=raw.get("sleep_after", 0),
-                shot=raw.get("shot"),
-                retry=retry,
-                note=raw.get("note"),
-                timeout_s=raw.get("timeout_s"),
-            )
+        step_obj = Step(
+            step=raw.get("step", "0"),
+            label=raw.get("label", cmd),
+            cmd=cmd,
+            lane=raw.get("lane", "cli"),
+            sleep_before=raw.get("sleep_before", 0),
+            sleep_after=raw.get("sleep_after", 0),
+            shot=raw.get("shot"),
+            retry=raw.get("retry", 0),
+            note=raw.get("note"),
+            timeout_s=raw.get("timeout_s"),
         )
+        _validate_step(step_obj, idx, "plan")
+        steps.append(step_obj)
 
     return Plan(title=title, steps=steps, meta=meta)
 
@@ -307,7 +346,11 @@ def _lane_for(cmd: str) -> str:
 def _apply_sidecar_override(step_obj: Step, overrides: dict) -> None:
     for key, value in overrides.items():
         if key not in _SIDECAR_OVERRIDE_FIELDS:
-            continue
+            raise CliError(
+                EXIT_USER_ERROR,
+                f"sidecar override for '{step_obj.cmd}': unknown field '{key}'",
+                f"use one of: {', '.join(_SIDECAR_OVERRIDE_FIELDS)}",
+            )
         setattr(step_obj, key, value)
 
 
@@ -345,5 +388,8 @@ def from_tutorial(mdx_text: str, sidecar: dict | None = None) -> Plan:
         unmatched = sorted(key for key in sidecar if key not in matched)
         if unmatched:
             meta["unmatched"] = unmatched
+
+    for idx, step_obj in enumerate(steps):
+        _validate_step(step_obj, idx, "tutorial")
 
     return Plan(title="Tutorial", steps=steps, meta=meta)
