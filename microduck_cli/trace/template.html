@@ -532,7 +532,7 @@
       tl.appendChild(el("rect", {x:xOf(s.t0), y:Y0+li*LH+6, width:w, height:LH-12, rx:1.5, fill:s.rc === 0 ? LANES[li][2] : "var(--bad)", opacity:.85}));
     }
     for (const e of events) {
-      const li = laneIdx[e.lane];
+      const li = laneIdx[laneOf(e.lane)];
       if (li == null) continue;
       if (e.lane === "viewer") { tl.appendChild(el("circle", {cx:xOf(e.t), cy:Y0+li*LH+LH/2, r:3.2, fill:LANES[li][2]})); continue; }
       const h = e.lane === "engine" && e.n ? Math.min(LH-8, 3 + e.n) : LH-10;

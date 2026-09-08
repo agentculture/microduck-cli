@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -130,13 +131,51 @@ def _load_events(run_dir: Any, events_path: Path) -> list[dict[str, Any]]:
     return [_as_dict(e) for e in loaded]
 
 
+def _num(value: Any, default: float | None = None) -> float | None:
+    """A finite float from a free-form field, or ``default`` (never raises)."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        out = float(value)
+    elif isinstance(value, str):
+        try:
+            out = float(value.strip())
+        except ValueError:
+            return default
+    else:
+        return default
+    return out if math.isfinite(out) else default
+
+
+def _int(value: Any, default: int | None = None) -> int | None:
+    """An int from a free-form field (bools excluded), or ``default``."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return default
+    return default
+
+
+def _t_of(e: dict[str, Any]) -> float:
+    return round(_num(e.get("t"), 0.0) or 0.0, 2)
+
+
 def _sorted_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(events, key=lambda x: (float(x.get("t", 0.0)), x.get("lane", "")))
+    return sorted(events, key=lambda x: (_t_of(x), str(x.get("lane", ""))))
 
 
 def _step_of(e: dict[str, Any]) -> str | None:
     step = e.get("step")
     return None if step is None else str(step)
+
+
+def _plain_text(value: Any) -> str:
+    return value if isinstance(value, str) else ""
 
 
 def _span(lane: str, label: str, step: str | None, t0: float, t1: float, end: dict | None) -> dict:
@@ -147,23 +186,23 @@ def _span(lane: str, label: str, step: str | None, t0: float, t1: float, end: di
         "lane": lane,
         "step": step,
         "label": label,
-        "rc": end.get("rc"),
-        "first": str(end.get("stdout_first", "") or "")[:FIRST_LINE_MAX],
-        "outn": end.get("stdout_lines"),
-        "errn": end.get("stderr_lines"),
+        "rc": _int(end.get("rc")),
+        "first": _plain_text(end.get("stdout_first"))[:FIRST_LINE_MAX],
+        "outn": _int(end.get("stdout_lines")),
+        "errn": _int(end.get("stderr_lines")),
     }
 
 
 def _closed_span(e: dict[str, Any], start: dict[str, Any] | None, lane: str, label: str) -> dict:
-    t1 = round(float(e.get("t", 0.0)), 2)
-    elapsed = float(e.get("elapsed", 0.0) or 0.0)
-    t0 = round(float(start["t"]), 2) if start else round(t1 - elapsed, 2)
+    t1 = _t_of(e)
+    elapsed = _num(e.get("elapsed"), 0.0) or 0.0
+    t0 = _t_of(start) if start else round(t1 - max(elapsed, 0.0), 2)
     return _span(lane, label, _step_of(e), t0, t1, e)
 
 
 def _engine_fields(e: dict[str, Any], label: str) -> dict[str, Any]:
-    ev = e.get("ev")
-    stage = e.get("stage")
+    ev = e.get("ev") if isinstance(e.get("ev"), str) else None
+    stage = e.get("stage") if isinstance(e.get("stage"), str) else None
     if ev is None:
         m = re.search(r"event=([a-z-]+)", label)
         ev = m.group(1) if m else None
@@ -171,14 +210,15 @@ def _engine_fields(e: dict[str, Any], label: str) -> dict[str, Any]:
         m = re.search(r"stage=([a-z]+)", label)
         stage = m.group(1) if m else None
     out: dict[str, Any] = {"ev": ev, "stage": stage}
-    if e.get("n") is not None:
-        out["n"] = int(e["n"])
+    n = _int(e.get("n"))
+    if n is not None and n > 0:
+        out["n"] = n
     return out
 
 
 def _event_record(e: dict[str, Any], lane: str, kind: str, label: str) -> dict[str, Any]:
     rec: dict[str, Any] = {
-        "t": round(float(e.get("t", 0.0)), 2),
+        "t": _t_of(e),
         "lane": lane,
         "kind": kind,
         "label": label,
@@ -210,8 +250,8 @@ def _spans_and_events(
         else:
             kept.append(_event_record(e, lane, kind, label))
     # every span carries a start, so an unterminated command still shows up
-    for (lane, label), start in sorted(open_cmds.items(), key=lambda kv: float(kv[1]["t"])):
-        t0 = round(float(start["t"]), 2)
+    for (lane, label), start in sorted(open_cmds.items(), key=lambda kv: _t_of(kv[1])):
+        t0 = _t_of(start)
         spans.append(_span(lane, label, _step_of(start), t0, t0, None))
     spans.sort(key=lambda s: (s["t0"], s["t1"], s["lane"], s["label"]))
     return spans, _thin(kept)
@@ -235,6 +275,36 @@ def _thin(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _window_flag(value: Any) -> bool:
+    return value if isinstance(value, bool) else True
+
+
+def _size_pair(value: Any) -> list[int] | None:
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        w, h = _int(value[0]), _int(value[1])
+        if w is not None and h is not None and w > 0 and h > 0:
+            return [w, h]
+    return None
+
+
+def _geometry(value: Any) -> dict[str, Any] | None:
+    """A crop rectangle the page can use: x, y, w, h ints and a positive screen size."""
+    if not isinstance(value, dict):
+        return None
+    out: dict[str, Any] = {}
+    for key in ("x", "y", "w", "h"):
+        num = _int(value.get(key))
+        if num is None:
+            return None
+        out[key] = num
+    if out["w"] <= 0 or out["h"] <= 0:
+        return None
+    screen = _size_pair(value.get("screen"))
+    if screen is not None:
+        out["screen"] = screen
+    return out
+
+
 def _shots(shots_dir: Path, events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Frames keyed by the shot event's ``file``, embedded as data URIs in sorted order."""
     by_file: dict[str, dict[str, Any]] = {}
@@ -253,9 +323,9 @@ def _shots(shots_dir: Path, events: list[dict[str, Any]]) -> dict[str, dict[str,
         meta = by_file.get(rel) or by_file.get(path.name) or {}
         out[rel] = {
             "src": f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("ascii"),
-            "window": bool(meta.get("window", True)),
-            "size": meta.get("size"),
-            "geometry": meta.get("geometry"),
+            "window": _window_flag(meta.get("window")),
+            "size": _size_pair(meta.get("size")),
+            "geometry": _geometry(meta.get("geometry")),
         }
     return out
 
@@ -348,9 +418,9 @@ def _t_end(meta: dict[str, Any], events: list[dict[str, Any]], spans: list) -> f
         return given
     last = 0.0
     for e in events:
-        last = max(last, float(e["t"]))
+        last = max(last, _num(e.get("t"), 0.0) or 0.0)
     for s in spans:
-        last = max(last, float(s["t1"]))
+        last = max(last, _num(s.get("t1"), 0.0) or 0.0)
     return round(last, 1) or 1.0
 
 
