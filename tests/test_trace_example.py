@@ -40,5 +40,6 @@ def test_example_has_twelve_frames_and_the_env_up_retry() -> None:
 
 def test_example_meta_and_size() -> None:
     meta = json.loads((EXAMPLE / "meta.json").read_text(encoding="utf-8"))
-    assert meta["t0_wall"] > 0 and meta["title"] == "MicroDuck Run Trace"
+    assert meta["t0_wall"] > 0
+    assert meta["title"] == "MicroDuck Run Trace"
     assert (EXAMPLE / "index.html").stat().st_size < 1_000_000
