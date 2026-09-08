@@ -68,7 +68,7 @@ def test_every_registered_verb_is_documented() -> None:
 
 def test_nouns_and_their_overviews_are_registered() -> None:
     paths = set(verb_paths(_build_parser()))
-    for noun in ("env", "duck", "policy", "rules"):
+    for noun in ("env", "duck", "policy", "rules", "trace"):
         assert (noun,) in paths
         assert (noun, "overview") in paths
 
@@ -93,7 +93,7 @@ def test_checker_catches_an_undocumented_noun_verb() -> None:
     assert any(problem.startswith("env zzz-verb:") for problem in problems)
 
 
-@pytest.mark.parametrize("noun", ["env", "duck", "policy", "rules"])
+@pytest.mark.parametrize("noun", ["env", "duck", "policy", "rules", "trace"])
 def test_noun_overview_never_hard_fails_on_stray_positional(
     noun: str, capsys: pytest.CaptureFixture[str]
 ) -> None:

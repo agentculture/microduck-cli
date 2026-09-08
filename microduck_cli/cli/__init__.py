@@ -2,8 +2,8 @@
 
 The agent-first global verbs (``whoami``, ``learn``, ``explain``, ``overview``,
 ``doctor``) are registered here under :mod:`microduck_cli.cli._commands`,
-alongside the ``cli`` noun group and the four domain nouns (``env``, ``duck``,
-``policy``, ``rules``). Every noun group registers via its own ``register()``
+alongside the ``cli`` noun group and the five domain nouns (``env``, ``duck``,
+``policy``, ``rules``, ``trace``). Every noun group registers via its own ``register()``
 function following the same pattern.
 
 Error propagation contract
@@ -72,6 +72,7 @@ def _build_parser() -> argparse.ArgumentParser:
     from microduck_cli.cli._commands import overview as _overview_cmd
     from microduck_cli.cli._commands import policy as _policy_group
     from microduck_cli.cli._commands import rules as _rules_group
+    from microduck_cli.cli._commands import trace as _trace_group
     from microduck_cli.cli._commands import whoami as _whoami_cmd
     from microduck_cli.explain.catalog import TAGLINE
 
@@ -101,6 +102,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _duck_group.register(sub)
     _policy_group.register(sub)
     _rules_group.register(sub)
+    _trace_group.register(sub)
 
     return parser
 

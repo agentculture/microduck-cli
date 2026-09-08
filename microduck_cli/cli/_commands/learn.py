@@ -21,8 +21,9 @@ _PURPOSE = (
     "Agent-agnostic control surface for the MicroDuck robot: bring up the sim or real\n"
     "environment (`env`), operate the duck in robotctl's words (`duck`), train/export/\n"
     "publish/install policies (`policy`), and run the data-only rules layer and its 50 Hz\n"
-    "tick engine (`rules`). Sim-first: every verb is exercised against `robotd --fake`/\n"
-    "`--sim` and the in-process fake daemon — no physical MicroDuck has been driven yet."
+    "tick engine (`rules`), and record a session as a shareable run trace (`trace`).\n"
+    "Sim-first: every verb is exercised against `robotd --fake`/`--sim` and the\n"
+    "in-process fake daemon — no physical MicroDuck has been driven yet."
 )
 
 
