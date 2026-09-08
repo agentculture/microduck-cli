@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.7] - 2026-09-08
+
+### Added
+
+- The `trace` noun (`microduck trace`) — eight verbs: `overview`, `plan` (build a plan from TOML or a tutorial's fenced commands, sidecar-augmented), `run` (execute a plan end to end, tracing every command), `exec` (trace one arbitrary command), `import` (adopt an externally recorded run), `render`, `serve`, `list`.
+- The trace run directory (`<state>/trace/<UTC stamp>/`: `events.jsonl`, `meta.json`, `steps/*.out`/`.err`, `shots/*`) and its two rendered outputs — `trace.html` (an Artifact fragment) and `index.html` (the same fragment wrapped in a skeleton).
+- `docs/traces/2026-09-08-spark-tutorial/` — the committed example run, imported and rendered from the 2026-09-08 Spark tutorial trace, with `tests/test_trace_example.py` re-rendering it and diffing byte-for-byte against the committed pages.
+- `docs/traces/tutorial.sidecar.toml` — the sidecar for the Jetson AI Lab tutorial, encoding the 2026-09-08 Spark run's retries, timeouts, sleeps and frame names; `tests/test_trace_sidecar.py` asserts it parses and merges cleanly.
+
+### Changed
+
+- This replaces the hand-run scratch tracer used for the 2026-09-08 Spark trace (`rt.py` plus a hand-written page, PIL cropping) with a stdlib-only, regenerable tool.
+
 ## [0.9.6] - 2026-09-08
 
 ### Added

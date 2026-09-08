@@ -191,6 +191,16 @@ tell motion from a static pose (this is how the "no gait" finding above was
 made). If no graphical session exists, say so and use `--headless` plus
 `duck monitor --json` instead of pretending to have looked.
 
+**Record the whole session instead of one-off shots.** `microduck trace run
+--plan <plan.toml>` (build one with `trace plan --from-tutorial <mdx>`, or hand
+write it) replays a sequence of commands and traces each one — command, rc,
+daemon log lines, and a viewer frame wherever the plan asks for a `shot` — into
+one run directory. For a single command, `microduck trace exec -- <cmd>` traces
+just that. Either way, `microduck trace render <run-dir>` (or `trace serve
+<run-dir>` to open it in a browser immediately) turns the run into the same
+MicroDuck Run Trace page every time — the committed example is
+`docs/traces/2026-09-08-spark-tutorial/`.
+
 ## Close the simulation
 
 ```bash
