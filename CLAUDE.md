@@ -18,10 +18,12 @@ motion gate), `env/` (train-host detection), `explain/` (per-noun catalogs), and
 engine with its single admission registry, and the tick engine itself
 (`engine.py`, `liveness.py`, `senselog.py`) — and `train/` (argv builders for
 the microduck_rl lane, the smoke gate, the artifact ledger). `env/` also carries
-`doctor.py`, `params.py` and `stack.py` (the sim stack lifecycle). Nothing here
-drives real hardware yet: the socket client is landing in its own task, so every
-module below the composition root is exercised through injected seams and the
-in-process fake daemon in `tests/fake_robotd.py`.
+`doctor.py`, `params.py` and `stack.py` (the sim stack lifecycle). `trace/` is
+the run-trace tool — it re-runs (or wraps) a tutorial's commands and turns them
+into a regenerable MicroDuck Run Trace page; see "The trace noun" below. Nothing
+here drives real hardware yet: the socket client is landing in its own task, so
+every module below the composition root is exercised through injected seams and
+the in-process fake daemon in `tests/fake_robotd.py`.
 
 Two things to internalize before touching anything:
 
@@ -111,7 +113,8 @@ wiring (reachy-mini-cli's split). What is on disk today:
 | `microduck_cli/env/` | `hosts.py` (train-host detection), `doctor.py` (rubric-shaped environment report), `params.py` (generated robotd params for a laptop run), `stack.py` (sim stack up/down/status, pid-by-cmdline). |
 | `microduck_cli/train/` | `lane.py` (pure argv builders for `list-envs`, the 64-env smoke test, `train`, `play`, `export`, `publish`, `infer`, plus the smoke-gate record that refuses a long run without a passed smoke) and `artifacts.py` (append-only JSONL ledger). Never imports the RL package. |
 | `microduck_cli/behavior/` | The engine and everything it composes — see the next section. |
-| `microduck_cli/explain/` | `catalog.py` plus one module per noun (`duck`, `env`, `policy`, `rules`). |
+| `microduck_cli/trace/` | `events.py` (the one event schema + run dir), `plan.py` (the TOML plan, `from_tutorial`), `capture.py` (frame capture, autolock pause), `render.py` + `template.html` (the deterministic page), `runner.py` (`Recorder`, `run_plan`, `exec_one`), `serve.py` (a local HTTP server for the rendered page). See "The trace noun" below. |
+| `microduck_cli/explain/` | `catalog.py` plus one module per noun (`duck`, `env`, `policy`, `rules`, `trace`). |
 
 ### The agent-first rubric (why some code looks odd)
 
@@ -131,6 +134,46 @@ invariants**: `prompt-file-present`, `backend-consistency` (`claude`→`CLAUDE.m
 `colleague`→`AGENTS.colleague.md`, `acp`→`AGENTS.md`, `gemini`→`GEMINI.md`), and
 `skills-present`. Change the backend in `culture.yaml` and you must teach `doctor`
 the matching prompt file.
+
+### The trace noun
+
+`microduck trace` (`cli/_commands/trace.py`, thin argparse wiring over
+`microduck_cli/trace/`) turns a run of the CLI into a regenerable **MicroDuck
+Run Trace** page: eight verbs — `overview`, `plan` (build a plan from a TOML
+file or a tutorial's fenced commands, sidecar-augmented), `run` (execute a
+plan end to end, tracing every command), `exec` (trace one arbitrary command),
+`import` (adopt an externally recorded run, e.g. a hand-run scratch trace),
+`render`, `serve`, `list`. A run lands under `<state>/trace/<UTC stamp>/` —
+`events.jsonl` (one JSON object per line: `t`, `wall`, `lane`, `kind`, `label`,
+optional `step`), `meta.json`, `steps/*.out`/`.err`, `shots/*.jpg`/`.png` — and
+`trace render` turns that directory into two files: `trace.html` (an Artifact
+fragment, no doctype/html/head/body) and `index.html` (the same fragment
+wrapped in a skeleton, open it directly in a browser or `microduck trace
+serve <run-dir>`).
+
+The honesty rules the renderer and runner keep, on purpose:
+
+- **Verbatim steps, no `--apply` injection.** The recorder runs exactly the
+  command string in the plan; it never adds `--apply` or any other flag on the
+  caller's behalf. A gated verb that needed `--apply` and didn't get it fails
+  the same way it would run by hand — the trace shows that, it doesn't paper
+  over it.
+- **A failed attempt is kept beside its retry**, never overwritten. A step
+  with `retry=N` gets its own `cmd-start`/`cmd-end` pair per attempt; the page
+  renders every attempt's span, the failing one in the failure colour.
+- **Headless is a recorded note, not a silent skip.** With no graphical
+  session, `capture.py` returns a `headless` outcome instead of raising, and
+  the page's frame panel says so instead of showing a blank space.
+- **`--pause-autolock` is opt-in.** Pausing the desktop's idle-delay and
+  screen lock during a long run touches the operator's session, so it only
+  happens when asked for — and `capture.pause_autolock()` restores both
+  settings in a `finally`, even if the run raises.
+
+`docs/traces/2026-09-08-spark-tutorial/` is the committed example — the
+2026-09-08 Spark run's events and frames, imported and rendered — with
+`tests/test_trace_example.py` re-rendering the directory and diffing the
+result byte-for-byte against the committed `index.html`/`trace.html`, so the
+template can't silently drift from what's checked in.
 
 ## Architecture: the behaviour engine
 
