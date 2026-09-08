@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import signal
 import subprocess
 import threading
 import time
@@ -31,7 +32,7 @@ from typing import Callable, Mapping
 
 from microduck_cli.trace.capture import DisplayEnv, ShotOutcome, capture_frame
 from microduck_cli.trace.events import Event, RunDir, append_event
-from microduck_cli.trace.plan import Plan, dump_plan
+from microduck_cli.trace.plan import Plan, Step, dump_plan
 
 __all__ = [
     "CmdResult",
@@ -54,6 +55,10 @@ _SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
 _OPERATOR_COMMANDS = frozenset({"free", "git", "pgrep", "cargo", "docker"})
 _LOG_POLL_S = 0.05
 _MAX_LABEL = 400
+#: Grace between SIGTERM and SIGKILL for a timed-out command's process group.
+_KILL_GRACE_S = 2.0
+#: Hard bound on waiting for the stderr pump thread; it never blocks the run.
+_PUMP_JOIN_S = 2.0
 _DEFAULT_STATE_SUBDIR = os.path.join(".cache", "duck-sim")
 
 
@@ -170,22 +175,24 @@ class Recorder:
                 stdout=out_handle,
                 stderr=subprocess.PIPE,
                 env=child_env,
+                # Its own process group, so a timeout can kill the whole tree:
+                # ``proc`` is only the bash shell, and its descendants would
+                # otherwise survive holding the stderr pipe open.
+                start_new_session=True,
             )
             pump = threading.Thread(
                 target=self._pump_stderr, args=(proc, lane, step, err_lines), daemon=True
             )
             pump.start()
-            timed_out = False
+            signal_used = ""
             try:
                 rc = proc.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
+                signal_used = self._kill_group(proc)
                 rc = -9
-                timed_out = True
-            pump.join(timeout=5)
-        if timed_out:
-            self.note(lane, f"timeout: killed after {timeout_s}s", step=step)
+            self._join_pump(pump, proc)
+        if signal_used:
+            self.note(lane, f"timeout: killed after {timeout_s}s ({signal_used})", step=step)
         err_path.write_text("\n".join(err_lines) + ("\n" if err_lines else ""), encoding="utf-8")
         out_text = out_path.read_text(encoding="utf-8", errors="replace")
         first = next((line for line in out_text.splitlines() if line.strip()), "")
@@ -209,11 +216,57 @@ class Recorder:
             stdout_first=first,
         )
 
+    @staticmethod
+    def _signal_group(proc: subprocess.Popen, sig: int) -> bool:
+        """Signal *proc*'s whole process group; ``False`` when it is already gone."""
+        try:
+            os.killpg(os.getpgid(proc.pid), sig)
+            return True
+        except (ProcessLookupError, PermissionError, OSError):
+            return False
+
+    def _kill_group(self, proc: subprocess.Popen) -> str:
+        """SIGTERM the group, then SIGKILL it if it outlives the grace period."""
+        if not self._signal_group(proc, signal.SIGTERM):
+            proc.kill()
+        try:
+            proc.wait(timeout=_KILL_GRACE_S)
+            return "SIGTERM"
+        except subprocess.TimeoutExpired:
+            pass
+        self._signal_group(proc, signal.SIGKILL)
+        try:
+            proc.wait(timeout=_KILL_GRACE_S)
+        except subprocess.TimeoutExpired:
+            pass
+        return "SIGKILL"
+
+    def _join_pump(self, pump: threading.Thread, proc: subprocess.Popen) -> None:
+        """Join the stderr pump under a hard bound; a survivor holding the pipe is killed."""
+        pump.join(timeout=_PUMP_JOIN_S)
+        if not pump.is_alive():
+            return
+        self._signal_group(proc, signal.SIGKILL)
+        try:
+            if proc.stderr is not None:
+                proc.stderr.close()
+        except OSError:
+            pass
+        pump.join(timeout=_PUMP_JOIN_S)
+
     def _pump_stderr(
         self, proc: subprocess.Popen, lane: str, step: str | None, sink: list[str]
     ) -> None:
         assert proc.stderr is not None
-        for raw in proc.stderr:
+        try:
+            self._pump_lines(proc, lane, step, sink)
+        except (ValueError, OSError):  # the pipe was closed under us by _join_pump
+            return
+
+    def _pump_lines(
+        self, proc: subprocess.Popen, lane: str, step: str | None, sink: list[str]
+    ) -> None:
+        for raw in proc.stderr:  # type: ignore[union-attr]
             line = _ANSI_RE.sub("", raw.decode("utf-8", "replace").rstrip("\n"))
             sink.append(line)
             if not line.strip():
@@ -257,12 +310,22 @@ class Recorder:
     # -- log tail -------------------------------------------------------------
 
     def start_log_tail(self, paths: Mapping[str, str]) -> None:
-        """Tail each ``path -> lane`` from its current size, 50 ms polling."""
+        """Tail each ``path -> lane`` from its current size, 50 ms polling.
+
+        A poll can land in the middle of a line the writer has not finished, so
+        each file keeps a byte buffer: only ``\\n``-terminated lines are emitted
+        and the unterminated tail waits for the next chunk. The tail is flushed
+        as one last line by :meth:`stop_log_tail`.
+        """
         self.stop_log_tail()
         self._tail_stop.clear()
         offsets = {p: (os.path.getsize(p) if os.path.exists(p) else 0) for p in paths}
+        buffers = {p: b"" for p in paths}
         self._tail_thread = threading.Thread(
-            target=self._tail_loop, args=(dict(paths), offsets), name="trace-logtail", daemon=True
+            target=self._tail_loop,
+            args=(dict(paths), offsets, buffers),
+            name="trace-logtail",
+            daemon=True,
         )
         self._tail_thread.start()
 
@@ -273,33 +336,51 @@ class Recorder:
         self._tail_thread.join(timeout=1)
         self._tail_thread = None
 
-    def _tail_loop(self, paths: dict[str, str], offsets: dict[str, int]) -> None:
+    def _tail_loop(
+        self, paths: dict[str, str], offsets: dict[str, int], buffers: dict[str, bytes]
+    ) -> None:
         while True:
             for path, lane in paths.items():
-                self._drain(path, lane, offsets)
+                self._drain(path, lane, offsets, buffers)
             if self._tail_stop.wait(_LOG_POLL_S):
                 for path, lane in paths.items():
-                    self._drain(path, lane, offsets)
+                    self._drain(path, lane, offsets, buffers)
+                    self._flush_tail(path, lane, buffers)
                 return
 
-    def _drain(self, path: str, lane: str, offsets: dict[str, int]) -> None:
+    def _drain(
+        self, path: str, lane: str, offsets: dict[str, int], buffers: dict[str, bytes]
+    ) -> None:
         if not os.path.exists(path):
             return
         size = os.path.getsize(path)
-        if size < offsets[path]:
+        if size < offsets[path]:  # truncated / rotated: start over, drop the stale tail
             offsets[path] = 0
+            buffers[path] = b""
         if size == offsets[path]:
             return
         with open(path, "rb") as handle:
             handle.seek(offsets[path])
             chunk = handle.read(size - offsets[path])
-        offsets[path] = size
-        for raw in chunk.decode("utf-8", "replace").splitlines():
-            line = _ANSI_RE.sub("", raw).strip()
-            if lane == "robotd":
-                line = _ROBOTD_PREFIX_RE.sub("", line)
-            if line:
-                self.emit(lane, "log", line)
+        offsets[path] += len(chunk)
+        pieces = (buffers[path] + chunk).split(b"\n")
+        buffers[path] = pieces.pop()  # the unterminated tail, if any
+        for raw in pieces:
+            self._emit_log_line(raw, lane)
+
+    def _flush_tail(self, path: str, lane: str, buffers: dict[str, bytes]) -> None:
+        """Emit whatever never got its newline, once, at the end of the tail."""
+        tail = buffers.get(path, b"")
+        if tail:
+            buffers[path] = b""
+            self._emit_log_line(tail, lane)
+
+    def _emit_log_line(self, raw: bytes, lane: str) -> None:
+        line = _ANSI_RE.sub("", raw.decode("utf-8", "replace")).strip()
+        if lane == "robotd":
+            line = _ROBOTD_PREFIX_RE.sub("", line)
+        if line:
+            self.emit(lane, "log", line)
 
 
 def _log_paths(state_dir: str) -> dict[str, str]:
@@ -330,37 +411,65 @@ def run_plan(
     rec.run_dir.ensure()
     (rec.run_dir.path / "plan.toml").write_text(dump_plan(plan), encoding="utf-8")
     result = PlanResult()
-    rec.start_log_tail(_log_paths(state_dir or default_state_dir()))
+    _start_tail(rec, state_dir)
     try:
         for step in plan.steps:
-            if step.note:
-                rec.note("operator", step.note, step.step)
-            if step.sleep_before:
-                rec.sleep(step.sleep_before)
-            attempts = 1 + max(step.retry, max_retry_default)
-            last: CmdResult | None = None
-            for attempt in range(attempts):
-                if attempt:
-                    rec.note("operator", f"retry {attempt}/{attempts - 1}: {step.label}", step.step)
-                    result.retried += 1
-                last = rec.run(step.step, step.lane, step.label, step.cmd, timeout_s=step.timeout_s)
-                if last.rc == 0:
-                    break
-            assert last is not None
+            _before_step(rec, step)
+            last = _run_step_attempts(rec, step, result, max_retry_default)
             result.steps_run += 1
             result.results.append(last)
             if last.rc != 0:
                 result.failures += 1
-            if step.sleep_after:
-                rec.sleep(step.sleep_after)
-            if step.shot:
-                if shot is None:
-                    rec.note("viewer", f"frame skipped (capture disabled): {step.shot}", step.step)
-                else:
-                    rec.shot(step.step, step.label, step.shot, shot=shot, env=display_env)
+            _after_step(rec, step, shot, display_env)
     finally:
         rec.stop_log_tail()
     return result
+
+
+def _start_tail(rec: Recorder, state_dir: str | None) -> None:
+    rec.start_log_tail(_log_paths(state_dir or default_state_dir()))
+
+
+def _before_step(rec: Recorder, step: Step) -> None:
+    """The step's note and its pre-sleep, in that order."""
+    if step.note:
+        rec.note("operator", step.note, step.step)
+    if step.sleep_before:
+        rec.sleep(step.sleep_before)
+
+
+def _run_step_attempts(
+    rec: Recorder, step: Step, result: PlanResult, max_retry_default: int
+) -> CmdResult:
+    """Run one step until it succeeds or its attempts run out; record every attempt."""
+    attempts = 1 + max(step.retry, max_retry_default)
+    last: CmdResult | None = None
+    for attempt in range(attempts):
+        if attempt:
+            rec.note("operator", f"retry {attempt}/{attempts - 1}: {step.label}", step.step)
+            result.retried += 1
+        last = rec.run(step.step, step.lane, step.label, step.cmd, timeout_s=step.timeout_s)
+        if last.rc == 0:
+            break
+    assert last is not None
+    return last
+
+
+def _after_step(
+    rec: Recorder,
+    step: Step,
+    shot: Callable[..., ShotOutcome] | None,
+    display_env: DisplayEnv | None,
+) -> None:
+    """The step's post-sleep and its frame (or the note that says why there is none)."""
+    if step.sleep_after:
+        rec.sleep(step.sleep_after)
+    if not step.shot:
+        return
+    if shot is None:
+        rec.note("viewer", f"frame skipped (capture disabled): {step.shot}", step.step)
+    else:
+        rec.shot(step.step, step.label, step.shot, shot=shot, env=display_env)
 
 
 def exec_one(
