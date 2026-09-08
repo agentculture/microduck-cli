@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -149,6 +151,79 @@ def test_log_tail_strips_ansi_and_robotd_prefix(run_dir: RunDir, tmp_path: Path)
     assert all("\x1b" not in e.label for e in logs)
 
 
+def test_log_tail_joins_a_line_split_across_polls(run_dir: RunDir, tmp_path: Path) -> None:
+    duck = tmp_path / "duck-a.log"
+    duck.write_text("")
+    rec = Recorder(run_dir)
+    rec.start_log_tail({str(duck): "robotd"})
+    with duck.open("a") as fh:
+        fh.write("half")
+        fh.flush()
+    time.sleep(0.3)
+    assert _events(run_dir, "log") == []  # the unterminated tail is buffered, not emitted
+    with duck.open("a") as fh:
+        fh.write("-line\nnext\n")
+        fh.flush()
+    time.sleep(0.3)
+    rec.stop_log_tail()
+    assert [e.label for e in _events(run_dir, "log")] == ["half-line", "next"]
+
+
+def test_log_tail_flushes_unterminated_tail_on_stop(run_dir: RunDir, tmp_path: Path) -> None:
+    body = tmp_path / "body.log"
+    body.write_text("")
+    rec = Recorder(run_dir)
+    rec.start_log_tail({str(body): "body"})
+    with body.open("a") as fh:
+        fh.write("done\nno newline here")
+        fh.flush()
+    time.sleep(0.2)
+    rec.stop_log_tail()
+    assert [e.label for e in _events(run_dir, "log")] == ["done", "no newline here"]
+
+
+def test_log_tail_resets_on_truncation(run_dir: RunDir, tmp_path: Path) -> None:
+    body = tmp_path / "body.log"
+    body.write_text("")
+    rec = Recorder(run_dir)
+    rec.start_log_tail({str(body): "body"})
+    with body.open("a") as fh:
+        fh.write("first\npartial")
+        fh.flush()
+    time.sleep(0.2)
+    body.write_text("after\n")  # truncate + rewrite: offset and buffer both reset
+    time.sleep(0.3)
+    rec.stop_log_tail()
+    labels = [e.label for e in _events(run_dir, "log")]
+    assert "first" in labels
+    assert "after" in labels
+    assert not any(label.startswith("partial") for label in labels)
+
+
+def test_timeout_kills_the_whole_process_group(run_dir: RunDir) -> None:
+    marker = f"trace-runner-marker-{uuid.uuid4().hex}"
+    rec = Recorder(run_dir)
+    started = time.monotonic()
+    result = rec.run(
+        "x",
+        "cli",
+        "grandchild",
+        f"sh -c 'sleep 30; echo done' {marker} & sleep 30",
+        timeout_s=0.5,
+    )
+    elapsed = time.monotonic() - started
+    assert elapsed < 5
+    assert result.rc == -9
+    time.sleep(0.2)
+    survivors = subprocess.run(  # nosec B603,B607 - fixed argv, test-only
+        ["pgrep", "-f", marker], capture_output=True, text=True, check=False
+    )
+    assert survivors.stdout.strip() == ""
+    notes = [n.label for n in _events(run_dir, "note")]
+    assert any("SIG" in label for label in notes)
+    assert _events(run_dir, "cmd-end")[0].extra["rc"] == -9
+
+
 def test_shot_records_outcome_or_reason(run_dir: RunDir) -> None:
     rec = Recorder(run_dir)
 
@@ -162,10 +237,12 @@ def test_shot_records_outcome_or_reason(run_dir: RunDir) -> None:
     rec.shot("7", "standing", "s1", shot=ok_shot)
     rec.shot("7", "standing again", "s2", shot=bad_shot)
     shots = _events(run_dir, "shot")
-    assert len(shots) == 1 and shots[0].extra["file"] == "shots/s1.png"
+    assert len(shots) == 1
+    assert shots[0].extra["file"] == "shots/s1.png"
     assert shots[0].extra["window"] is True
     notes = _events(run_dir, "note", "viewer")
-    assert notes and "headless" in notes[0].label
+    assert notes
+    assert "headless" in notes[0].label
 
 
 def test_exec_one_creates_meta_when_absent(tmp_path: Path) -> None:
@@ -184,7 +261,8 @@ def test_run_uses_injected_clock(run_dir: RunDir) -> None:
     rec = Recorder(run_dir, clock=lambda: next(ticks, 1002.0))
     rec.note("operator", "hello")
     ev = load_events(run_dir)[0]
-    assert ev.t == 0.5 and ev.wall == 1000.5
+    assert ev.t == 0.5
+    assert ev.wall == 1000.5
 
 
 def test_default_state_dir() -> None:
