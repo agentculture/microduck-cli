@@ -1,0 +1,584 @@
+{
+  "slug": "run-trace-tool",
+  "title": "run-trace tool",
+  "schema_version": 6,
+  "status": "exported",
+  "created": "2026-09-08T14:50:13Z",
+  "updated": "2026-09-08T14:59:25Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "microduck-cli ships a run-trace tool: one command re-runs the tutorial's steps, traces every command, daemon log line and viewer frame with wall-clock stamps, and regenerates the same MicroDuck Run Trace page verbatim \u2014 as a standalone local HTML file and as a Claude artifact fragment",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h8",
+          "text": "a windowed trace run on Spark and a render of the committed example both work from a clean checkout of the PR branch",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "verify with the success signal: import + render the committed example byte-for-byte, then one fresh windowed run",
+      "revisions": []
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "the tool lives in docs/tools/ beside check_tutorial.py as trace_run.py (the tracer that runs steps and writes events.jsonl + shots) and trace_page.py (the generator that turns a run directory into the page) \u2014 repo tooling, not part of the wheel; tests/test_check_tutorial.py already shows the load-by-path test pattern",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c3",
+      "kind": "boundary",
+      "text": "no new CLI noun or verb: adding microduck trace would pull the catalog, overview, learn and rubric contracts (three-places-in-lockstep in CLAUDE.md) and any image dependency into a wheel that must stay dependencies = []",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c4",
+      "kind": "requirement",
+      "text": "the step plan is data, not code: the tracer reads the tutorial's fenced bash commands (check_tutorial.py's extract_commands, which already skips nocheck fences) plus a small sidecar (TOML) that says where to sleep, screenshot, retry once, or gate \u2014 so the same tutorial file regenerates the same run",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h9",
+          "text": "trace plan --from-tutorial produces the same command list check_tutorial.py extracts (26 lines for the current tutorial), nocheck fences skipped",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "share the extraction rules: move the fenced-block extractor into microduck_cli/trace/plan.py and have docs/tools/check_tutorial.py keep its own copy untouched (docs script, not a package importer); a test compares both on the tutorial fixture",
+      "revisions": []
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "two outputs from one generator: index.html (a complete document, opens from file:// or python3 -m http.server, all data and frames inlined as data URIs, fonts falling back to system stacks offline) and trace.html (the same body as an Artifact fragment without doctype/head/body, which the Artifact tool wraps)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h10",
+          "text": "index.html opens from file:// with no network and shows the frames; trace.html has no doctype/html/head/body and starts with <title>",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "render writes trace.html (fragment) then index.html = skeleton + fragment; test both properties",
+      "revisions": []
+    },
+    {
+      "id": "c6",
+      "kind": "requirement",
+      "text": "screenshots without Pillow: capture the window only with gnome-screenshot -w (the tutorial's own recipe) after focusing the MuJoCo window, or capture full-screen and record the xwininfo geometry so the page crops with CSS object-position \u2014 no image library in the repo; today's rt.py used PIL, which is neither a dev dep nor in uv.lock",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h11",
+          "text": "no import of PIL anywhere under microduck_cli; a frame captured window-only is the MuJoCo window and nothing else",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "capture.py: focus the 'MuJoCo : scene' window if a focus tool exists, gnome-screenshot -w; else full-screen + geometry from xwininfo recorded on the shot event, and the page crops with object-position/object-fit from that geometry",
+      "revisions": []
+    },
+    {
+      "id": "c7",
+      "kind": "requirement",
+      "text": "CI lint covers the tool: the lint job's black/isort/flake8 paths add docs/tools (they list only microduck_cli tests today), tests load both scripts by path, and a fixture events.jsonl + two tiny JPEGs regenerate a page in a test that asserts the title, the inlined data and the frame count",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c8",
+      "kind": "boundary",
+      "text": "the page never smooths a run: a failed attempt stays on the timeline in red beside its retry, a headless run shows the frame panel empty with the reason, interpolated positions (trainer iterations) are labelled as interpolated \u2014 the honesty rules of the verification records apply to the picture",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h12",
+          "text": "a run with a failed then retried command renders both spans, the failed one in the failure colour; a headless run renders the frame panel with the reason text",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "fixture events with rc=2 then rc=0 for the same label; assert both spans and the frame-panel text in the rendered HTML",
+      "revisions": []
+    },
+    {
+      "id": "c9",
+      "kind": "requirement",
+      "text": "run output lives outside the tree: default --out .local/trace/<UTC-stamp>/ (untracked; .local is already excluded by the markdownlint glob), holding events.jsonl, steps/*.out|.err, shots/, index.html, trace.html \u2014 nothing generated is committed except a checked-in sample page under docs/tools/ if the user wants one",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c10",
+      "kind": "non_goal",
+      "text": "not a generic tracer: the tier map (microduck-cli / robotd / microduck_rl, operator, viewer, GPU) and its edges are MicroDuck-specific and hard-coded in the generator; reachy-mini-cli or neurosymbolic-system would cite the method, not import the map",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c11",
+      "kind": "requirement",
+      "text": "every PR bumps the version and prepends a CHANGELOG entry (version-check job); this one is a patch bump with docs/tools, tests, CI and CLAUDE.md/README pointers",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h13",
+          "text": "pyproject version differs from origin/main and CHANGELOG has the entry",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "run the version-bump skill (patch) as the last step before cicd open",
+      "revisions": []
+    },
+    {
+      "id": "c12",
+      "kind": "assumption",
+      "text": "the runner is Linux/GNOME-shaped: gnome-screenshot, xwininfo, loginctl and the session DISPLAY/XAUTHORITY/DBUS address are discovered from the gnome-shell process environment as the operate-microduck skill prescribes; with no graphical session it runs the tutorial headless and skips frames",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c13",
+      "kind": "decision",
+      "text": "USER DECISION: trace is a CLI noun, microduck trace, with its own overview (rubric) \u2014 not a docs/tools script; it is relevant to operators and agents, not only to the tutorial",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c14",
+      "kind": "decision",
+      "text": "USER DECISION: a trace covers ANY CLI work \u2014 a tutorial run, the post-run checks, an exploratory session, or an import of an existing run directory \u2014 not only tutorial steps 1-11",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c15",
+      "kind": "decision",
+      "text": "USER DECISION: pausing the desktop auto-lock for a windowed run is opt-in (a flag), restored afterwards; without the flag the tool warns when lock is armed and proceeds",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c16",
+      "kind": "decision",
+      "text": "USER DECISION: the PR ships the generator and today's page as a committed example; publishing to a Claude artifact stays an agent step on the fragment",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c17",
+      "kind": "requirement",
+      "text": "engine logic lives in microduck_cli/trace/ (events.py schema + recorder, plan.py, capture.py for frames, render.py for the page, serve.py) and cli/_commands/trace.py is thin argparse wiring for a noun group built with parser_class=type(p) so nested parse errors keep the CliError contract; the noun gets overview, catalog entries, the _VERBS list and learn's _TEXT/_as_json_payload in lockstep",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h1",
+          "text": "nothing under microduck_cli/trace/ imports cli/ except cli/_errors, and _commands/trace.py contains no engine logic (the reachy split)",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "mirror cli/_commands/cli.py for the noun group and the behavior/ package split for the engine; add catalog entries for (trace,) and each verb, the _VERBS row, and learn's text + JSON payload",
+      "revisions": []
+    },
+    {
+      "id": "c18",
+      "kind": "requirement",
+      "text": "verbs: trace overview; trace run --plan <toml> (execute a step plan, tracing each command's argv, exit, timing, stdout first line, timestamped stderr lines, the robotd/body log tails and viewer frames); trace exec -- <command> (trace one arbitrary command into the current run dir, so exploratory or post-run work is traced the same way); trace plan --from-tutorial <mdx> (derive a plan from the fenced bash commands, nocheck fences skipped, with an editable sidecar for sleeps/frames/retries); trace import <dir> (adopt an events.jsonl + shots directory produced elsewhere, e.g. today's scratch tracer); trace render <run-dir> (write index.html and trace.html); trace serve <run-dir> (stdlib http.server on the run dir); trace status/list of run dirs",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h2",
+          "text": "every verb has --json, raises CliError on failure, and trace overview exits 0 on any argument (rubric)",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "one register(sub) per verb inside _commands/trace.py; run/exec share a Recorder; serve wraps http.server.ThreadingHTTPServer bound to 127.0.0.1 with a printed URL",
+      "revisions": []
+    },
+    {
+      "id": "c19",
+      "kind": "requirement",
+      "text": "one event schema (t, wall, lane, kind, label, step, and per-kind fields) shared by run, exec and import \u2014 the renderer never knows which mode produced a record; kinds: cmd-start, cmd-end, stderr, log, shot, note",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h3",
+          "text": "trace render accepts a run dir produced by run, exec or import without a mode flag",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "events.py defines the record dataclasses and a load()/append() pair used by run, exec, import and render; import validates each line and reports the first bad one as CliError",
+      "revisions": []
+    },
+    {
+      "id": "c20",
+      "kind": "requirement",
+      "text": "the run directory defaults to <DUCK_SIM_STATE>/trace/<UTC-stamp>/ (--out overrides): events.jsonl, steps/NN-name.out|.err, shots/, plan.toml, index.html, trace.html; the same run dir renders byte-for-byte identical pages on every render (verbatim regeneration is a test)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h4",
+          "text": "rendering the same run dir twice yields identical bytes \u2014 no wall-clock, random id or dict-order nondeterminism in render",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "render sorts everything it emits, embeds frames in filename order, and takes no clock; test renders twice and compares bytes",
+      "revisions": []
+    },
+    {
+      "id": "c21",
+      "kind": "requirement",
+      "text": "today's run is the committed example: docs/traces/2026-09-08-spark-tutorial/ holds events.jsonl, the 12 frames and the rendered index.html + trace.html, imported through trace import and re-rendered by trace render; a test renders the example dir and diffs against the committed page",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h5",
+          "text": "the committed example is imported from today's scratch events.jsonl unchanged except home-path redaction, and its page differs from the artifact only where the generator's template changed",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "copy the scratch run's events.jsonl and 12 web JPEGs to docs/traces/2026-09-08-spark-tutorial/, redact /home/<user> to ~, render, commit index.html + trace.html; the test re-renders and diffs",
+      "revisions": []
+    },
+    {
+      "id": "c22",
+      "kind": "boundary",
+      "text": "the trace noun adds no runtime dependency: stdlib only (json, subprocess, base64, http.server, threading); no Pillow \u2014 frames are captured window-only (gnome-screenshot -w after focusing the MuJoCo window via xdotool/wmctrl if present, else full-screen with recorded xwininfo geometry that the page crops with CSS); dependencies = [] is unchanged",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h7",
+          "text": "uv run python -c 'import microduck_cli.trace' works in a venv with no extras and pyproject dependencies is still []",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "grep test: no third-party import under microduck_cli/trace; pyproject dependencies stays []",
+      "revisions": []
+    },
+    {
+      "id": "c23",
+      "kind": "requirement",
+      "text": "trace run and exec honour the repo's gate: commands that move hardware are passed through as typed (--apply must be in the plan); the tracer never injects --apply, never answers a TTY prompt, and a dry-run plan line is recorded as what it is",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h6",
+          "text": "a plan line without --apply on a pipe records a dry-run plan and moves nothing \u2014 the tracer is not a way around the gate",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "the plan's command strings are executed verbatim through bash -c with stdin from /dev/null; document that --apply belongs in the plan",
+      "revisions": []
+    },
+    {
+      "id": "c24",
+      "kind": "audience",
+      "text": "operators and agents driving the duck who want a shareable, honest replay of a session \u2014 the tutorial's authors and reviewers first, then anyone reporting a run",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h14",
+          "text": "trace overview names operators, agents and tutorial reviewers as the audience",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "the overview and catalog text name this audience first",
+      "revisions": []
+    },
+    {
+      "id": "c25",
+      "kind": "after_state",
+      "text": "microduck trace run --plan tutorial.toml (or exec/import) produces a run directory that trace render turns into the MicroDuck Run Trace page: the three-tier map lighting up over a scrubbable timeline with the viewer frames, openable from file://, served with trace serve, or published as an artifact from trace.html \u2014 and rendering the same run dir twice gives identical bytes",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h15",
+          "text": "the after-state walk-through in the PR description was executed and its commands appear in the PR",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "this is the acceptance walk-through in the PR description",
+      "revisions": []
+    },
+    {
+      "id": "c26",
+      "kind": "before_state",
+      "text": "today the trace exists once, hand-built: a scratch rt.py in a session scratchpad, a hand-written page.html, PIL cropping, and manual bash chains \u2014 nobody can regenerate it, and the tier map's honesty rules live only in the page's prose",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h16",
+          "text": "the scratch rt.py and page.html are not copied into the repo; their content is re-expressed inside microduck_cli/trace",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "the CHANGELOG entry says what replaced the scratch tracer",
+      "revisions": []
+    },
+    {
+      "id": "c27",
+      "kind": "why_it_matters",
+      "text": "a verification record says what happened; the trace shows which tier did it and when, from the same timestamps \u2014 a reviewer of the tutorial or of a failed run can see the first env up die and the retry succeed instead of reading two log excerpts",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h17",
+          "text": "the committed example page shows the 2026-09-08 first env up failure and its retry side by side",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "the trace overview text carries this one-liner",
+      "revisions": []
+    },
+    {
+      "id": "c28",
+      "kind": "success_signal",
+      "text": "from a clean checkout: microduck trace import docs/traces/2026-09-08-spark-tutorial && microduck trace render <dir> reproduces the committed index.html byte-for-byte (a pytest asserts it); teken cli doctor --strict passes with the new noun; test_every_catalog_path_resolves covers trace; a fresh windowed trace run --plan on Spark produces a page a reviewer can scrub through",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h18",
+          "text": "every clause of the success signal maps to a named test or a command recorded in the PR body",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "each clause is a test or a recorded command in the PR",
+      "revisions": []
+    }
+  ],
+  "open_vagueness": [
+    {
+      "id": "v1",
+      "text": "the first env up --sim failure on 2026-09-08 (body exited silently) is unexplained; a tracer that retries once will keep hitting it and the page will keep showing it \u2014 root cause is outside this tool",
+      "kind": "unknown_nonblocking",
+      "claim_id": null,
+      "resolved": false,
+      "resolution": "",
+      "resolution_claim_id": null
+    },
+    {
+      "id": "v2",
+      "text": "whether the generated page should be a committed sample (docs/tools/sample-trace/index.html, ~600 KB with frames) or only regenerated on demand \u2014 repo weight vs a browsable example",
+      "kind": "unknown_nonblocking",
+      "claim_id": null,
+      "resolved": false,
+      "resolution": "",
+      "resolution_claim_id": null
+    }
+  ],
+  "scope_entries": [
+    {
+      "id": "s1",
+      "surface": "docs/tools/check_tutorial.py + tests/test_check_tutorial.py",
+      "finding": "docs/tools/ is the established home for repo-side tooling that is not shipped in the wheel; its tests import the script by path via importlib, which the new tool's tests can copy",
+      "seeds": [
+        "c2"
+      ]
+    },
+    {
+      "id": "s2",
+      "surface": "microduck_cli/cli (three-places rule, teken rubric) + pyproject dependencies = []",
+      "finding": "a CLI verb would cost the catalog/overview/learn lockstep and the rubric gate for a docs-time tool, and the wheel must stay zero-dep; the tool stays outside the package",
+      "seeds": [
+        "c3"
+      ]
+    },
+    {
+      "id": "s3",
+      "surface": "docs/tools/check_tutorial.py extract_commands / _iter_fenced_blocks",
+      "finding": "the tutorial's command list is already extractable from the mdx with nocheck fences skipped; the tracer can reuse it instead of hand-listing steps, keeping the tutorial the single source of the run",
+      "seeds": [
+        "c4"
+      ]
+    },
+    {
+      "id": "s4",
+      "surface": "Artifact tool contract (wraps a fragment; forbids doctype/html/head/body) vs a local static site",
+      "finding": "one body serves both targets; only the outer skeleton differs, so the generator emits the fragment and a wrapped copy rather than two page sources",
+      "seeds": [
+        "c5"
+      ]
+    },
+    {
+      "id": "s5",
+      "surface": "pyproject [dependency-groups].dev + uv.lock (no pillow) + .claude/skills/operate-microduck (screenshot recipe)",
+      "finding": "the scratch tracer's PIL crop cannot land as-is; the dev group has no image library and the operator skill already prescribes gnome-screenshot -w for a window-only capture",
+      "seeds": [
+        "c6"
+      ]
+    },
+    {
+      "id": "s6",
+      "surface": ".github/workflows/tests.yml lint job + [tool.coverage.run] source",
+      "finding": "CI lints microduck_cli and tests only, so docs/tools would drift unlinted unless the paths are added; coverage is scoped to the package, so the tool's tests do not move the gate",
+      "seeds": [
+        "c7"
+      ]
+    },
+    {
+      "id": "s7",
+      "surface": "docs/verification/2026-09-07-spark-retest.md + 2026-09-08 record (honest-failure convention)",
+      "finding": "records keep first attempts and failures verbatim; the generated page must keep the same discipline or it contradicts the record it illustrates",
+      "seeds": [
+        "c8"
+      ]
+    },
+    {
+      "id": "s8",
+      "surface": ".gitignore + markdownlint globs (#.local)",
+      "finding": ".local is already the convention for untracked local artefacts in this repo's lint config, so run directories belong there and stay out of PRs",
+      "seeds": [
+        "c9"
+      ]
+    },
+    {
+      "id": "s9",
+      "surface": "CLAUDE.md sibling-repos section (cite-don't-import, extraction seams)",
+      "finding": "a generic trace library is the neurosymbolic-system extraction question again; keep the map duck-specific now and let a sibling cite the pattern",
+      "seeds": [
+        "c10"
+      ]
+    },
+    {
+      "id": "s10",
+      "surface": "CHANGELOG.md + tests.yml version-check",
+      "finding": "docs/tooling-only PRs still need the bump; the entry documents the tool and the two output files",
+      "seeds": [
+        "c11"
+      ]
+    },
+    {
+      "id": "s11",
+      "surface": ".claude/skills/operate-microduck/SKILL.md (Watch it section) + Spark/Thor/Orin display state",
+      "finding": "the display-owner discovery recipe is already written down; the tracer automates it and degrades to headless rather than failing",
+      "seeds": [
+        "c12"
+      ]
+    }
+  ],
+  "lapses": [],
+  "obligations": []
+}
