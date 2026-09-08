@@ -1,0 +1,518 @@
+{
+  "slug": "run-trace-tool",
+  "title": "run-trace tool",
+  "frame_slug": "run-trace-tool",
+  "schema_version": 5,
+  "status": "exported",
+  "created": "2026-09-08T15:00:49Z",
+  "updated": "2026-09-08T15:03:19Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "microduck-cli ships a run-trace tool: one command re-runs the tutorial's steps, traces every command, daemon log line and viewer frame with wall-clock stamps, and regenerates the same MicroDuck Run Trace page verbatim \u2014 as a standalone local HTML file and as a Claude artifact fragment",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "a windowed trace run on Spark and a render of the committed example both work from a clean checkout of the PR branch",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c4",
+      "kind": "requirement",
+      "text": "the step plan is data, not code: the tracer reads the tutorial's fenced bash commands (check_tutorial.py's extract_commands, which already skips nocheck fences) plus a small sidecar (TOML) that says where to sleep, screenshot, retry once, or gate \u2014 so the same tutorial file regenerates the same run",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "trace plan --from-tutorial produces the same command list check_tutorial.py extracts (26 lines for the current tutorial), nocheck fences skipped",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "two outputs from one generator: index.html (a complete document, opens from file:// or python3 -m http.server, all data and frames inlined as data URIs, fonts falling back to system stacks offline) and trace.html (the same body as an Artifact fragment without doctype/head/body, which the Artifact tool wraps)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "index.html opens from file:// with no network and shows the frames; trace.html has no doctype/html/head/body and starts with <title>",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c6",
+      "kind": "requirement",
+      "text": "screenshots without Pillow: capture the window only with gnome-screenshot -w (the tutorial's own recipe) after focusing the MuJoCo window, or capture full-screen and record the xwininfo geometry so the page crops with CSS object-position \u2014 no image library in the repo; today's rt.py used PIL, which is neither a dev dep nor in uv.lock",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h11",
+      "kind": "honesty",
+      "text": "no import of PIL anywhere under microduck_cli; a frame captured window-only is the MuJoCo window and nothing else",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "boundary",
+      "text": "the page never smooths a run: a failed attempt stays on the timeline in red beside its retry, a headless run shows the frame panel empty with the reason, interpolated positions (trainer iterations) are labelled as interpolated \u2014 the honesty rules of the verification records apply to the picture",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "a run with a failed then retried command renders both spans, the failed one in the failure colour; a headless run renders the frame panel with the reason text",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c11",
+      "kind": "requirement",
+      "text": "every PR bumps the version and prepends a CHANGELOG entry (version-check job); this one is a patch bump with docs/tools, tests, CI and CLAUDE.md/README pointers",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "pyproject version differs from origin/main and CHANGELOG has the entry",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c17",
+      "kind": "requirement",
+      "text": "engine logic lives in microduck_cli/trace/ (events.py schema + recorder, plan.py, capture.py for frames, render.py for the page, serve.py) and cli/_commands/trace.py is thin argparse wiring for a noun group built with parser_class=type(p) so nested parse errors keep the CliError contract; the noun gets overview, catalog entries, the _VERBS list and learn's _TEXT/_as_json_payload in lockstep",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "nothing under microduck_cli/trace/ imports cli/ except cli/_errors, and _commands/trace.py contains no engine logic (the reachy split)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c18",
+      "kind": "requirement",
+      "text": "verbs: trace overview; trace run --plan <toml> (execute a step plan, tracing each command's argv, exit, timing, stdout first line, timestamped stderr lines, the robotd/body log tails and viewer frames); trace exec -- <command> (trace one arbitrary command into the current run dir, so exploratory or post-run work is traced the same way); trace plan --from-tutorial <mdx> (derive a plan from the fenced bash commands, nocheck fences skipped, with an editable sidecar for sleeps/frames/retries); trace import <dir> (adopt an events.jsonl + shots directory produced elsewhere, e.g. today's scratch tracer); trace render <run-dir> (write index.html and trace.html); trace serve <run-dir> (stdlib http.server on the run dir); trace status/list of run dirs",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "every verb has --json, raises CliError on failure, and trace overview exits 0 on any argument (rubric)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c19",
+      "kind": "requirement",
+      "text": "one event schema (t, wall, lane, kind, label, step, and per-kind fields) shared by run, exec and import \u2014 the renderer never knows which mode produced a record; kinds: cmd-start, cmd-end, stderr, log, shot, note",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "trace render accepts a run dir produced by run, exec or import without a mode flag",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c20",
+      "kind": "requirement",
+      "text": "the run directory defaults to <DUCK_SIM_STATE>/trace/<UTC-stamp>/ (--out overrides): events.jsonl, steps/NN-name.out|.err, shots/, plan.toml, index.html, trace.html; the same run dir renders byte-for-byte identical pages on every render (verbatim regeneration is a test)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "rendering the same run dir twice yields identical bytes \u2014 no wall-clock, random id or dict-order nondeterminism in render",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c21",
+      "kind": "requirement",
+      "text": "today's run is the committed example: docs/traces/2026-09-08-spark-tutorial/ holds events.jsonl, the 12 frames and the rendered index.html + trace.html, imported through trace import and re-rendered by trace render; a test renders the example dir and diffs against the committed page",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "the committed example is imported from today's scratch events.jsonl unchanged except home-path redaction, and its page differs from the artifact only where the generator's template changed",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c22",
+      "kind": "boundary",
+      "text": "the trace noun adds no runtime dependency: stdlib only (json, subprocess, base64, http.server, threading); no Pillow \u2014 frames are captured window-only (gnome-screenshot -w after focusing the MuJoCo window via xdotool/wmctrl if present, else full-screen with recorded xwininfo geometry that the page crops with CSS); dependencies = [] is unchanged",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "uv run python -c 'import microduck_cli.trace' works in a venv with no extras and pyproject dependencies is still []",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c23",
+      "kind": "requirement",
+      "text": "trace run and exec honour the repo's gate: commands that move hardware are passed through as typed (--apply must be in the plan); the tracer never injects --apply, never answers a TTY prompt, and a dry-run plan line is recorded as what it is",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "a plan line without --apply on a pipe records a dry-run plan and moves nothing \u2014 the tracer is not a way around the gate",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c24",
+      "kind": "audience",
+      "text": "operators and agents driving the duck who want a shareable, honest replay of a session \u2014 the tutorial's authors and reviewers first, then anyone reporting a run",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "trace overview names operators, agents and tutorial reviewers as the audience",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c25",
+      "kind": "after_state",
+      "text": "microduck trace run --plan tutorial.toml (or exec/import) produces a run directory that trace render turns into the MicroDuck Run Trace page: the three-tier map lighting up over a scrubbable timeline with the viewer frames, openable from file://, served with trace serve, or published as an artifact from trace.html \u2014 and rendering the same run dir twice gives identical bytes",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h15",
+      "kind": "honesty",
+      "text": "the after-state walk-through in the PR description was executed and its commands appear in the PR",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c26",
+      "kind": "before_state",
+      "text": "today the trace exists once, hand-built: a scratch rt.py in a session scratchpad, a hand-written page.html, PIL cropping, and manual bash chains \u2014 nobody can regenerate it, and the tier map's honesty rules live only in the page's prose",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "the scratch rt.py and page.html are not copied into the repo; their content is re-expressed inside microduck_cli/trace",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c27",
+      "kind": "why_it_matters",
+      "text": "a verification record says what happened; the trace shows which tier did it and when, from the same timestamps \u2014 a reviewer of the tutorial or of a failed run can see the first env up die and the retry succeed instead of reading two log excerpts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h17",
+      "kind": "honesty",
+      "text": "the committed example page shows the 2026-09-08 first env up failure and its retry side by side",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c28",
+      "kind": "success_signal",
+      "text": "from a clean checkout: microduck trace import docs/traces/2026-09-08-spark-tutorial && microduck trace render <dir> reproduces the committed index.html byte-for-byte (a pytest asserts it); teken cli doctor --strict passes with the new noun; test_every_catalog_path_resolves covers trace; a fresh windowed trace run --plan on Spark produces a page a reviewer can scrub through",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "every clause of the success signal maps to a named test or a command recorded in the PR body",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "trace/events.py \u2014 the one event schema (t, wall, lane, kind, label, step, per-kind fields), append()/load()/validate(), the run-dir layout helper, and import_run(src, dst) that adopts an external events.jsonl + shots dir (validating each line, first bad line as CliError); microduck_cli/trace/__init__.py; tests/test_trace_events.py",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "a fixture events.jsonl round-trips through load()/append() unchanged",
+        "a line missing 'lane' is refused with a CliError naming the line number",
+        "import_run copies events + shots and rewrites /home/<user> to ~ in labels",
+        "no third-party import under microduck_cli/trace (grep test) and pyproject dependencies stays []"
+      ],
+      "deps": [],
+      "covers": [
+        "c19",
+        "h3",
+        "c22",
+        "h7"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t2",
+      "summary": "trace/plan.py \u2014 the TOML plan (ordered steps: step, label, cmd, sleep_before/after, shot, retry, note) and from_tutorial(mdx_text, sidecar) that extracts fenced bash commands with the same rules as docs/tools/check_tutorial.py (nocheck skipped, comments stripped, uv-run prefix kept as typed) and merges the sidecar's sleeps/frames/retries by command match; tests/test_trace_plan.py",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "from_tutorial on a tutorial fixture yields exactly the command list check_tutorial.extract_commands yields for the same text",
+        "a sidecar entry that matches no command is reported, not silently dropped",
+        "plan round-trips: dumps() then loads() is equal"
+      ],
+      "deps": [],
+      "covers": [
+        "c4",
+        "h9"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t3",
+      "summary": "trace/render.py \u2014 the MicroDuck Run Trace page as a deterministic template: render(run_dir) -> (trace_html fragment starting with <title>, index_html = skeleton + fragment), frames inlined as data URIs in filename order, CSS object-position crop from recorded geometry, the tier map + timeline + captions + step ladder + checks table, failed spans in the failure colour beside retries, headless frame panel with the reason, interpolated positions labelled; tests/test_trace_render.py",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "rendering the same run dir twice yields identical bytes",
+        "trace.html has no doctype/html/head/body and index.html has them once",
+        "a fixture with rc=2 then rc=0 for the same label renders two spans, one in the failure colour",
+        "a fixture with no shot events renders the frame panel with its reason text",
+        "the render takes no clock and reads no environment"
+      ],
+      "deps": [],
+      "covers": [
+        "c5",
+        "h10",
+        "c8",
+        "h12",
+        "c20",
+        "h4"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t4",
+      "summary": "trace/render.py \u2014 the MicroDuck Run Trace page as a deterministic template: render(run_dir) -> (trace_html fragment starting with <title>, index_html = skeleton + fragment), frames inlined as data URIs in filename order, CSS object-position crop from recorded geometry, the tier map + timeline + captions + step ladder + checks table, failed spans in the failure colour beside retries, headless frame panel with the reason, interpolated positions labelled; tests/test_trace_render.py",
+      "origin": "llm",
+      "status": "rejected",
+      "acceptance_criteria": [
+        "rendering the same run dir twice yields identical bytes",
+        "trace.html has no doctype/html/head/body and index.html has them once",
+        "a fixture with rc=2 then rc=0 for the same label renders two spans, one in the failure colour",
+        "a fixture with no shot events renders the frame panel with its reason text",
+        "the render takes no clock and reads no environment"
+      ],
+      "deps": [],
+      "covers": [
+        "c5",
+        "h10",
+        "c8",
+        "h12",
+        "c20",
+        "h4"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t5",
+      "summary": "trace/capture.py \u2014 display-owner discovery (DISPLAY/XAUTHORITY/DBUS from the gnome-shell process environ, seam-injected), window-only capture (focus 'MuJoCo : scene' with xdotool/wmctrl when present, then gnome-screenshot -w) with the fallback full-screen shot plus xwininfo geometry recorded on the shot event, headless detection, and the opt-in autolock pause/restore helper (idle-delay, lock-enabled) that always restores \u2014 USER DECISION c15: opt-in flag only; tests with fake runners",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "with no graphical session capture() returns a 'headless' outcome and raises nothing",
+        "when the focus tool is absent the shot event carries the window geometry from xwininfo",
+        "pause_autolock() restores the two gsettings values even when the body raises",
+        "no PIL import anywhere under microduck_cli"
+      ],
+      "deps": [],
+      "covers": [
+        "c6",
+        "h11"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t6",
+      "summary": "trace/runner.py \u2014 Recorder: run one command via bash -c with stdin=/dev/null, stdout to steps/NN-name.out, stderr streamed line by line to events with timestamps ([SENSE lines to the engine lane), cmd-start/cmd-end with rc, elapsed, first stdout line; a log-tail thread for the robotd and body logs under DUCK_SIM_STATE; run_plan(plan, run_dir, shot=capture) executing steps with sleeps, frames and one retry when the plan says so; exec_one(argv, run_dir) so any CLI work is traced (USER DECISION c14); serve.py (ThreadingHTTPServer on 127.0.0.1, prints the URL); tests with fake commands",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "a plan line is executed verbatim; the recorder never appends --apply and never opens a TTY",
+        "a command's stderr lines carry increasing t and land in the right lane",
+        "a step with retry=1 that fails then passes records two cmd-end events with rc 2 then 0",
+        "run dir defaults to <DUCK_SIM_STATE>/trace/<UTC stamp> and --out overrides it"
+      ],
+      "deps": [
+        "t1",
+        "t5"
+      ],
+      "covers": [
+        "c23",
+        "h6"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t7",
+      "summary": "cli/_commands/trace.py \u2014 the trace noun group (parser_class=type(p)) with overview, run, exec, plan, import, render, serve, list (USER DECISION c13); every verb has --json and raises CliError; explain/trace.py catalog entries for (trace,) and each verb; overview.py _VERBS row; learn.py _TEXT + _as_json_payload; tests/test_cli_trace.py; teken cli doctor --strict passes",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "trace overview exits 0 with any positional and names operators, agents and tutorial reviewers",
+        "test_every_catalog_path_resolves passes with the trace entries",
+        "a bad nested argument yields the two-line error/hint contract with exit 1, in text and --json",
+        "_commands/trace.py contains no engine logic; it calls microduck_cli.trace public functions only",
+        "uv run teken cli doctor . --strict exits 0"
+      ],
+      "deps": [
+        "t1",
+        "t2",
+        "t3",
+        "t5",
+        "t6"
+      ],
+      "covers": [
+        "c17",
+        "h1",
+        "c18",
+        "h2",
+        "c24",
+        "h14",
+        "c27",
+        "h17"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t8",
+      "summary": "docs/traces/2026-09-08-spark-tutorial/ \u2014 the committed example (USER DECISION c16): import today's scratch events.jsonl and 12 frames (home paths redacted), render index.html + trace.html, and tests/test_trace_example.py that re-renders the directory and diffs byte-for-byte against the committed pages",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "the test renders docs/traces/2026-09-08-spark-tutorial and asserts equality with the committed index.html and trace.html",
+        "the example events differ from the scratch events only in /home/<user> -> ~",
+        "the example page shows the first env up failure and its retry side by side"
+      ],
+      "deps": [
+        "t1",
+        "t3"
+      ],
+      "covers": [
+        "c21",
+        "h5",
+        "c26"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t9",
+      "summary": "docs: CLAUDE.md (trace package in the packages table, the noun in the architecture section, the autolock flag), README pointer, operate-microduck SKILL.md 'Watch it' pointing at trace run/exec, docs/traces/tutorial.sidecar.toml (the sleeps, frames and the single env up retry for the Jetson AI Lab tutorial), CHANGELOG entry via the version-bump skill (patch)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "pyproject version differs from origin/main and CHANGELOG names the trace noun and what replaced the scratch tracer",
+        "markdownlint-cli2 passes",
+        "docs/traces/tutorial.sidecar.toml loads through plan.from_tutorial against the fork's tutorial mdx"
+      ],
+      "deps": [
+        "t7",
+        "t8"
+      ],
+      "covers": [
+        "c11",
+        "h13",
+        "h16"
+      ],
+      "instruction": ""
+    },
+    {
+      "id": "t10",
+      "summary": "acceptance on Spark: from the branch, microduck trace plan --from-tutorial <fork mdx> --sidecar docs/traces/tutorial.sidecar.toml, one fresh windowed trace run --plan (with --pause-autolock), trace render, trace serve; open the PR with the after-state walk-through and every success-signal clause mapped to a test or a recorded command; ask-colleague review; cicd open",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "the fresh run's page renders and scrubs; its run dir is kept outside the tree",
+        "the PR body lists each success-signal clause with its test name or command",
+        "CI green: test, lint, version-check"
+      ],
+      "deps": [
+        "t9"
+      ],
+      "covers": [
+        "c1",
+        "h8",
+        "c25",
+        "h15",
+        "c28",
+        "h18"
+      ],
+      "instruction": ""
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "the first env up --sim failure of 2026-09-08 is unexplained; a plan with retry=1 keeps the page honest but the root cause is outside this plan",
+      "kind": "unknown_nonblocking",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "window focus for gnome-screenshot -w needs xdotool or wmctrl; neither is confirmed installed on Spark/Thor/Orin \u2014 the geometry fallback must be the tested default, focus an improvement",
+      "kind": "unknown_nonblocking",
+      "task_id": "t5",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r3",
+      "text": "the first env up --sim failure of 2026-09-08 is unexplained; a plan with retry=1 keeps the page honest but the root cause is outside this plan",
+      "kind": "unknown_nonblocking",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r4",
+      "text": "the committed example weighs ~600 KB of frames + page in git history; every template change re-commits it \u2014 keep template changes to one commit per PR",
+      "kind": "unknown_nonblocking",
+      "task_id": "t8",
+      "resolved": false,
+      "resolution": ""
+    }
+  ],
+  "obligations": []
+}
