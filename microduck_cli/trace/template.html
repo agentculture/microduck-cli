@@ -35,7 +35,7 @@
   .frame{background:#000;border:1px solid var(--line);border-radius:6px;overflow:hidden;position:relative;aspect-ratio:1468/1014}
   .frame .crop{position:absolute;inset:0;overflow:hidden}
   .frame img{display:block;position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover}
-  .frame img.cropped{object-fit:fill}
+  .frame img.cropped{position:absolute;object-fit:fill;max-width:none;max-height:none}
   .frame .tag{position:absolute;left:8px;bottom:8px;right:8px;font-family:var(--mono);font-size:11px;color:var(--fg);
         background:rgba(15,20,28,.78);padding:4px 8px;border-radius:3px;display:flex;gap:10px;justify-content:space-between}
   .frame .tag span:last-child{color:var(--viewer-ink);white-space:nowrap}
@@ -335,7 +335,7 @@
     for (const e of EDGES) { const p = edgeEl[e.id]; const isOn = edgesOn.has(e.id); p.classList.toggle("on", isOn); p.style.color = isOn ? e.c : "var(--line2)"; const l = document.getElementById("l-"+e.id); if (l) l.classList.toggle("on", isOn); }
     // captions
     const step = stepAt(t);
-    setCap("c-step", `${/^\d+$/.test(step) ? "Step " + step + " — " : ""}${STEP_TITLES[step] || step}`);
+    setCap("c-step", /^\d+$/.test(step) ? "Step " + step + (STEP_TITLES[step] ? " — " + STEP_TITLES[step] : "") : (STEP_TITLES[step] || step));
     document.getElementById("t-step").textContent = /^\d+$/.test(step) ? step : (step === "0" ? "—" : step);
     setCap("c-op", lastOp ? lastOp.label : null);
     const curCmd = active.filter(s => s.lane !== "checks").slice(-1)[0] || [...spans].reverse().find(s => s.t1 <= t && s.lane !== "checks");
@@ -443,7 +443,7 @@
   for (const s of spans) { if (s.step === "0") continue; const k = s.step; let e = ladderSteps.find(x => x.step === k); if (!e) { e = {step:k, t0:s.t0, ok:true, n:0}; ladderSteps.push(e); } e.n++; if (s.rc !== 0) e.retry = true; }
   for (const e of ladderSteps) {
     const b = document.createElement("button"); b.dataset.step = e.step;
-    const title = STEP_TITLES[e.step] || e.step;
+    const title = STEP_TITLES[e.step] || (/^\d+$/.test(e.step) ? "" : e.step);
     b.innerHTML = `<span class="n">${esc(/^\d+$/.test(e.step) ? "step " + e.step : e.step)}</span><span>${esc(title)}</span><span class="s ${e.retry ? "bad-t" : "ok"}">${e.retry ? "pass on 2nd attempt" : "pass"} · ${fmt(e.t0)}</span>`;
     b.addEventListener("click", () => seek(e.t0 - 0.5)); ladder.appendChild(b);
     const o = document.createElement("option"); o.value = e.t0 - 0.5; o.textContent = (/^\d+$/.test(e.step) ? e.step + " " : "") + title; jump.appendChild(o);

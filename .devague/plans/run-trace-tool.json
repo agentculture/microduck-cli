@@ -5,7 +5,7 @@
   "schema_version": 5,
   "status": "exported",
   "created": "2026-09-08T15:00:49Z",
-  "updated": "2026-09-08T15:03:19Z",
+  "updated": "2026-09-08T15:03:41Z",
   "targets": [
     {
       "id": "c1",
@@ -439,7 +439,7 @@
       "id": "t9",
       "summary": "docs: CLAUDE.md (trace package in the packages table, the noun in the architecture section, the autolock flag), README pointer, operate-microduck SKILL.md 'Watch it' pointing at trace run/exec, docs/traces/tutorial.sidecar.toml (the sleeps, frames and the single env up retry for the Jetson AI Lab tutorial), CHANGELOG entry via the version-bump skill (patch)",
       "origin": "llm",
-      "status": "confirmed",
+      "status": "proposed",
       "acceptance_criteria": [
         "pyproject version differs from origin/main and CHANGELOG names the trace noun and what replaced the scratch tracer",
         "markdownlint-cli2 passes",
@@ -454,13 +454,13 @@
         "h13",
         "h16"
       ],
-      "instruction": ""
+      "instruction": "run the version-bump skill last; edit only docs, the skill file, CHANGELOG and pyproject version"
     },
     {
       "id": "t10",
       "summary": "acceptance on Spark: from the branch, microduck trace plan --from-tutorial <fork mdx> --sidecar docs/traces/tutorial.sidecar.toml, one fresh windowed trace run --plan (with --pause-autolock), trace render, trace serve; open the PR with the after-state walk-through and every success-signal clause mapped to a test or a recorded command; ask-colleague review; cicd open",
       "origin": "llm",
-      "status": "confirmed",
+      "status": "proposed",
       "acceptance_criteria": [
         "the fresh run's page renders and scrubs; its run dir is kept outside the tree",
         "the PR body lists each success-signal clause with its test name or command",
@@ -477,7 +477,7 @@
         "c28",
         "h18"
       ],
-      "instruction": ""
+      "instruction": "main-session task: needs the Spark display; keep the run dir under ~/.cache/duck-sim/trace, never in the tree"
     }
   ],
   "risks": [
