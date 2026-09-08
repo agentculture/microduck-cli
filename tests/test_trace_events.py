@@ -14,6 +14,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -24,6 +25,7 @@ from microduck_cli.trace.events import (
     Event,
     RunDir,
     append_event,
+    ensure_run_dir,
     import_run,
     load_events,
     new_run_dir,
@@ -117,6 +119,14 @@ def test_load_events_raises_on_first_bad_line(tmp_path):
     assert "2" in exc_info.value.message
 
 
+def test_load_events_rejects_non_utf8_bytes(tmp_path):
+    run_dir = _run_dir(tmp_path)
+    run_dir.events_path.write_bytes(b"\xff\xfe\x00not utf8\n")
+    with pytest.raises(CliError) as exc_info:
+        load_events(run_dir)
+    assert "not valid UTF-8" in exc_info.value.message
+
+
 def test_validate_line_rejects_unknown_kind():
     obj = {"t": 0.0, "wall": 0.0, "lane": "operator", "kind": "bogus", "label": "x"}
     with pytest.raises(CliError):
@@ -143,6 +153,34 @@ def test_validate_line_rejects_non_numeric_wall():
 
 def test_validate_line_rejects_oversized_label():
     obj = {"t": 0.0, "wall": 0.0, "lane": "operator", "kind": "note", "label": "x" * 401}
+    with pytest.raises(CliError):
+        validate_line(obj, 1)
+
+
+def test_validate_line_rejects_nan_t():
+    obj = {"t": float("nan"), "wall": 0.0, "lane": "operator", "kind": "note", "label": "x"}
+    with pytest.raises(CliError) as exc_info:
+        validate_line(obj, 7)
+    assert "7" in exc_info.value.message
+    assert "t" in exc_info.value.message
+
+
+def test_validate_line_rejects_infinite_t():
+    obj = {"t": float("inf"), "wall": 0.0, "lane": "operator", "kind": "note", "label": "x"}
+    with pytest.raises(CliError):
+        validate_line(obj, 1)
+
+
+def test_validate_line_rejects_nan_wall():
+    obj = {"t": 0.0, "wall": float("nan"), "lane": "operator", "kind": "note", "label": "x"}
+    with pytest.raises(CliError) as exc_info:
+        validate_line(obj, 9)
+    assert "9" in exc_info.value.message
+    assert "wall" in exc_info.value.message
+
+
+def test_validate_line_rejects_negative_infinite_wall():
+    obj = {"t": 0.0, "wall": float("-inf"), "lane": "operator", "kind": "note", "label": "x"}
     with pytest.raises(CliError):
         validate_line(obj, 1)
 
@@ -184,6 +222,41 @@ def test_run_dir_write_and_read_meta_round_trip(tmp_path):
     run_dir = _run_dir(tmp_path)
     run_dir.write_meta({"t0_wall": 5.0, "title": "a run"})
     assert run_dir.read_meta() == {"t0_wall": 5.0, "title": "a run"}
+
+
+def test_read_meta_rejects_json_array(tmp_path):
+    run_dir = _run_dir(tmp_path)
+    run_dir.meta_path.write_text("[1, 2, 3]", encoding="utf-8")
+    with pytest.raises(CliError) as exc_info:
+        run_dir.read_meta()
+    assert "meta.json must be a JSON object" in exc_info.value.message
+
+
+def test_read_meta_rejects_non_utf8_bytes(tmp_path):
+    run_dir = _run_dir(tmp_path)
+    run_dir.meta_path.write_bytes(b"\xff\xfe\x00not utf8")
+    with pytest.raises(CliError) as exc_info:
+        run_dir.read_meta()
+    assert "not valid UTF-8" in exc_info.value.message
+
+
+def test_read_meta_rejects_invalid_json(tmp_path):
+    run_dir = _run_dir(tmp_path)
+    run_dir.meta_path.write_text("{not valid json", encoding="utf-8")
+    with pytest.raises(CliError) as exc_info:
+        run_dir.read_meta()
+    assert "invalid JSON" in exc_info.value.message
+
+
+def test_ensure_run_dir_rejects_json_array_meta(tmp_path):
+    run_dir = RunDir(tmp_path / "array-meta-run")
+    run_dir.ensure()
+    run_dir.meta_path.write_text("[1, 2, 3]", encoding="utf-8")
+
+    with pytest.raises(CliError) as exc_info:
+        ensure_run_dir(run_dir.path, 5.0)
+
+    assert "meta.json must be a JSON object" in exc_info.value.message
 
 
 def test_new_run_dir_same_second_yields_two_distinct_dirs(tmp_path):
@@ -337,6 +410,64 @@ def test_import_run_meta_not_an_object_raises_cli_error(tmp_path):
         import_run(str(src_dir), dst)
 
     assert "not a JSON object" in exc_info.value.message
+
+
+def test_import_run_does_not_follow_a_symlink_in_shots(tmp_path):
+    secret = tmp_path / "secret.jpg"
+    secret.write_bytes(b"private host data")
+
+    src_dir = tmp_path / "symlink-src"
+    (src_dir / "shots").mkdir(parents=True)
+    (src_dir / "events.jsonl").write_text(
+        '{"t":0.0,"wall":0.0,"lane":"operator","kind":"note","label":"ok"}\n',
+        encoding="utf-8",
+    )
+    link = src_dir / "shots" / "linked.jpg"
+    link.symlink_to(secret)
+
+    dst = RunDir(tmp_path / "symlink-dst")
+
+    import_run(str(src_dir), dst)
+
+    assert not (dst.shots / "linked.jpg").exists()
+    assert list(dst.shots.iterdir()) == []
+
+
+def test_import_run_events_read_utf8_error_leaves_dst_untouched(tmp_path):
+    src_dir = tmp_path / "bad-utf8-src"
+    src_dir.mkdir()
+    (src_dir / "events.jsonl").write_bytes(b"\xff\xfe\x00not utf8\n")
+
+    dst = RunDir(tmp_path / "bad-utf8-dst")
+
+    with pytest.raises(CliError) as exc_info:
+        import_run(str(src_dir), dst)
+
+    assert "not valid UTF-8" in exc_info.value.message
+
+
+def test_import_run_rolls_back_a_failed_shot_copy(tmp_path):
+    src = FIXTURES / "trace_import_src"
+    dst = RunDir(tmp_path / "rollback-dst")
+    dst.ensure()
+    dst.events_path.write_text(
+        '{"t":0.0,"wall":0.0,"lane":"operator","kind":"note","label":"pre-existing"}\n',
+        encoding="utf-8",
+    )
+    pre_existing_shot = dst.shots / "pre-existing.jpg"
+    pre_existing_shot.write_bytes(b"already here")
+    original_events = dst.events_path.read_bytes()
+    original_shot_names = sorted(item.name for item in dst.shots.iterdir())
+
+    with mock.patch("microduck_cli.trace.events.shutil.copy2", side_effect=OSError("disk full")):
+        with pytest.raises(CliError) as exc_info:
+            import_run(str(src), dst)
+
+    assert "import failed while staging" in exc_info.value.message
+    assert dst.events_path.read_bytes() == original_events
+    assert sorted(item.name for item in dst.shots.iterdir()) == original_shot_names
+    assert pre_existing_shot.read_bytes() == b"already here"
+    assert not any(item.name.startswith(".import-") for item in dst.path.iterdir())
 
 
 def test_import_run_unreadable_events_raises_cli_error(tmp_path):
