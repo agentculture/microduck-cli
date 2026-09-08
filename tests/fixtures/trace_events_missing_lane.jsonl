@@ -1,0 +1,2 @@
+{"kind":"note","label":"ok line","lane":"operator","t":0.0,"wall":1000.0}
+{"kind":"note","label":"missing lane","t":0.1,"wall":1000.1}
