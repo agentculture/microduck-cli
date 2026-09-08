@@ -32,17 +32,32 @@ class _CompletedProcess:
 
 
 class FakeRunner:
-    """Records every argv it is called with and fakes a handful of tools."""
+    """Records every argv (and env) it is called with and fakes a handful of tools."""
 
-    def __init__(self, *, xwininfo_line=None, xdpyinfo_dims=None, gsettings=None, raise_on=None):
+    def __init__(
+        self,
+        *,
+        xwininfo_line=None,
+        xdpyinfo_dims=None,
+        gsettings=None,
+        raise_on=None,
+        xdotool_window_ids=("64",),
+        xdotool_activate_rc=0,
+        wmctrl_rc=0,
+    ):
         self.calls: list[list[str]] = []
+        self.call_envs: list[dict[str, str] | None] = []
         self._xwininfo_line = xwininfo_line
         self._xdpyinfo_dims = xdpyinfo_dims
         self._gsettings = dict(gsettings or {})
         self._raise_on = raise_on or ()
+        self._xdotool_window_ids = xdotool_window_ids
+        self._xdotool_activate_rc = xdotool_activate_rc
+        self._wmctrl_rc = wmctrl_rc
 
     def __call__(self, argv, **kwargs):
         self.calls.append(list(argv))
+        self.call_envs.append(kwargs.get("env"))
         tool = argv[0]
         if tool in self._raise_on:
             raise OSError(f"{tool} not found")
@@ -59,8 +74,13 @@ class FakeRunner:
             path = argv[argv.index("-f") + 1]
             Path(path).write_bytes(_png_bytes(640, 480))
             return _CompletedProcess(argv, 0)
-        if tool in ("xdotool", "wmctrl"):
-            return _CompletedProcess(argv, 0)
+        if tool == "xdotool" and "search" in argv:
+            stdout = "\n".join(self._xdotool_window_ids)
+            return _CompletedProcess(argv, 0, stdout=stdout)
+        if tool == "xdotool" and "windowactivate" in argv:
+            return _CompletedProcess(argv, self._xdotool_activate_rc)
+        if tool == "wmctrl":
+            return _CompletedProcess(argv, self._wmctrl_rc)
         if tool == "gsettings" and argv[1] == "get":
             schema, key = argv[2], argv[3]
             value = self._gsettings.get((schema, key))
@@ -138,7 +158,7 @@ def test_window_true_when_which_finds_xdotool(
 
 
 def test_runner_exception_yields_ok_false_with_reason_no_raise(tmp_path: Path) -> None:
-    runner = FakeRunner(raise_on={"gnome-screenshot"})
+    runner = FakeRunner(xwininfo_line=_XWININFO_LINE, raise_on={"gnome-screenshot"})
     env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
 
     outcome = capture_frame(FakeRunDir(tmp_path), "shot3", env=env, runner=runner)
@@ -160,7 +180,12 @@ def test_runner_nonzero_returncode_reported(
             return super().__call__(argv, **kwargs)
 
     env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
-    outcome = capture_frame(FakeRunDir(tmp_path), "shot4", env=env, runner=FailingRunner())
+    outcome = capture_frame(
+        FakeRunDir(tmp_path),
+        "shot4",
+        env=env,
+        runner=FailingRunner(xwininfo_line=_XWININFO_LINE),
+    )
 
     assert outcome.ok is False
     assert outcome.reason == "boom"
@@ -168,12 +193,131 @@ def test_runner_nonzero_returncode_reported(
 
 def test_png_size_parsed_from_ihdr(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("microduck_cli.trace.capture.shutil.which", lambda _name: None)
-    runner = FakeRunner()
+    runner = FakeRunner(xwininfo_line=_XWININFO_LINE)
     env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
 
     outcome = capture_frame(FakeRunDir(tmp_path), "shot5", env=env, runner=runner)
 
     assert outcome.size == [640, 480]
+
+
+# --- capture_frame: shot name validation -------------------------------------
+
+
+@pytest.mark.parametrize("bad_name", ["../escape", "/abs", "a/b", ".hidden"])
+def test_invalid_shot_name_rejected_without_runner_call(tmp_path: Path, bad_name: str) -> None:
+    runner = FakeRunner(xwininfo_line=_XWININFO_LINE)
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), bad_name, env=env, runner=runner)
+
+    assert outcome.ok is False
+    assert outcome.reason is not None
+    assert "invalid frame name" in outcome.reason
+    assert runner.calls == []
+
+
+def test_valid_shot_name_still_records_shots_relative_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("microduck_cli.trace.capture.shutil.which", lambda _name: None)
+    runner = FakeRunner(xwininfo_line=_XWININFO_LINE)
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "shot.6-ok_1", env=env, runner=runner)
+
+    assert outcome.ok is True
+    assert outcome.file == "shots/shot.6-ok_1.png"
+
+
+# --- capture_frame: focus must actually succeed ------------------------------
+
+
+def test_focus_rc1_falls_back_to_full_screen_with_geometry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "microduck_cli.trace.capture.shutil.which",
+        lambda name: "/usr/bin/xdotool" if name == "xdotool" else None,
+    )
+    runner = FakeRunner(
+        xwininfo_line=_XWININFO_LINE, xdpyinfo_dims=(1920, 1080), xdotool_activate_rc=1
+    )
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "shot7", env=env, runner=runner)
+
+    assert outcome.ok is True
+    assert outcome.window is False
+    assert outcome.geometry == {"x": 32, "y": 59, "w": 1200, "h": 900, "screen": [1920, 1080]}
+    screenshot_calls = [c for c in runner.calls if c[0] == "gnome-screenshot"]
+    assert screenshot_calls
+    assert "-w" not in screenshot_calls[0]
+
+
+def test_no_focus_tool_and_no_xwininfo_window_yields_ok_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("microduck_cli.trace.capture.shutil.which", lambda _name: None)
+    runner = FakeRunner(xwininfo_line="")
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "shot8", env=env, runner=runner)
+
+    assert outcome.ok is False
+    assert outcome.reason == "no MuJoCo viewer window found"
+    assert not any(c[0] == "gnome-screenshot" for c in runner.calls)
+
+
+def test_xdotool_search_with_no_window_ids_falls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "microduck_cli.trace.capture.shutil.which",
+        lambda name: "/usr/bin/xdotool" if name == "xdotool" else None,
+    )
+    runner = FakeRunner(xwininfo_line=_XWININFO_LINE, xdotool_window_ids=())
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "shot9", env=env, runner=runner)
+
+    assert outcome.ok is True
+    assert outcome.window is False
+    activate_calls = [c for c in runner.calls if c[0] == "xdotool" and "windowactivate" in c]
+    assert activate_calls == []
+
+
+# --- capture_frame: negative window coordinates ------------------------------
+
+
+def test_xwininfo_negative_x_parsed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("microduck_cli.trace.capture.shutil.which", lambda _name: None)
+    line = (
+        '     0x1600041 "MuJoCo : scene": ("python3" "Python3")  ' "1468x1026+-300+70  +-288+119\n"
+    )
+    runner = FakeRunner(xwininfo_line=line)
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "shot10", env=env, runner=runner)
+
+    assert outcome.geometry is not None
+    assert outcome.geometry["x"] == -288
+    assert outcome.geometry["y"] == 119
+
+
+def test_xwininfo_negative_y_bare_sign_form_parsed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("microduck_cli.trace.capture.shutil.which", lambda _name: None)
+    line = '     0x1600041 "MuJoCo : scene": ("python3" "Python3")  ' "1468x1026+70-300  +119-288\n"
+    runner = FakeRunner(xwininfo_line=line)
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "shot11", env=env, runner=runner)
+
+    assert outcome.geometry is not None
+    assert outcome.geometry["x"] == 119
+    assert outcome.geometry["y"] == -288
 
 
 # --- discover_display --------------------------------------------------------
@@ -249,6 +393,55 @@ def test_pause_autolock_yields_empty_and_changes_nothing_on_read_failure() -> No
 
     set_calls = [c for c in runner.calls if c[0] == "gsettings" and c[1] == "set"]
     assert set_calls == []
+
+
+def test_pause_autolock_applies_display_env_to_every_gsettings_call() -> None:
+    runner = FakeRunner(
+        gsettings={
+            ("org.gnome.desktop.session", "idle-delay"): "uint32 300",
+            ("org.gnome.desktop.screensaver", "lock-enabled"): "true",
+        }
+    )
+    env = DisplayEnv(display=":1", xauthority="/home/x/.Xauthority", dbus="unix:path=/run/bus")
+
+    with pause_autolock(runner=runner, env=env) as original:
+        assert original == {"idle-delay": "uint32 300", "lock-enabled": "true"}
+
+    gsettings_indices = [i for i, c in enumerate(runner.calls) if c[0] == "gsettings"]
+    assert len(gsettings_indices) == 6  # 2 gets + 2 sets (pause) + 2 sets (restore)
+    for index in gsettings_indices:
+        call_env = runner.call_envs[index]
+        assert call_env is not None
+        assert call_env["DISPLAY"] == ":1"
+        assert call_env["XAUTHORITY"] == "/home/x/.Xauthority"
+        assert call_env["DBUS_SESSION_BUS_ADDRESS"] == "unix:path=/run/bus"
+
+
+def test_pause_autolock_failing_read_with_env_makes_no_set_calls() -> None:
+    runner = FakeRunner(gsettings={})
+    env = DisplayEnv(display=":1", xauthority="/home/x/.Xauthority")
+
+    with pause_autolock(runner=runner, env=env) as original:
+        assert original == {}
+
+    set_calls = [c for c in runner.calls if c[0] == "gsettings" and c[1] == "set"]
+    assert set_calls == []
+    get_indices = [i for i, c in enumerate(runner.calls) if c[0] == "gsettings" and c[1] == "get"]
+    assert get_indices
+    first_get_env = runner.call_envs[get_indices[0]]
+    assert first_get_env is not None
+    assert first_get_env["DISPLAY"] == ":1"
+
+
+def test_pause_autolock_without_env_passes_none_to_runner() -> None:
+    runner = FakeRunner(gsettings={})
+
+    with pause_autolock(runner=runner) as original:
+        assert original == {}
+
+    get_indices = [i for i, c in enumerate(runner.calls) if c[0] == "gsettings" and c[1] == "get"]
+    assert get_indices
+    assert runner.call_envs[get_indices[0]] is None
 
 
 # --- module hygiene -----------------------------------------------------------

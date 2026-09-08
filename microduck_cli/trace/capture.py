@@ -31,13 +31,22 @@ _WINDOW_TITLE = "MuJoCo : scene"
 # xwininfo -tree lines look like:
 #   0x1600041 "MuJoCo : scene": ("python3" "Python3")  1200x900+0+0  +32+59
 # The first WxH+x+y pair is relative to the parent; the second (+AX+AY) is the
-# absolute screen position the contract asks us to record.
-_XWININFO_RE = re.compile(r"(\d+)x(\d+)\+-?\d+\+-?\d+\s+\+(-?\d+)\+(-?\d+)")
+# absolute screen position the contract asks us to record. A window left of
+# or above the primary monitor has a negative coordinate, which xwininfo
+# renders either as a bare sign ("-300") or a doubled one ("+-300") depending
+# on version — ``_COORD`` matches both.
+_COORD = r"[+-]-?\d+"
+_XWININFO_RE = re.compile(rf"(\d+)x(\d+){_COORD}{_COORD}\s+({_COORD})({_COORD})")
 
 # xdpyinfo prints a line such as "  dimensions:    1920x1080 pixels (...)".
 _XDPYINFO_RE = re.compile(r"dimensions:\s+(\d+)x(\d+)\s+pixels")
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+#: A shot ``name`` is joined under ``shots/`` as a single path segment — no
+#: separators, no leading ``.``, no absolute form — so ``../x`` or ``/abs``
+#: can never escape the run directory.
+_SHOT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
 
 _GSETTINGS_KEYS: dict[str, tuple[str, str]] = {
     "idle-delay": ("org.gnome.desktop.session", "idle-delay"),
@@ -175,8 +184,13 @@ def _window_geometry(runner, env: Mapping[str, str]) -> dict[str, int] | None:
             continue
         match = _XWININFO_RE.search(line)
         if match:
-            w, h, x, y = match.groups()
-            return {"x": int(x), "y": int(y), "w": int(w), "h": int(h)}
+            w, h, x_raw, y_raw = match.groups()
+            # A doubled sign ("+-300") is redundant with the leading token;
+            # stripping the "+" leaves a plain int()-parseable string in
+            # every case ("-300", "-300"; "+70" -> "70").
+            x = int(x_raw.replace("+", ""))
+            y = int(y_raw.replace("+", ""))
+            return {"x": x, "y": y, "w": int(w), "h": int(h)}
     return None
 
 
@@ -194,20 +208,42 @@ def _screen_size(runner, env: Mapping[str, str]) -> list[int] | None:
     return [int(match.group(1)), int(match.group(2))]
 
 
-def _focus_window(runner, env: Mapping[str, str]) -> None:
-    """Best-effort: bring the viewer window to the front before the shot."""
+def _focus_window(runner, env: Mapping[str, str]) -> bool:
+    """Best-effort: bring the viewer window to the front before the shot.
+
+    Returns ``True`` only when the focus command actually succeeded — for
+    ``xdotool`` that means ``search`` printed at least one window id *and*
+    the follow-up ``windowactivate`` exited 0; for ``wmctrl`` it means the
+    single activate call exited 0. ``False`` tells the caller to fall back to
+    the full-screen + geometry path instead of trusting whatever window
+    happens to be active.
+    """
     try:
         if shutil.which("xdotool"):
-            runner(
-                ["xdotool", "search", "--name", _WINDOW_TITLE, "windowactivate", "--sync"],
+            search = runner(
+                ["xdotool", "search", "--name", _WINDOW_TITLE],
                 capture_output=True,
                 text=True,
                 env=dict(env),
             )
-        elif shutil.which("wmctrl"):
-            runner(["wmctrl", "-a", _WINDOW_TITLE], capture_output=True, text=True, env=dict(env))
-    except Exception:  # nosec B110 - focusing is never load-bearing; the shot proceeds unfocused
-        pass
+            window_ids = [line.strip() for line in search.stdout.splitlines() if line.strip()]
+            if search.returncode != 0 or not window_ids:
+                return False
+            activate = runner(
+                ["xdotool", "windowactivate", "--sync", window_ids[0]],
+                capture_output=True,
+                text=True,
+                env=dict(env),
+            )
+            return activate.returncode == 0
+        if shutil.which("wmctrl"):
+            result = runner(
+                ["wmctrl", "-a", _WINDOW_TITLE], capture_output=True, text=True, env=dict(env)
+            )
+            return result.returncode == 0
+    except Exception:  # noqa: BLE001 - focusing is never load-bearing
+        return False
+    return False
 
 
 def _read_png_size(path: str) -> list[int] | None:
@@ -234,32 +270,54 @@ def capture_frame(
     """Capture one frame of the MuJoCo viewer window.
 
     ``env is None`` means no graphical session was found: this returns a
-    ``headless`` outcome without calling ``runner`` at all. Otherwise this
-    tries, in order: (1) the window's absolute geometry via ``xwininfo``;
-    (2) if ``xdotool`` or ``wmctrl`` is on ``PATH``, focus the window and take
-    a window-only shot with ``gnome-screenshot -w``; (3) otherwise a
-    full-screen shot, carrying the ``xwininfo`` geometry (plus the screen size
-    from ``xdpyinfo``, when available) so the page can crop it. Never raises —
-    any subprocess failure or exception is reported as ``ok=False``.
+    ``headless`` outcome without calling ``runner`` at all. ``name`` is
+    validated against :data:`_SHOT_NAME_RE` (and the resolved target path is
+    re-checked to land inside ``run_dir.shots``) before anything else runs —
+    an invalid name is reported as ``ok=False`` and never reaches ``runner``.
+    Otherwise this tries, in order: (1) the window's absolute geometry via
+    ``xwininfo``; (2) if ``xdotool`` or ``wmctrl`` is on ``PATH`` *and*
+    actually focuses the window, a window-only shot with
+    ``gnome-screenshot -w``; (3) otherwise a full-screen shot, carrying the
+    ``xwininfo`` geometry (plus the screen size from ``xdpyinfo``, when
+    available) so the page can crop it. If neither the focus attempt nor the
+    geometry lookup finds the viewer window at all, this reports ``ok=False``
+    rather than a misleading frame. Never raises — any subprocess failure or
+    exception is reported as ``ok=False``.
     """
     if env is None:
         return ShotOutcome(ok=False, reason="headless")
 
-    proc_env = env.as_env(os.environ)
     shots_dir = run_dir.shots
+    if not _SHOT_NAME_RE.match(name):
+        return ShotOutcome(ok=False, reason=f"invalid frame name: {name!r}")
+
+    path = os.path.join(shots_dir, f"{name}.png")
+    resolved_dir = os.path.realpath(shots_dir)
+    resolved_path = os.path.realpath(path)
+    try:
+        contained = os.path.commonpath([resolved_dir, resolved_path]) == resolved_dir
+    except ValueError:  # different drives on Windows-style paths
+        contained = False
+    if not contained:
+        return ShotOutcome(ok=False, reason=f"invalid frame name: {name!r}")
+
+    proc_env = env.as_env(os.environ)
     try:
         os.makedirs(shots_dir, exist_ok=True)
     except OSError:
         pass
-    path = os.path.join(shots_dir, f"{name}.png")
     rel_file = os.path.join("shots", f"{name}.png")
 
     wininfo = _window_geometry(runner, proc_env)
     has_focus_tool = bool(shutil.which("xdotool") or shutil.which("wmctrl"))
 
+    focused = has_focus_tool and _focus_window(runner, proc_env)
+
+    if not focused and wininfo is None:
+        return ShotOutcome(ok=False, reason="no MuJoCo viewer window found")
+
     try:
-        if has_focus_tool:
-            _focus_window(runner, proc_env)
+        if focused:
             result = runner(
                 ["gnome-screenshot", "-w", "-f", path],
                 capture_output=True,
@@ -276,11 +334,8 @@ def capture_frame(
                 env=proc_env,
             )
             window = False
-            if wininfo is not None:
-                geometry = dict(wininfo)
-                geometry["screen"] = _screen_size(runner, proc_env)
-            else:
-                geometry = None
+            geometry = dict(wininfo)
+            geometry["screen"] = _screen_size(runner, proc_env)
     except Exception as exc:  # noqa: BLE001 - a screenshot is best-effort
         return ShotOutcome(ok=False, reason=str(exc))
 
@@ -293,21 +348,35 @@ def capture_frame(
 
 
 @contextmanager
-def pause_autolock(runner=subprocess.run):
+def pause_autolock(runner=subprocess.run, *, env: DisplayEnv | None = None):
     """Pause the desktop's idle-lock while a trace run is capturing frames.
+
+    ``gsettings`` talks to the session bus, so over SSH — where this CLI's
+    own environment carries no ``DBUS_SESSION_BUS_ADDRESS`` — every call must
+    run with the *display owner's* environment or it silently targets
+    nothing while the run still reports "paused". Pass the same
+    :class:`DisplayEnv` :func:`discover_display` returned; it is applied
+    (via :meth:`DisplayEnv.as_env`) to every read, set and restore call.
 
     On enter, reads ``org.gnome.desktop.session idle-delay`` and
     ``org.gnome.desktop.screensaver lock-enabled`` via ``gsettings get``, sets
     both off, and yields the two original strings verbatim (e.g.
     ``{"idle-delay": "uint32 300", "lock-enabled": "true"}``). Restores those
     exact strings in a ``finally``, so a raising body still leaves the desktop
-    as it found it. If the initial reads fail, yields ``{}`` and changes
-    nothing — pausing the lock is never load-bearing for a trace run.
+    as it found it. If the initial reads fail — nonzero exit or a raised
+    exception — this yields ``{}`` and makes no ``set`` calls: an empty dict
+    is the caller's signal that nothing was actually paused.
     """
+    proc_env = env.as_env(os.environ) if env is not None else None
     original: dict[str, str] = {}
     try:
         for field, (schema, key) in _GSETTINGS_KEYS.items():
-            result = runner(["gsettings", "get", schema, key], capture_output=True, text=True)
+            result = runner(
+                ["gsettings", "get", schema, key],
+                capture_output=True,
+                text=True,
+                env=proc_env,
+            )
             if result.returncode != 0:
                 raise RuntimeError(result.stderr or f"gsettings get {schema} {key} failed")
             original[field] = result.stdout.strip()
@@ -321,6 +390,7 @@ def pause_autolock(runner=subprocess.run):
                     ["gsettings", "set", schema, key, _AUTOLOCK_OFF[field]],
                     capture_output=True,
                     text=True,
+                    env=proc_env,
                 )
             except Exception:  # nosec B110 - best-effort pause; restore still runs regardless
                 pass
@@ -335,6 +405,7 @@ def pause_autolock(runner=subprocess.run):
                         ["gsettings", "set", schema, key, original[field]],
                         capture_output=True,
                         text=True,
+                        env=proc_env,
                     )
                 except Exception:  # nosec B110 - restore is best-effort per key, never fatal
                     pass
