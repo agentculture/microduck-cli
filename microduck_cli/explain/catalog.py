@@ -11,7 +11,8 @@ Per-noun split
 The global verbs (``whoami``, ``learn``, ``explain``, ``overview``, ``doctor``)
 and the ``cli`` noun keep their entries here. Every domain noun owns its own
 module — :mod:`microduck_cli.explain.env`, :mod:`~microduck_cli.explain.duck`,
-:mod:`~microduck_cli.explain.policy`, :mod:`~microduck_cli.explain.rules` —
+:mod:`~microduck_cli.explain.policy`, :mod:`~microduck_cli.explain.rules`,
+:mod:`~microduck_cli.explain.trace` —
 exporting ``ENTRIES`` and ``VERBS``; both are merged here so a noun task adds a
 verb by editing only its own three files (``cli/_commands/<noun>.py``,
 ``explain/<noun>.py``, ``tests/test_<noun>.py``).
@@ -31,6 +32,8 @@ from microduck_cli.explain.policy import ENTRIES as _POLICY_ENTRIES
 from microduck_cli.explain.policy import VERBS as _POLICY_VERBS
 from microduck_cli.explain.rules import ENTRIES as _RULES_ENTRIES
 from microduck_cli.explain.rules import VERBS as _RULES_VERBS
+from microduck_cli.explain.trace import ENTRIES as _TRACE_ENTRIES
+from microduck_cli.explain.trace import VERBS as _TRACE_VERBS
 
 TAGLINE = "One CLI for the MicroDuck robot — environment, duck control, policies, and rules."
 
@@ -45,7 +48,13 @@ GLOBAL_VERBS: list[str] = [
 ]
 
 #: Verbs contributed by the domain nouns, in noun order.
-NOUN_VERBS: list[str] = [*_ENV_VERBS, *_DUCK_VERBS, *_POLICY_VERBS, *_RULES_VERBS]
+NOUN_VERBS: list[str] = [
+    *_ENV_VERBS,
+    *_DUCK_VERBS,
+    *_POLICY_VERBS,
+    *_RULES_VERBS,
+    *_TRACE_VERBS,
+]
 
 #: The canonical verb list. Format: ``"<command path> — <one line>"``.
 VERBS: list[str] = [*GLOBAL_VERBS, *NOUN_VERBS]
@@ -76,7 +85,7 @@ _ROOT = f"""\
 runtime package has no third-party dependencies; every command supports
 `--json`, results go to stdout and errors/diagnostics to stderr, never mixed.
 
-The four domain nouns are simulation-first, sim-first meaning no physical
+The domain nouns are simulation-first, sim-first meaning no physical
 MicroDuck has been driven from this CLI yet — every verb below is exercised
 against `robotd --fake`/`--sim` and the in-process fake daemon
 (`tests/fake_robotd.py`), never a real duck:
@@ -90,6 +99,9 @@ against `robotd --fake`/`--sim` and the in-process fake daemon
 - `rules` — the data-only rules layer and its 50 Hz tick engine
   (`rules list`, `rules check`, `rules engine run|start|stop|status`,
   `rules intent`).
+- `trace` — record a session and render its run-trace page (`trace plan`,
+  `trace run`, `trace exec`, `trace import`, `trace render`, `trace serve`,
+  `trace list`).
 
 ## Verbs
 
@@ -110,6 +122,7 @@ against `robotd --fake`/`--sim` and the in-process fake daemon
 - `microduck-cli explain duck`
 - `microduck-cli explain policy`
 - `microduck-cli explain rules`
+- `microduck-cli explain trace`
 - https://github.com/pollen-robotics/microduck/blob/sim-remote-io/docs/robot/cheatsheet.md
 """
 
@@ -210,5 +223,11 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("cli", "overview"): _CLI,
 }
 
-for _noun_entries in (_ENV_ENTRIES, _DUCK_ENTRIES, _POLICY_ENTRIES, _RULES_ENTRIES):
+for _noun_entries in (
+    _ENV_ENTRIES,
+    _DUCK_ENTRIES,
+    _POLICY_ENTRIES,
+    _RULES_ENTRIES,
+    _TRACE_ENTRIES,
+):
     ENTRIES.update(_noun_entries)
