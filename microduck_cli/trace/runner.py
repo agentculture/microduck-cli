@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Mapping
 
-from microduck_cli.trace.capture import DisplayEnv, ShotOutcome, capture_frame
+from microduck_cli.trace.capture import DisplayEnv, ShotOutcome, capture_frame, pause_autolock
 from microduck_cli.trace.events import Event, RunDir, append_event
 from microduck_cli.trace.plan import Plan, Step, dump_plan
 
@@ -38,10 +38,12 @@ __all__ = [
     "CmdResult",
     "PlanResult",
     "Recorder",
+    "TracedResult",
     "default_state_dir",
     "exec_one",
     "lane_for_command",
     "run_plan",
+    "run_traced",
 ]
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -424,6 +426,57 @@ def run_plan(
     finally:
         rec.stop_log_tail()
     return result
+
+
+@dataclass(frozen=True)
+class TracedResult:
+    """One :func:`run_traced` call: the plan's result plus what the run's policy did."""
+
+    plan_result: PlanResult
+    autolock_paused: bool
+    headless: bool
+
+
+def run_traced(
+    plan: Plan,
+    run_dir: RunDir,
+    *,
+    pause_autolock: bool,
+    display_env: DisplayEnv | None,
+    state_dir: str | None,
+    shot: Callable[..., ShotOutcome] | None = capture_frame,
+    pause: Callable[..., object] = pause_autolock,
+) -> TracedResult:
+    """Run *plan* under the session policy a traced run needs, and report both.
+
+    Two decisions live here rather than in the caller, because getting either
+    of them wrong is silent:
+
+    * **Headless is derived, not passed twice.** ``display_env is None`` means
+      no display was found (or ``--headless`` was asked for), so frame capture
+      is switched off here — a *shot* callable can never be handed to
+      :func:`run_plan` without a display to take it on.
+    * **The autolock pause carries the display's environment.** ``gsettings``
+      talks to the session bus, so pausing without ``display_env`` would
+      silently target nothing while the run still reported "paused". *pause*
+      is always called as ``pause(env=display_env)``.
+
+    ``pause_autolock`` is the caller's already-granted consent (the flag plus,
+    on a TTY, the operator's answer) — this function asks nobody anything.
+    ``autolock_paused`` reports whether the pause context was entered.
+    """
+    headless = display_env is None
+    kwargs = {
+        "shot": None if headless else shot,
+        "display_env": display_env,
+        "state_dir": state_dir,
+    }
+    if not pause_autolock:
+        result = run_plan(plan, run_dir, **kwargs)
+        return TracedResult(plan_result=result, autolock_paused=False, headless=headless)
+    with pause(env=display_env):
+        result = run_plan(plan, run_dir, **kwargs)
+    return TracedResult(plan_result=result, autolock_paused=True, headless=headless)
 
 
 def _start_tail(rec: Recorder, state_dir: str | None) -> None:

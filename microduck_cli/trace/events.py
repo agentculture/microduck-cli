@@ -31,6 +31,14 @@ in the contract: it keeps ``append_event`` deterministic and round-trip-safe
 load-then-append) without inventing a distinct "explicitly null" state
 nothing else in the plan needs.
 
+Beside the schema this module owns the run directory *as a directory*: making
+one (:func:`new_run_dir`, :func:`ensure_run_dir`), editing its metadata
+(:func:`update_meta`, :func:`append_note`), describing what is on disk
+(:func:`list_runs`, :func:`newest_run`, :func:`count_events`,
+:func:`count_shots`) and removing an empty one (:func:`remove_empty_run_dir`).
+No caller — the CLI least of all — should be listing a state directory or
+rewriting a ``meta.json`` by hand.
+
 Every failure in this module raises :class:`~microduck_cli.cli._errors.CliError`
 — never a bare ``KeyError``/``ValueError``/``json.JSONDecodeError`` escaping to
 a caller.
@@ -60,7 +68,20 @@ __all__ = [
     "validate_line",
     "import_run",
     "remove_empty_run_dir",
+    "RunSummary",
+    "TRACE_SUBDIR",
+    "append_note",
+    "count_events",
+    "count_shots",
+    "ensure_run_dir",
+    "list_runs",
+    "newest_run",
+    "trace_root",
+    "update_meta",
 ]
+
+#: The subdirectory of a state directory that holds run directories.
+TRACE_SUBDIR = "trace"
 
 #: Every legal ``lane`` tag, in the contract's documented order.
 LANES: tuple[str, ...] = (
@@ -194,6 +215,11 @@ class RunDir:
             handle.write("\n")
 
 
+def trace_root(state_dir: str) -> Path:
+    """``<state_dir>/trace`` — the directory every run directory lives under."""
+    return Path(state_dir) / TRACE_SUBDIR
+
+
 def new_run_dir(state_dir: str, now: float) -> RunDir:
     """Create ``<state_dir>/trace/<YYYYMMDDTHHMMSSZ>/`` (UTC, from *now*).
 
@@ -207,7 +233,7 @@ def new_run_dir(state_dir: str, now: float) -> RunDir:
     determinism.
     """
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(now))
-    trace_dir = Path(state_dir) / "trace"
+    trace_dir = trace_root(state_dir)
     trace_dir.mkdir(parents=True, exist_ok=True)
     suffix = 1
     while True:
@@ -223,6 +249,117 @@ def new_run_dir(state_dir: str, now: float) -> RunDir:
     run_dir.ensure()
     run_dir.write_meta({"t0_wall": now})
     return run_dir
+
+
+def ensure_run_dir(path: Path | str, now: float) -> RunDir:
+    """The run directory at *path*, created with a ``t0_wall`` meta if it is new.
+
+    The counterpart to :func:`new_run_dir` for a caller-chosen location (a
+    ``--out``): idempotent, and it never rewrites an existing ``meta.json`` —
+    a directory that already carries one keeps it (and its ``t0_wall``) so a
+    second command against the same run dir stays on the first run's clock.
+    """
+    run_dir = RunDir(Path(path))
+    run_dir.ensure()
+    if not run_dir.read_meta():
+        run_dir.write_meta({"t0_wall": now})
+    return run_dir
+
+
+def update_meta(run_dir: RunDir, **fields: Any) -> dict[str, Any]:
+    """Merge *fields* into ``meta.json`` and write it back; returns the new meta.
+
+    Read-modify-write of the whole document, so keys the caller does not name
+    (``t0_wall``, ``notes``, ...) survive. A field whose value is ``None`` is
+    skipped rather than written as null — "no title given" must not overwrite
+    a title that is already there.
+    """
+    meta = run_dir.read_meta()
+    meta.update({key: value for key, value in fields.items() if value is not None})
+    run_dir.write_meta(meta)
+    return meta
+
+
+def append_note(run_dir: RunDir, text: str) -> list[str]:
+    """Append one operator note to ``meta.notes``; returns the resulting list.
+
+    Reads no clock of its own — a note is ordered by the list it lands in.
+    """
+    meta = run_dir.read_meta()
+    notes = [*meta.get("notes", []), text]
+    meta["notes"] = notes
+    run_dir.write_meta(meta)
+    return notes
+
+
+def count_shots(run_dir: RunDir) -> int:
+    """How many frame files ``shots/`` holds (0 when the directory is absent)."""
+    if not run_dir.shots.is_dir():
+        return 0
+    return sum(1 for item in run_dir.shots.iterdir() if item.is_file())
+
+
+def count_events(run_dir: RunDir) -> int:
+    """How many non-blank lines ``events.jsonl`` holds, without validating them.
+
+    A listing must be able to describe a run whose events are malformed, so
+    this counts lines where :func:`load_events` would raise.
+    """
+    path = run_dir.events_path
+    if not path.is_file():
+        return 0
+    with path.open("r", encoding="utf-8") as handle:
+        return sum(1 for line in handle if line.strip())
+
+
+@dataclass(frozen=True)
+class RunSummary:
+    """One row of :func:`list_runs` — a run directory described without opening it."""
+
+    path: str
+    stamp: str
+    events: int
+    rendered: bool
+    title: str | None = None
+
+
+def _summarise(path: Path) -> RunSummary:
+    run_dir = RunDir(path)
+    title: str | None = None
+    try:
+        meta = run_dir.read_meta()
+    except (OSError, json.JSONDecodeError):
+        meta = {}
+    raw_title = meta.get("title")
+    if isinstance(raw_title, str):
+        title = raw_title
+    return RunSummary(
+        path=str(path),
+        stamp=path.name,
+        events=count_events(run_dir),
+        rendered=(path / "index.html").is_file(),
+        title=title,
+    )
+
+
+def list_runs(state_dir: str) -> list[RunSummary]:
+    """Every run directory under ``<state_dir>/trace``, sorted by name.
+
+    The ordering is the stamp's lexicographic order, which for the UTC stamps
+    :func:`new_run_dir` writes is also chronological — so the newest run is
+    last, deterministically. A state directory that does not exist (or holds
+    no ``trace/``) is an empty list, never an error: listing is descriptive.
+    """
+    root = trace_root(state_dir)
+    if not root.is_dir():
+        return []
+    return [_summarise(path) for path in sorted(p for p in root.iterdir() if p.is_dir())]
+
+
+def newest_run(state_dir: str) -> RunDir | None:
+    """The last run directory :func:`list_runs` reports, or ``None`` if there is none."""
+    runs = list_runs(state_dir)
+    return RunDir(Path(runs[-1].path)) if runs else None
 
 
 def append_event(run_dir: RunDir, event: Event) -> None:

@@ -1,9 +1,12 @@
 """Explain entries and verb list for the ``trace`` noun.
 
-Owned by the ``trace`` noun task: adding a ``trace`` verb means editing this
-module (``VERBS`` + ``ENTRIES``), ``cli/_commands/trace.py`` and
-``tests/test_cli_trace.py`` — nothing else. See :mod:`microduck_cli.explain.env`
-for the shared conventions.
+Adding a ``trace`` verb means editing this module — ``VERBS`` (what ``trace
+overview`` lists) *and* ``ENTRIES`` (what ``explain trace <verb>`` renders) —
+alongside ``cli/_commands/trace.py`` and ``tests/test_cli_trace.py``. Those are
+the usual three, not a guarantee of "nothing else": the root ``explain`` page in
+:mod:`microduck_cli.explain.catalog` also names this noun's verbs in prose, and a
+verb that changes the noun's shape belongs there too. See
+:mod:`microduck_cli.explain.env` for the shared conventions.
 
 The engine behind these verbs lives in :mod:`microduck_cli.trace` (events, plan,
 capture, render, runner, serve); the noun module is argparse wiring only.
@@ -31,7 +34,8 @@ VERBS: list[str] = [
     "trace exec — trace one arbitrary command into a run dir (new, newest or --run)",
     "trace import <src-dir> — adopt an external run directory (redacting home paths) and render it",
     "trace render <run-dir> — regenerate index.html and trace.html from the recorded events",
-    "trace serve <run-dir> — serve a rendered run dir over loopback HTTP",
+    "trace serve <run-dir> — serve a rendered run dir over loopback HTTP "
+    "(--allow-remote to bind off-box: no auth, no TLS)",
     "trace list — the run dirs under <state>/trace, their event counts and whether they rendered",
 ]
 
@@ -258,16 +262,26 @@ before the server blocks, so an agent reading the stream always has it. Port `0`
 Ctrl-C stops the server cleanly and exits 0. `--check` binds, prints the URL and
 stops immediately — the non-blocking form used in tests and in health checks.
 
+## Binding off-box
+
+The bind is loopback-only by default and a non-loopback `--host` (`0.0.0.0`, a
+LAN address) is **refused** unless you also pass `--allow-remote`: this server
+has no auth and no TLS, and a run dir is a whole session's output — commands,
+stderr and viewer frames. `--allow-remote` is the flag that says you mean it;
+use it only on a trusted network.
+
 ## Usage
 
     microduck-cli trace serve ./run
     microduck-cli trace serve ./run --port 8000 --host 127.0.0.1
+    microduck-cli trace serve ./run --host 0.0.0.0 --allow-remote --port 8000
     microduck-cli trace serve ./run --check --json
 
 ## Exit codes
 
 - `0` the server bound (and, without `--check`, was stopped by Ctrl-C)
-- `1` the run directory does not exist
+- `1` the run directory does not exist, or a non-loopback `--host` was asked
+  for without `--allow-remote`
 - `2` the address could not be bound (port in use, host unavailable)
 """
 
