@@ -463,7 +463,11 @@ def run_traced(
 
     ``pause_autolock`` is the caller's already-granted consent (the flag plus,
     on a TTY, the operator's answer) — this function asks nobody anything.
-    ``autolock_paused`` reports whether the pause context was entered.
+    ``autolock_paused`` reports what the pause context *yielded*, not that it
+    was entered: :func:`~microduck_cli.trace.capture.pause_autolock` yields a
+    falsy state when the desktop was not actually paused (no ``gsettings``, a
+    failing read, a failing ``set``), and reporting "paused" for a pause that
+    never happened is exactly the lie an operator would act on.
     """
     headless = display_env is None
     kwargs = {
@@ -474,9 +478,10 @@ def run_traced(
     if not pause_autolock:
         result = run_plan(plan, run_dir, **kwargs)
         return TracedResult(plan_result=result, autolock_paused=False, headless=headless)
-    with pause(env=display_env):
+    with pause(env=display_env) as paused_state:
+        paused = bool(paused_state)
         result = run_plan(plan, run_dir, **kwargs)
-    return TracedResult(plan_result=result, autolock_paused=True, headless=headless)
+    return TracedResult(plan_result=result, autolock_paused=paused, headless=headless)
 
 
 def _start_tail(rec: Recorder, state_dir: str | None) -> None:

@@ -44,6 +44,8 @@ class FakeRunner:
         xdotool_window_ids=("64",),
         xdotool_activate_rc=0,
         wmctrl_rc=0,
+        screenshot_bytes=None,
+        set_fail_keys=(),
     ):
         self.calls: list[list[str]] = []
         self.call_envs: list[dict[str, str] | None] = []
@@ -54,6 +56,8 @@ class FakeRunner:
         self._xdotool_window_ids = xdotool_window_ids
         self._xdotool_activate_rc = xdotool_activate_rc
         self._wmctrl_rc = wmctrl_rc
+        self._screenshot_bytes = screenshot_bytes
+        self._set_fail_keys = set(set_fail_keys)
 
     def __call__(self, argv, **kwargs):
         self.calls.append(list(argv))
@@ -72,7 +76,8 @@ class FakeRunner:
             return _CompletedProcess(argv, 0, stdout=f"  dimensions:    {w}x{h} pixels (some mm)")
         if tool == "gnome-screenshot":
             path = argv[argv.index("-f") + 1]
-            Path(path).write_bytes(_png_bytes(640, 480))
+            payload = self._screenshot_bytes
+            Path(path).write_bytes(_png_bytes(640, 480) if payload is None else payload)
             return _CompletedProcess(argv, 0)
         if tool == "xdotool" and "search" in argv:
             stdout = "\n".join(self._xdotool_window_ids)
@@ -89,6 +94,8 @@ class FakeRunner:
             return _CompletedProcess(argv, 0, stdout=value + "\n")
         if tool == "gsettings" and argv[1] == "set":
             schema, key, value = argv[2], argv[3], argv[4]
+            if key in self._set_fail_keys:
+                return _CompletedProcess(argv, 1, stderr="cannot write key")
             self._gsettings[(schema, key)] = value
             return _CompletedProcess(argv, 0)
         raise AssertionError(f"unexpected tool: {tool}")
@@ -199,6 +206,49 @@ def test_png_size_parsed_from_ihdr(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     outcome = capture_frame(FakeRunDir(tmp_path), "shot5", env=env, runner=runner)
 
     assert outcome.size == [640, 480]
+
+
+def test_empty_png_after_rc_zero_is_not_ok_and_is_deleted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("microduck_cli.trace.capture.shutil.which", lambda _name: None)
+    runner = FakeRunner(xwininfo_line=_XWININFO_LINE, screenshot_bytes=b"")
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "empty1", env=env, runner=runner)
+
+    assert outcome.ok is False
+    assert outcome.reason == "screenshot produced no readable PNG"
+    assert outcome.file is None
+    assert not (tmp_path / "shots" / "empty1.png").exists()
+
+
+def test_truncated_png_after_rc_zero_is_not_ok_and_is_deleted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("microduck_cli.trace.capture.shutil.which", lambda _name: None)
+    runner = FakeRunner(xwininfo_line=_XWININFO_LINE, screenshot_bytes=_png_bytes(640, 480)[:12])
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "trunc1", env=env, runner=runner)
+
+    assert outcome.ok is False
+    assert outcome.reason == "screenshot produced no readable PNG"
+    assert not (tmp_path / "shots" / "trunc1.png").exists()
+
+
+def test_non_png_payload_after_rc_zero_is_not_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("microduck_cli.trace.capture.shutil.which", lambda _name: None)
+    runner = FakeRunner(xwininfo_line=_XWININFO_LINE, screenshot_bytes=b"GIF89a" + b"\x00" * 40)
+    env = DisplayEnv(display=":0", xauthority="/home/x/.Xauthority")
+
+    outcome = capture_frame(FakeRunDir(tmp_path), "notpng1", env=env, runner=runner)
+
+    assert outcome.ok is False
+    assert outcome.reason == "screenshot produced no readable PNG"
+    assert not (tmp_path / "shots" / "notpng1.png").exists()
 
 
 # --- capture_frame: shot name validation -------------------------------------
@@ -442,6 +492,78 @@ def test_pause_autolock_without_env_passes_none_to_runner() -> None:
     get_indices = [i for i, c in enumerate(runner.calls) if c[0] == "gsettings" and c[1] == "get"]
     assert get_indices
     assert runner.call_envs[get_indices[0]] is None
+
+
+def test_pause_autolock_yields_falsy_when_a_set_fails() -> None:
+    runner = FakeRunner(
+        gsettings={
+            ("org.gnome.desktop.session", "idle-delay"): "uint32 300",
+            ("org.gnome.desktop.screensaver", "lock-enabled"): "true",
+        },
+        set_fail_keys=("lock-enabled",),
+    )
+
+    with pause_autolock(runner=runner) as original:
+        assert not original
+        assert original == {}
+        assert runner._gsettings[("org.gnome.desktop.session", "idle-delay")] == "0"
+        assert runner._gsettings[("org.gnome.desktop.screensaver", "lock-enabled")] == "true"
+
+    assert runner._gsettings[("org.gnome.desktop.session", "idle-delay")] == "uint32 300"
+
+
+def test_pause_autolock_does_not_restore_the_key_whose_set_failed() -> None:
+    runner = FakeRunner(
+        gsettings={
+            ("org.gnome.desktop.session", "idle-delay"): "uint32 300",
+            ("org.gnome.desktop.screensaver", "lock-enabled"): "true",
+        },
+        set_fail_keys=("lock-enabled",),
+    )
+
+    with pause_autolock(runner=runner):
+        pass
+
+    set_keys = [c[3] for c in runner.calls if c[0] == "gsettings" and c[1] == "set"]
+    assert set_keys.count("lock-enabled") == 1
+    assert set_keys.count("idle-delay") == 2
+
+
+def test_pause_autolock_yields_the_originals_when_both_sets_succeed() -> None:
+    runner = FakeRunner(
+        gsettings={
+            ("org.gnome.desktop.session", "idle-delay"): "uint32 300",
+            ("org.gnome.desktop.screensaver", "lock-enabled"): "true",
+        }
+    )
+
+    with pause_autolock(runner=runner) as original:
+        assert bool(original) is True
+        assert original == {"idle-delay": "uint32 300", "lock-enabled": "true"}
+
+
+def test_pause_autolock_yields_falsy_when_a_set_raises() -> None:
+    runner = FakeRunner(
+        gsettings={
+            ("org.gnome.desktop.session", "idle-delay"): "uint32 300",
+            ("org.gnome.desktop.screensaver", "lock-enabled"): "true",
+        }
+    )
+    real_call = runner.__call__
+
+    def call(argv, **kwargs):
+        if argv[0] == "gsettings" and argv[1] == "set" and argv[3] == "idle-delay":
+            runner.calls.append(list(argv))
+            runner.call_envs.append(kwargs.get("env"))
+            raise OSError("dbus is gone")
+        return real_call(argv, **kwargs)
+
+    with pause_autolock(runner=call) as original:
+        assert not original
+
+    set_keys = [c[3] for c in runner.calls if c[0] == "gsettings" and c[1] == "set"]
+    assert set_keys.count("idle-delay") == 1
+    assert set_keys.count("lock-enabled") == 2
 
 
 # --- module hygiene -----------------------------------------------------------

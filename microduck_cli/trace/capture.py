@@ -344,7 +344,24 @@ def capture_frame(
         return ShotOutcome(ok=False, reason=reason)
 
     size = _read_png_size(path)
+    if size is None:
+        # rc 0 with no readable PNG happens (a killed compositor, a full disk, a
+        # truncated write). Reporting ok=True would put a broken <img> on the page
+        # and claim a frame that isn't there, so the husk goes and the outcome says
+        # what actually happened.
+        _discard(path)
+        return ShotOutcome(ok=False, reason="screenshot produced no readable PNG")
     return ShotOutcome(ok=True, file=rel_file, window=window, size=size, geometry=geometry)
+
+
+def _discard(path: str) -> None:
+    """Remove a zero-byte or truncated screenshot; an absent file is already fine."""
+    try:
+        os.remove(path)
+    except OSError:
+        # Cleanup is best-effort: the outcome already reports ok=False, and a
+        # file we cannot remove is not worth failing a run over.
+        pass
 
 
 @contextmanager
@@ -361,11 +378,17 @@ def pause_autolock(runner=subprocess.run, *, env: DisplayEnv | None = None):
     On enter, reads ``org.gnome.desktop.session idle-delay`` and
     ``org.gnome.desktop.screensaver lock-enabled`` via ``gsettings get``, sets
     both off, and yields the two original strings verbatim (e.g.
-    ``{"idle-delay": "uint32 300", "lock-enabled": "true"}``). Restores those
-    exact strings in a ``finally``, so a raising body still leaves the desktop
-    as it found it. If the initial reads fail — nonzero exit or a raised
-    exception — this yields ``{}`` and makes no ``set`` calls: an empty dict
-    is the caller's signal that nothing was actually paused.
+    ``{"idle-delay": "uint32 300", "lock-enabled": "true"}``) — but *only* when
+    every ``gsettings set`` actually reported success. The yielded mapping is
+    the caller's evidence, not its intent: it is non-empty only when the
+    desktop really is paused, so ``{}`` covers all three ways a pause fails to
+    happen — a failing read (nonzero exit or a raised exception, in which case
+    no ``set`` runs at all), a failing set, and a set that raised.
+
+    Restore is independent of that verdict: whatever keys were successfully
+    changed are put back to their exact original strings in a ``finally``, so a
+    raising body still leaves the desktop as it found it and a key whose ``set``
+    failed is never "restored" to a value it was never moved from.
     """
     proc_env = env.as_env(os.environ) if env is not None else None
     original: dict[str, str] = {}
@@ -383,29 +406,35 @@ def pause_autolock(runner=subprocess.run, *, env: DisplayEnv | None = None):
     except Exception:  # noqa: BLE001 - no gsettings means nothing to pause
         original = {}
 
+    changed: dict[str, str] = {}
     if original:
         for field, (schema, key) in _GSETTINGS_KEYS.items():
+            applied = False
             try:
-                runner(
+                result = runner(
                     ["gsettings", "set", schema, key, _AUTOLOCK_OFF[field]],
                     capture_output=True,
                     text=True,
                     env=proc_env,
                 )
-            except Exception:  # nosec B110 - best-effort pause; restore still runs regardless
-                pass
+                applied = result.returncode == 0
+            except Exception:  # noqa: BLE001 - best-effort pause; the other key still gets a try
+                applied = False
+            if applied:
+                changed[field] = original[field]
 
+    paused = dict(original) if len(changed) == len(_GSETTINGS_KEYS) else {}
     try:
-        yield dict(original)
+        yield paused
     finally:
-        if original:
-            for field, (schema, key) in _GSETTINGS_KEYS.items():
-                try:
-                    runner(
-                        ["gsettings", "set", schema, key, original[field]],
-                        capture_output=True,
-                        text=True,
-                        env=proc_env,
-                    )
-                except Exception:  # nosec B110 - restore is best-effort per key, never fatal
-                    pass
+        for field, value in changed.items():
+            schema, key = _GSETTINGS_KEYS[field]
+            try:
+                runner(
+                    ["gsettings", "set", schema, key, value],
+                    capture_output=True,
+                    text=True,
+                    env=proc_env,
+                )
+            except Exception:  # nosec B110 - restore is best-effort per key, never fatal
+                pass

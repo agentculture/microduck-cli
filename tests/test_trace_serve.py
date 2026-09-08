@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -65,5 +66,61 @@ def test_serve_str_is_url(tmp_path: Path) -> None:
     handle = serve(rd, port=0)
     try:
         assert str(handle) == handle.url
+    finally:
+        handle.stop()
+
+
+def test_serve_refuses_an_empty_host_as_a_wildcard_bind(tmp_path: Path) -> None:
+    rd = RunDir(tmp_path / "run")
+    rd.ensure()
+    with pytest.raises(CliError) as excinfo:
+        serve(rd, port=0, host="")
+    assert excinfo.value.code == EXIT_USER_ERROR
+    assert "loopback-only" in excinfo.value.message
+    assert excinfo.value.remediation
+
+
+def test_serve_binds_an_empty_host_only_when_opted_in(tmp_path: Path) -> None:
+    rd = RunDir(tmp_path / "run")
+    rd.ensure()
+    handle = serve(rd, port=0, host="", allow_remote=True)
+    try:
+        assert handle.thread.is_alive()
+    finally:
+        handle.stop()
+
+
+def test_serve_404s_a_symlink_that_points_out_of_the_run_dir(tmp_path: Path) -> None:
+    secret = tmp_path / "secret.txt"
+    secret.write_text("do not serve me", encoding="utf-8")
+    rd = RunDir(tmp_path / "run")
+    rd.ensure()
+    (rd.path / "index.html").write_text("<title>stub</title>", encoding="utf-8")
+    (rd.path / "escape.txt").symlink_to(secret)
+
+    handle = serve(rd, port=0)
+    try:
+        with urllib.request.urlopen(handle.url, timeout=5) as resp:  # nosec B310 - loopback
+            assert resp.status == 200
+        escape = handle.url.replace("/index.html", "/escape.txt")
+        with pytest.raises(urllib.error.HTTPError) as excinfo:
+            urllib.request.urlopen(escape, timeout=5)  # nosec B310 - loopback
+        assert excinfo.value.code == 404
+    finally:
+        handle.stop()
+
+
+def test_serve_still_follows_a_symlink_that_stays_inside_the_run_dir(tmp_path: Path) -> None:
+    rd = RunDir(tmp_path / "run")
+    rd.ensure()
+    (rd.path / "index.html").write_text("<title>stub</title>", encoding="utf-8")
+    (rd.path / "alias.html").symlink_to(rd.path / "index.html")
+
+    handle = serve(rd, port=0)
+    try:
+        inside = handle.url.replace("/index.html", "/alias.html")
+        with urllib.request.urlopen(inside, timeout=5) as resp:  # nosec B310 - loopback
+            assert resp.status == 200
+            assert resp.read() == b"<title>stub</title>"
     finally:
         handle.stop()
