@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from microduck_cli.trace.events import (
     import_run,
     load_events,
     new_run_dir,
+    remove_empty_run_dir,
     validate_line,
 )
 
@@ -184,6 +186,23 @@ def test_run_dir_write_and_read_meta_round_trip(tmp_path):
     assert run_dir.read_meta() == {"t0_wall": 5.0, "title": "a run"}
 
 
+def test_new_run_dir_same_second_yields_two_distinct_dirs(tmp_path):
+    now = 1_757_318_400.0  # 2025-09-08T08:00:00Z
+
+    first = new_run_dir(str(tmp_path), now)
+    second = new_run_dir(str(tmp_path), now)
+
+    assert first.path != second.path
+    assert first.path == tmp_path / "trace" / "20250908T080000Z"
+    assert second.path == tmp_path / "trace" / "20250908T080000Z-2"
+    assert first.meta_path.exists()
+    assert second.meta_path.exists()
+
+    third = new_run_dir(str(tmp_path), now)
+    assert third.path == tmp_path / "trace" / "20250908T080000Z-3"
+    assert third.meta_path.exists()
+
+
 # --------------------------------------------------------------------------- #
 # import_run                                                                  #
 # --------------------------------------------------------------------------- #
@@ -252,6 +271,174 @@ def test_import_run_missing_events_file_raises_cli_error(tmp_path):
 
     with pytest.raises(CliError):
         import_run(str(src_dir), dst)
+
+
+def test_import_run_refuses_source_equals_destination(tmp_path):
+    src = FIXTURES / "trace_import_src"
+    dst = RunDir(src)
+
+    with pytest.raises(CliError) as exc_info:
+        import_run(str(src), dst)
+
+    error = exc_info.value
+    assert "source and destination are the same directory" in error.message
+    assert "--out" in error.remediation
+
+
+def test_import_run_clears_stale_shots_in_existing_destination(tmp_path):
+    src = FIXTURES / "trace_import_src"
+    dst = RunDir(tmp_path / "existing-dst")
+    dst.ensure()
+    stray = dst.shots / "stale.jpg"
+    stray.write_bytes(b"old frame")
+
+    import_run(str(src), dst)
+
+    assert not stray.exists()
+    assert (dst.shots / "frame1.jpg").is_file()
+
+
+def test_import_run_malformed_meta_raises_and_leaves_destination_untouched(tmp_path):
+    src_dir = tmp_path / "bad-meta-src"
+    src_dir.mkdir()
+    (src_dir / "events.jsonl").write_text(
+        '{"t":0.0,"wall":0.0,"lane":"operator","kind":"note","label":"ok"}\n',
+        encoding="utf-8",
+    )
+    (src_dir / "meta.json").write_text("{not valid json", encoding="utf-8")
+
+    dst = RunDir(tmp_path / "bad-meta-dst")
+    dst.ensure()
+    dst.events_path.write_text(
+        '{"t":0.0,"wall":0.0,"lane":"operator","kind":"note","label":"pre-existing"}\n',
+        encoding="utf-8",
+    )
+    original_events = dst.events_path.read_bytes()
+
+    with pytest.raises(CliError) as exc_info:
+        import_run(str(src_dir), dst)
+
+    assert "meta.json" in exc_info.value.message
+    assert dst.events_path.read_bytes() == original_events
+
+
+def test_import_run_meta_not_an_object_raises_cli_error(tmp_path):
+    src_dir = tmp_path / "list-meta-src"
+    src_dir.mkdir()
+    (src_dir / "events.jsonl").write_text(
+        '{"t":0.0,"wall":0.0,"lane":"operator","kind":"note","label":"ok"}\n',
+        encoding="utf-8",
+    )
+    (src_dir / "meta.json").write_text("[1, 2, 3]", encoding="utf-8")
+
+    dst = RunDir(tmp_path / "list-meta-dst")
+
+    with pytest.raises(CliError) as exc_info:
+        import_run(str(src_dir), dst)
+
+    assert "not a JSON object" in exc_info.value.message
+
+
+def test_import_run_unreadable_events_raises_cli_error(tmp_path):
+    src_dir = tmp_path / "dir-events-src"
+    src_dir.mkdir()
+    (src_dir / "events.jsonl").mkdir()  # a directory, not a file
+
+    dst = RunDir(tmp_path / "dir-events-dst")
+
+    with pytest.raises(CliError):
+        import_run(str(src_dir), dst)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses file permissions")
+def test_import_run_permission_denied_events_raises_cli_error(tmp_path):
+    src_dir = tmp_path / "chmod-src"
+    src_dir.mkdir()
+    events_path = src_dir / "events.jsonl"
+    events_path.write_text(
+        '{"t":0.0,"wall":0.0,"lane":"operator","kind":"note","label":"ok"}\n',
+        encoding="utf-8",
+    )
+    events_path.chmod(0o000)
+    dst = RunDir(tmp_path / "chmod-dst")
+
+    try:
+        with pytest.raises(CliError):
+            import_run(str(src_dir), dst)
+    finally:
+        events_path.chmod(0o644)
+
+
+def test_import_run_redacts_home_in_meta_when_src_has_meta(tmp_path):
+    src_dir = tmp_path / "meta-redact-src"
+    src_dir.mkdir()
+    (src_dir / "events.jsonl").write_text(
+        '{"t":0.0,"wall":0.0,"lane":"operator","kind":"note","label":"ok"}\n',
+        encoding="utf-8",
+    )
+    (src_dir / "meta.json").write_text(
+        json.dumps({"t0_wall": 0.0, "note": "seen at /home/someone/work"}),
+        encoding="utf-8",
+    )
+    dst = RunDir(tmp_path / "meta-redact-dst")
+
+    import_run(str(src_dir), dst)
+
+    meta = dst.read_meta()
+    assert "/home/someone" not in meta["note"]
+    assert "~/work" in meta["note"]
+
+
+def test_import_run_without_redact_home_keeps_meta_verbatim(tmp_path):
+    src_dir = tmp_path / "meta-noredact-src"
+    src_dir.mkdir()
+    (src_dir / "events.jsonl").write_text(
+        '{"t":0.0,"wall":0.0,"lane":"operator","kind":"note","label":"ok"}\n',
+        encoding="utf-8",
+    )
+    (src_dir / "meta.json").write_text(
+        json.dumps({"t0_wall": 0.0, "note": "seen at /home/someone/work"}),
+        encoding="utf-8",
+    )
+    dst = RunDir(tmp_path / "meta-noredact-dst")
+
+    import_run(str(src_dir), dst, redact_home=False)
+
+    meta = dst.read_meta()
+    assert "/home/someone" in meta["note"]
+
+
+# --------------------------------------------------------------------------- #
+# remove_empty_run_dir                                                        #
+# --------------------------------------------------------------------------- #
+
+
+def test_remove_empty_run_dir_removes_a_fresh_new_run_dir(tmp_path):
+    run_dir = new_run_dir(str(tmp_path), 1_757_318_400.0)
+
+    removed = remove_empty_run_dir(run_dir)
+
+    assert removed is True
+    assert not run_dir.path.exists()
+
+
+def test_remove_empty_run_dir_refuses_one_with_events(tmp_path):
+    run_dir = new_run_dir(str(tmp_path), 1_757_318_400.0)
+    append_event(run_dir, Event(t=0.0, wall=0.0, lane="operator", kind="note", label="hello"))
+
+    removed = remove_empty_run_dir(run_dir)
+
+    assert removed is False
+    assert run_dir.path.exists()
+    assert run_dir.events_path.exists()
+
+
+def test_remove_empty_run_dir_refuses_nonexistent_dir(tmp_path):
+    run_dir = RunDir(tmp_path / "does-not-exist")
+
+    removed = remove_empty_run_dir(run_dir)
+
+    assert removed is False
 
 
 # --------------------------------------------------------------------------- #

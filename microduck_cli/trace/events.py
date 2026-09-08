@@ -59,6 +59,7 @@ __all__ = [
     "load_events",
     "validate_line",
     "import_run",
+    "remove_empty_run_dir",
 ]
 
 #: Every legal ``lane`` tag, in the contract's documented order.
@@ -196,11 +197,29 @@ class RunDir:
 def new_run_dir(state_dir: str, now: float) -> RunDir:
     """Create ``<state_dir>/trace/<YYYYMMDDTHHMMSSZ>/`` (UTC, from *now*).
 
-    Writes ``meta.json`` with ``{"t0_wall": now}``. Takes *now* rather than
-    reading the clock itself, so the caller controls determinism.
+    When that name is already taken (two runs in the same UTC second), the
+    first free ``<stamp>-2``, ``<stamp>-3``, ... is used instead — the run
+    root itself is claimed with ``mkdir(exist_ok=False)`` semantics so two
+    concurrent callers never collide on the same directory, while
+    :meth:`RunDir.ensure` stays idempotent for the ``steps``/``shots``
+    subdirectories. Writes ``meta.json`` with ``{"t0_wall": now}``. Takes
+    *now* rather than reading the clock itself, so the caller controls
+    determinism.
     """
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(now))
-    run_dir = RunDir(Path(state_dir) / "trace" / stamp)
+    trace_dir = Path(state_dir) / "trace"
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    suffix = 1
+    while True:
+        name = stamp if suffix == 1 else f"{stamp}-{suffix}"
+        candidate = trace_dir / name
+        try:
+            candidate.mkdir(parents=False, exist_ok=False)
+            break
+        except FileExistsError:
+            suffix += 1
+            continue
+    run_dir = RunDir(candidate)
     run_dir.ensure()
     run_dir.write_meta({"t0_wall": now})
     return run_dir
@@ -344,21 +363,45 @@ def _redact_home_in(value: Any) -> Any:
     return value
 
 
+def _read_text_or_raise(path: Path, what: str) -> str:
+    """``path.read_text`` wrapped so any ``OSError`` becomes a :class:`CliError`."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{path}: cannot read {what} ({exc})",
+            "check that the path exists, is a file, and is readable",
+        ) from exc
+
+
 def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
     """Adopt an external run directory (``src``) into ``dst``.
 
     *src* is a directory holding ``events.jsonl`` and optionally ``shots/``
-    and ``meta.json``. Every line is validated first — the first bad line
-    raises :class:`CliError` and nothing is written to *dst*. When
-    ``redact_home`` (the default), every ``/home/<user>`` occurrence in an
-    event's ``label`` (and in every string under its per-kind fields) is
-    rewritten to ``~``. ``shots/*`` and ``meta.json`` are
-    copied verbatim; when *src* has no ``meta.json`` a minimal one is written
-    with ``t0_wall`` derived from the first event (``wall - t``, so the
-    adopted events line up on ``t == 0`` at that wall time) — deterministic,
-    no clock read. Returns the number of events written.
+    and ``meta.json``. Everything is read and validated FIRST — events,
+    and ``meta.json`` when present — before any write to *dst*; the first
+    problem (a missing/unreadable ``events.jsonl``, a bad event line, an
+    unreadable or malformed ``meta.json``) raises :class:`CliError` and
+    leaves *dst* untouched. Importing a run into itself is refused up front
+    for the same reason. When ``redact_home`` (the default), every
+    ``/home/<user>`` occurrence in an event's ``label``/per-kind fields and in
+    every string value of ``meta.json`` is rewritten to ``~``. ``shots/*`` and
+    ``meta.json`` are then copied in (any file already directly under
+    ``dst.shots`` is cleared first, so a prior import's stale frames never
+    survive); when *src* has no ``meta.json`` a minimal one is written with
+    ``t0_wall`` derived from the first event (``wall - t``, so the adopted
+    events line up on ``t == 0`` at that wall time) — deterministic, no clock
+    read. Returns the number of events written.
     """
     src_path = Path(src)
+    if src_path.resolve() == Path(dst.path).resolve():
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{src}: source and destination are the same directory",
+            "pass --out <another dir>",
+        )
+
     events_src = src_path / _EVENTS_FILENAME
     if not events_src.is_file():
         raise CliError(
@@ -367,14 +410,47 @@ def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
             f"point the import source at a directory containing {_EVENTS_FILENAME}",
         )
 
-    events = _parse_events(events_src.read_text(encoding="utf-8"))
+    events_text = _read_text_or_raise(events_src, "events")
+    events = _parse_events(events_text)
+
+    meta_src = src_path / "meta.json"
+    meta: dict[str, Any] | None = None
+    if meta_src.is_file():
+        meta_text = _read_text_or_raise(meta_src, "meta.json")
+        try:
+            meta = json.loads(meta_text)
+        except json.JSONDecodeError as exc:
+            raise CliError(
+                EXIT_USER_ERROR,
+                f"{meta_src}: invalid JSON ({exc})",
+                "fix or remove meta.json before importing",
+            ) from exc
+        if not isinstance(meta, dict):
+            raise CliError(
+                EXIT_USER_ERROR,
+                f"{meta_src}: not a JSON object",
+                "meta.json must contain a single JSON object",
+            )
 
     if redact_home:
         for event in events:
             event.label = _redact_home(event.label)
             event.extra = _redact_home_in(event.extra)
+        if meta is not None:
+            meta = _redact_home_in(meta)
 
+    if meta is None:
+        t0_wall = events[0].wall - events[0].t if events else 0.0
+        meta = {"t0_wall": t0_wall}
+
+    # Every read above succeeded and validated — only now do we touch dst.
     dst.ensure()
+
+    if dst.shots.is_dir():
+        for item in dst.shots.iterdir():
+            if item.is_file():
+                item.unlink()
+
     if dst.events_path.exists():
         dst.events_path.unlink()
     for event in events:
@@ -386,12 +462,34 @@ def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
             if item.is_file():
                 shutil.copy2(item, dst.shots / item.name)
 
-    meta_src = src_path / "meta.json"
-    if meta_src.is_file():
-        meta = json.loads(meta_src.read_text(encoding="utf-8"))
-    else:
-        t0_wall = events[0].wall - events[0].t if events else 0.0
-        meta = {"t0_wall": t0_wall}
     dst.write_meta(meta)
 
     return len(events)
+
+
+def remove_empty_run_dir(run_dir: RunDir) -> bool:
+    """Remove *run_dir* if it holds only a freshly-created layout skeleton.
+
+    "Only the skeleton" means: no ``events.jsonl``, an empty ``steps/``, an
+    empty ``shots/``, and — if ``meta.json`` exists at all — one containing
+    nothing but ``t0_wall``. Anything else (an events file, a captured step
+    or shot, extra meta keys) means real work happened and the directory is
+    left alone. Returns whether it removed the directory.
+    """
+    if not run_dir.path.is_dir():
+        return False
+    if run_dir.events_path.exists():
+        return False
+    if run_dir.steps.is_dir() and any(run_dir.steps.iterdir()):
+        return False
+    if run_dir.shots.is_dir() and any(run_dir.shots.iterdir()):
+        return False
+    if run_dir.meta_path.exists():
+        try:
+            meta = run_dir.read_meta()
+        except (OSError, json.JSONDecodeError):
+            return False
+        if set(meta.keys()) - {"t0_wall"}:
+            return False
+    shutil.rmtree(run_dir.path)
+    return True
