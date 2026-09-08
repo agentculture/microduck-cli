@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.6] - 2026-09-08
+
+### Added
+
+- `docs/verification/2026-09-08-thor-orin-tutorial-run.md` — the tutorial's operator run on Jetson AGX Thor (PyPI 0.9.4 wheel): the first smoke failed on a torch the clone had re-synced to `+cu129` after slipping back to the pin, the second passed in 26 s beside the production stack; the simulation's memory footprint on Thor (`duck-body` 933 MB, `robotd` 34 MB) and Orin (590 MB / 41 MB, +0.9 GB box-wide, headless); Orin's clone at `a30a9e4` resolves torch from the SBSA index with a plain `uv sync`.
+
+### Changed
+
+- `README.md`: the Spark re-test row's `[FAIL]`-under-healthy caveat now points at this fix.
+
+### Fixed
+
+- `env doctor` on a wheel install (`uv tool install microduck-cli`) reported both pin checks as "pinned commit unknown" because it read `docs/upstream-pins.md` from a path the wheel does not ship (defect d5 from the 2026-09-07 Spark re-test). The pinned commits are now carried inside the package as `env/doctor.py`'s `PACKAGED_PINS`; a checkout still reads the docs table first, a wheel falls back to the packaged copy, and `tests/test_env_doctor.py` asserts the two never drift.
+- `env doctor` and `doctor` text output print `[WARN]` for a failing warning-severity check and reserve `[FAIL]` for errors, so a `healthy` verdict is never followed by a `[FAIL]` line (a Thor clone on the `microduck_rl#39` branch reads `[WARN] rl_pinned_commit`, as the tutorial says).
+
 ## [0.9.5] - 2026-09-07
 
 ### Added

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from microduck_cli.env.doctor import (
+    PACKAGED_PINS,
     EnvProbe,
+    _parse_pins,
     default_probe,
     diagnose,
+    load_pins,
     render_text,
 )
 from microduck_cli.env.hosts import HostInfo
@@ -335,3 +339,58 @@ def test_default_probe_never_raises_and_returns_env_probe():
     # Must be diagnosable without raising regardless of what's installed here.
     report = diagnose(probe)
     assert isinstance(report["healthy"], bool)
+
+
+# --- packaged pins (d5: a wheel ships no docs/) ---------------------------
+
+_PINS_DOC = Path(__file__).resolve().parents[1] / "docs" / "upstream-pins.md"
+
+
+def test_packaged_pins_match_the_docs_table():
+    # A re-pin that updates one source and not the other must fail here.
+    assert _parse_pins(_PINS_DOC) == PACKAGED_PINS
+
+
+def test_load_pins_falls_back_to_packaged_when_docs_absent(tmp_path):
+    assert load_pins(tmp_path / "missing" / "upstream-pins.md") == PACKAGED_PINS
+
+
+def test_load_pins_prefers_a_readable_docs_table(tmp_path):
+    doc = tmp_path / "upstream-pins.md"
+    doc.write_text(
+        "| repo | ref | commit |\n|---|---|---|\n"
+        "| `pollen-robotics/microduck` | branch `x` | `abcdef1234567` |\n",
+        encoding="utf-8",
+    )
+    pins = load_pins(doc)
+    assert pins["pollen-robotics/microduck"] == "abcdef1234567"
+    assert pins["pollen-robotics/microduck_rl"] == PACKAGED_PINS["pollen-robotics/microduck_rl"]
+
+
+def test_default_probe_knows_both_pins():
+    probe = default_probe()
+    assert probe.microduck_pinned_commit == PACKAGED_PINS["pollen-robotics/microduck"]
+    assert probe.rl_pinned_commit == PACKAGED_PINS["pollen-robotics/microduck_rl"]
+
+
+# --- [WARN] vs [FAIL] -----------------------------------------------------
+
+
+def test_render_text_marks_warnings_warn_not_fail():
+    probe = EnvProbe(
+        **{
+            **COMPLETE_PROBE.__dict__,
+            "rl_clone_commit": "a30a9e4ffc161c90d19181f2815d1b50064182bb",
+        }
+    )
+    report = diagnose(probe)
+    text = render_text(report)
+    assert text.startswith("microduck-cli env doctor: healthy")
+    assert "[WARN] rl_pinned_commit:" in text
+    assert "[FAIL]" not in text
+
+
+def test_render_text_marks_errors_fail():
+    text = render_text(diagnose(EMPTY_PROBE))
+    assert text.startswith("microduck-cli env doctor: unhealthy")
+    assert "[FAIL] microduck_clone_present:" in text
