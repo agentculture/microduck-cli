@@ -7,7 +7,9 @@ of the installed package).
 
 from __future__ import annotations
 
+import datetime
 import importlib.util
+import math
 import sys
 from pathlib import Path
 
@@ -378,3 +380,123 @@ def test_load_plan_of_dump_plan_of_from_tutorial_passes_validation():
     plan = from_tutorial(FIXTURE_TUTORIAL, sidecar={"echo hello": {"sleep_before": 0.5}})
     reloaded = load_plan(dump_plan(plan))
     assert [s.cmd for s in reloaded.steps] == [s.cmd for s in plan.steps]
+
+
+# ---------------------------------------------------------------------------
+# (j) Qodo 3959991502: a non-table sidecar entry raises CliError, not
+#     AttributeError from calling .items() on a scalar.
+# ---------------------------------------------------------------------------
+
+
+def test_sidecar_non_table_entry_raises_cli_error():
+    sidecar = {"echo hello": 1}
+    with pytest.raises(CliError) as excinfo:
+        from_tutorial(FIXTURE_TUTORIAL, sidecar=sidecar)
+    assert "echo hello" in excinfo.value.message
+    assert "must be a table of overrides" in excinfo.value.message
+
+
+# ---------------------------------------------------------------------------
+# (k) Qodo 3959991552: dump_plan/load_plan round-trip nested tables and
+#     dates/times in plan.meta; a non-representable meta value raises at load.
+# ---------------------------------------------------------------------------
+
+
+def test_dump_plan_renders_nested_meta_table_as_inline_table():
+    plan = Plan(title="t", steps=[Step(step="1", label="x", cmd="x")], meta={"box": {"a": 1}})
+    text = dump_plan(plan)
+    assert "box = { a = 1 }" in text
+
+
+def test_meta_nested_table_round_trips_through_dump_and_load():
+    plan = Plan(
+        title="t",
+        steps=[Step(step="1", label="x", cmd="x")],
+        meta={"box": {"a": 1, "b": "two"}},
+    )
+    reloaded = load_plan(dump_plan(plan))
+    assert reloaded.meta == plan.meta
+
+
+def test_meta_date_round_trips_through_dump_and_load():
+    plan = Plan(
+        title="t",
+        steps=[Step(step="1", label="x", cmd="x")],
+        meta={"captured": datetime.date(2026, 9, 8)},
+    )
+    dumped = dump_plan(plan)
+    assert "captured = 2026-09-08" in dumped
+    reloaded = load_plan(dumped)
+    assert reloaded.meta == plan.meta
+
+
+def test_meta_validation_rejects_non_representable_value():
+    with pytest.raises(CliError) as excinfo:
+        trace_plan._validate_meta_value(object(), "bad")
+    assert "bad" in excinfo.value.message
+
+
+def test_meta_validation_rejects_non_representable_value_nested_in_table():
+    with pytest.raises(CliError) as excinfo:
+        trace_plan._validate_meta_value({"inner": object()}, "box")
+    assert "box.inner" in excinfo.value.message
+
+
+# ---------------------------------------------------------------------------
+# (l) Qodo 3959991592: a repeated command gets the override applied to every
+#     occurrence, not just the first.
+# ---------------------------------------------------------------------------
+
+REPEATED_COMMAND_TUTORIAL = """\
+# Tutorial
+
+## Step 1: First check
+
+```bash
+microduck duck health
+```
+
+## Step 2: Second check
+
+```bash
+microduck duck health
+```
+"""
+
+
+def test_sidecar_override_applies_to_every_matching_repeated_step():
+    sidecar = {"microduck duck health": {"sleep_after": 4}}
+    plan = from_tutorial(REPEATED_COMMAND_TUTORIAL, sidecar=sidecar)
+    matching = [step for step in plan.steps if step.cmd == "microduck duck health"]
+    assert len(matching) == 2
+    assert matching[0].sleep_after == 4
+    assert matching[1].sleep_after == 4
+    assert "unmatched" not in plan.meta
+
+
+# ---------------------------------------------------------------------------
+# (m) Qodo 3959991613: NaN/inf are rejected for sleep_before/sleep_after/
+#     timeout_s, not accepted as "numbers".
+# ---------------------------------------------------------------------------
+
+
+def test_load_plan_rejects_nan_sleep_before():
+    text = _step_toml("sleep_before = nan\n")
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "sleep_before" in excinfo.value.message
+
+
+def test_load_plan_rejects_inf_timeout_s():
+    text = _step_toml("timeout_s = inf\n")
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "timeout_s" in excinfo.value.message
+
+
+def test_is_number_rejects_nan_and_inf_directly():
+    assert not trace_plan._is_number(float("nan"))
+    assert not trace_plan._is_number(float("inf"))
+    assert not trace_plan._is_number(float("-inf"))
+    assert trace_plan._is_number(1.0)
+    assert math.isfinite(1.0)

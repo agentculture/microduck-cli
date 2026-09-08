@@ -8,7 +8,9 @@ so the rules are reproduced here rather than imported).
 
 from __future__ import annotations
 
+import datetime
 import json
+import math
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -84,7 +86,7 @@ _FIELD_REMEDIATION = {
 
 
 def _is_number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _validate_step(step_obj: Step, index: int, origin: str) -> None:
@@ -135,6 +137,36 @@ def _validate_step(step_obj: Step, index: int, origin: str) -> None:
 # --------------------------------------------------------------------------
 
 
+_META_SCALAR_TYPES = (
+    str,
+    int,
+    float,
+    bool,
+    datetime.datetime,
+    datetime.date,
+    datetime.time,
+)
+
+
+def _validate_meta_value(value: object, key: str) -> None:
+    """Reject a meta value dump_plan could not later serialise back to TOML."""
+    if isinstance(value, _META_SCALAR_TYPES):
+        return
+    if isinstance(value, dict):
+        for sub_key, sub_value in value.items():
+            _validate_meta_value(sub_value, f"{key}.{sub_key}")
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            _validate_meta_value(item, key)
+        return
+    raise CliError(
+        EXIT_USER_ERROR,
+        f"plan meta '{key}': cannot represent value of type {type(value).__name__}",
+        "use a string, number, bool, date/time, list or table of those in plan.meta",
+    )
+
+
 def load_plan(text: str) -> Plan:
     """Parse plan TOML into a :class:`Plan`, validating every step."""
     try:
@@ -148,6 +180,8 @@ def load_plan(text: str) -> Plan:
 
     title = data.get("title", "")
     meta = dict(data.get("meta", {}))
+    for key, value in meta.items():
+        _validate_meta_value(value, key)
     raw_steps = data.get("step", [])
 
     steps: list[Step] = []
@@ -190,16 +224,20 @@ def _toml_number(value: float | int) -> str:
 def _toml_value(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
     if isinstance(value, (int, float)):
         return _toml_number(value)
     if isinstance(value, str):
         return _toml_str(value)
+    if isinstance(value, dict):
+        return "{ " + ", ".join(f"{k} = {_toml_value(v)}" for k, v in value.items()) + " }"
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(_toml_value(item) for item in value) + "]"
     raise CliError(
         EXIT_USER_ERROR,
         f"cannot serialise meta value of type {type(value).__name__} to TOML",
-        "use a string, number, bool or list of those in plan.meta",
+        "use a string, number, bool, date/time, list or table of those in plan.meta",
     )
 
 
@@ -344,6 +382,12 @@ def _lane_for(cmd: str) -> str:
 
 
 def _apply_sidecar_override(step_obj: Step, overrides: dict) -> None:
+    if not isinstance(overrides, dict):
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"sidecar entry for '{step_obj.cmd}': must be a table of overrides",
+            "use a TOML table of Step field overrides, e.g. sleep_after = 2",
+        )
     for key, value in overrides.items():
         if key not in _SIDECAR_OVERRIDE_FIELDS:
             raise CliError(
@@ -363,7 +407,9 @@ def from_tutorial(mdx_text: str, sidecar: dict | None = None) -> Plan:
     (``free``, ``git``, ``pgrep``, ``cargo``, ``docker``) or "cli" otherwise.
 
     ``sidecar`` maps an exact command string to a dict of Step-field overrides.
-    A sidecar key that matches no extracted command is recorded (sorted) in
+    An override applies to EVERY extracted step whose ``cmd`` matches the key
+    (a repeated command gets the same override on each occurrence). A sidecar
+    key that matches no extracted command is recorded (sorted) in
     ``plan.meta["unmatched"]`` instead of being silently dropped.
     """
     steps = [
@@ -373,17 +419,18 @@ def from_tutorial(mdx_text: str, sidecar: dict | None = None) -> Plan:
 
     meta: dict = {}
     if sidecar:
-        by_cmd: dict[str, Step] = {}
+        by_cmd: dict[str, list[Step]] = {}
         for step_obj in steps:
-            by_cmd.setdefault(step_obj.cmd, step_obj)
+            by_cmd.setdefault(step_obj.cmd, []).append(step_obj)
 
         matched: set[str] = set()
         for key, overrides in sidecar.items():
-            target = by_cmd.get(key)
-            if target is None:
+            targets = by_cmd.get(key)
+            if not targets:
                 continue
             matched.add(key)
-            _apply_sidecar_override(target, overrides)
+            for target in targets:
+                _apply_sidecar_override(target, overrides)
 
         unmatched = sorted(key for key in sidecar if key not in matched)
         if unmatched:
