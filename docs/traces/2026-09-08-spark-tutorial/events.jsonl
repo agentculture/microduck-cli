@@ -1,0 +1,995 @@
+{"kind":"note","label":"run begins on DGX Spark (GB10), windowed, following the Jetson AI Lab tutorial draft (PR 444) with the newest wheel","lane":"operator","step":"0","t":0.031,"wall":1788876984.1088815}
+{"kind":"cmd-start","label":"uv tool install microduck-cli==0.9.6","lane":"cli","step":"1","t":27.55,"wall":1788877011.6275036}
+{"kind":"stderr","label":"`microduck-cli==0.9.6` is already installed","lane":"cli","step":"1","t":27.592,"wall":1788877011.6694012}
+{"elapsed":0.044,"kind":"cmd-end","label":"uv tool install microduck-cli==0.9.6","lane":"cli","out":"steps/01-uv-tool-install-microduck-cli-0-9-6.out","rc":0,"stderr_lines":1,"stdout_first":"","stdout_lines":0,"step":"1","t":27.594,"wall":1788877011.671569}
+{"kind":"note","label":"deviation: the tutorial's Step 1 pins 0.9.4; this run installs 0.9.6 (PyPI latest, the env doctor pin fix) \u2014 the tutorial pin needs bumping","lane":"operator","step":"1","t":27.612,"wall":1788877011.68993}
+{"kind":"cmd-start","label":"microduck --version","lane":"cli","step":"1","t":27.629,"wall":1788877011.7071006}
+{"elapsed":0.074,"kind":"cmd-end","label":"microduck --version","lane":"cli","out":"steps/02-microduck-version.out","rc":0,"stderr_lines":0,"stdout_first":"microduck-cli 0.9.6","stdout_lines":1,"step":"1","t":27.703,"wall":1788877011.7808008}
+{"kind":"cmd-start","label":"git -C ~/git/microduck rev-parse HEAD","lane":"microduck","step":"2","t":27.733,"wall":1788877011.811075}
+{"elapsed":0.004,"kind":"cmd-end","label":"git -C ~/git/microduck rev-parse HEAD","lane":"microduck","out":"steps/03-git-C-git-microduck-rev-parse-HEAD.out","rc":0,"stderr_lines":0,"stdout_first":"0cd676d6fbb6e90a762c84aa63abe7a02dbc9495","stdout_lines":1,"step":"2","t":27.738,"wall":1788877011.8154397}
+{"kind":"cmd-start","label":"git -C ~/git/microduck_rl log --oneline -1","lane":"rl","step":"2","t":27.769,"wall":1788877011.846864}
+{"elapsed":0.015,"kind":"cmd-end","label":"git -C ~/git/microduck_rl log --oneline -1","lane":"rl","out":"steps/04-git-C-git-microduck-rl-log-oneline-1.out","rc":0,"stderr_lines":0,"stdout_first":"29e887e Merge pull request #30 from peterschade/sim-body-server","stdout_lines":2,"step":"2","t":27.784,"wall":1788877011.8618755}
+{"kind":"cmd-start","label":"cargo --version","lane":"microduck","step":"3","t":27.802,"wall":1788877011.8793414}
+{"elapsed":0.027,"kind":"cmd-end","label":"cargo --version","lane":"microduck","out":"steps/05-cargo-version.out","rc":0,"stderr_lines":0,"stdout_first":"cargo 1.93.1 (083ac5135 2025-12-15)","stdout_lines":2,"step":"3","t":27.828,"wall":1788877011.9059565}
+{"kind":"cmd-start","label":"microduck_rl venv: torch / onnxruntime / mujoco","lane":"rl","step":"4","t":27.86,"wall":1788877011.9377537}
+{"elapsed":1.008,"kind":"cmd-end","label":"microduck_rl venv: torch / onnxruntime / mujoco","lane":"rl","out":"steps/06-microduck-rl-venv-torch-onnxruntime-mujoco.out","rc":0,"stderr_lines":0,"stdout_first":"torch 2.9.1+cu129 cuda True | onnxruntime 1.24.4 | mujoco 3.10.0","stdout_lines":1,"step":"4","t":28.868,"wall":1788877012.9455383}
+{"kind":"cmd-start","label":"microduck env doctor","lane":"cli","step":"5","t":28.901,"wall":1788877012.9785407}
+{"elapsed":1.22,"kind":"cmd-end","label":"microduck env doctor","lane":"cli","out":"steps/07-microduck-env-doctor.out","rc":0,"stderr_lines":0,"stdout_first":"microduck-cli env doctor: healthy","stdout_lines":15,"step":"5","t":30.121,"wall":1788877014.19875}
+{"kind":"cmd-start","label":"microduck env doctor --json","lane":"cli","step":"5","t":30.154,"wall":1788877014.2320075}
+{"elapsed":0.678,"kind":"cmd-end","label":"microduck env doctor --json","lane":"cli","out":"steps/08-microduck-env-doctor-json.out","rc":0,"stderr_lines":0,"stdout_first":"{\"healthy\": true, \"checks\": [{\"id\": \"microduck_clone_present\", \"passed\": true, \"severity\": \"error\", \"message\": \"microduck clone present at ~/git/microduck\", \"remediation\": \"\"}, {\"id\": \"microduck_pinned_commit\", \"passed\": true, \"severity\": \"info\", \"message\": \"microduck clone is at the pinne","stdout_lines":1,"step":"5","t":30.832,"wall":1788877014.9098155}
+{"kind":"cmd-start","label":"free -g","lane":"operator","step":"0","t":30.864,"wall":1788877014.9418087}
+{"elapsed":0.003,"kind":"cmd-end","label":"free -g","lane":"operator","out":"steps/09-free-g.out","rc":0,"stderr_lines":0,"stdout_first":"               total        used        free      shared  buff/cache   available","stdout_lines":3,"step":"0","t":30.867,"wall":1788877014.9448442}
+{"kind":"cmd-start","label":"microduck env up --sim","lane":"cli","step":"6","t":55.357,"wall":1788877039.4343665}
+{"kind":"log","label":"2026-09-08T14:17:20.543737Z  WARN robotd: starting service=\"robotd\" build=0.10.0 (rev unknown, not a CI build) exe=~/git/microduck/target/debug/robotd pid=2382611","lane":"robotd","t":56.469,"wall":1788877040.546832}
+{"kind":"log","label":"2026-09-08T14:17:20.549576Z  WARN robotd: --sim: the body is in MuJoCo addr=127.0.0.1:7801","lane":"robotd","t":56.52,"wall":1788877040.597241}
+{"kind":"log","label":"2026-09-08T14:17:20.549582Z  INFO robotd: serving robot IPC path=~/.cache/duck-sim/duck-a.sock mode=\"660\" model_api=1","lane":"robotd","t":56.52,"wall":1788877040.5973656}
+{"kind":"log","label":"2026-09-08T14:17:20.550457Z  WARN duck_control::sim: no simulated body; retrying every tick until it answers addr=127.0.0.1:7801 error=serial port 127.0.0.1:7801: Connection refused (os error 111)","lane":"robotd","t":56.52,"wall":1788877040.5973887}
+{"kind":"log","label":"2026-09-08T14:17:20.550522Z  WARN robotd: no answer from the motor bus; waiting, not commanding anything error=serial port 127.0.0.1:7801: Connection refused (os error 111) attempt=1","lane":"robotd","t":56.52,"wall":1788877040.5974085}
+{"kind":"stderr","label":"waiting for duck-a to report healthy (~/.cache/duck-sim/duck-a.sock)...","lane":"cli","step":"6","t":56.646,"wall":1788877040.72326}
+{"kind":"log","label":"== scene.xml: 1 duck(s), starting at SIT","lane":"body","t":56.871,"wall":1788877040.9483976}
+{"kind":"log","label":"==   duck 0: robotd --sim 127.0.0.1:7801","lane":"body","t":56.871,"wall":1788877040.9484897}
+{"kind":"log","label":"2026-09-08T14:17:49.794683Z  WARN robotd: no answer from the motor bus; waiting, not commanding anything error=serial port 127.0.0.1:7801: Connection refused (os error 111) attempt=30","lane":"robotd","t":85.752,"wall":1788877069.829759}
+{"kind":"log","label":"2026-09-08T14:18:19.832784Z  WARN robotd: no answer from the motor bus; waiting, not commanding anything error=serial port 127.0.0.1:7801: Connection refused (os error 111) attempt=60","lane":"robotd","t":115.801,"wall":1788877099.8787992}
+{"kind":"log","label":"2026-09-08T14:18:49.876750Z  WARN robotd: no answer from the motor bus; waiting, not commanding anything error=serial port 127.0.0.1:7801: Connection refused (os error 111) attempt=90","lane":"robotd","t":145.807,"wall":1788877129.8849986}
+{"kind":"log","label":"2026-09-08T14:19:19.917095Z  WARN robotd: no answer from the motor bus; waiting, not commanding anything error=serial port 127.0.0.1:7801: Connection refused (os error 111) attempt=120","lane":"robotd","t":175.849,"wall":1788877159.9263608}
+{"kind":"stderr","label":"duck-a never reported healthy: stopping what was started...","lane":"cli","step":"6","t":177.017,"wall":1788877161.0942447}
+{"kind":"log","label":"2026-09-08T14:19:21.094718Z  INFO robotd: shutting down","lane":"robotd","t":177.056,"wall":1788877161.1332874}
+{"kind":"stderr","label":"cleanup: duck-a: recycled (pid 2382611 no longer matches 'robotd' after SIGTERM (recycled while waiting); not signalled further)","lane":"cli","step":"6","t":178.02,"wall":1788877162.0980842}
+{"kind":"stderr","label":"cleanup: body: stale (pid 2382610 is no longer body (cmdline does not contain 'mjlab_microduck.sim.body_server'); removed the pidfile without signalling it)","lane":"cli","step":"6","t":178.021,"wall":1788877162.0982804}
+{"kind":"stderr","label":"error: duck-a did not report healthy within 120s","lane":"cli","step":"6","t":178.021,"wall":1788877162.0983377}
+{"kind":"stderr","label":"hint: read ~/.cache/duck-sim/duck-a.log for why it never came up","lane":"cli","step":"6","t":178.021,"wall":1788877162.098379}
+{"elapsed":122.722,"kind":"cmd-end","label":"microduck env up --sim","lane":"cli","out":"steps/10-microduck-env-up-sim.out","rc":2,"stderr_lines":6,"stdout_first":"","stdout_lines":0,"step":"6","t":178.079,"wall":1788877162.156741}
+{"kind":"note","label":"first env up --sim: the body printed its banner and vanished without a traceback; robotd got 'Connection refused' on 127.0.0.1:7801 for 120 s; env up cleaned both up (exit 2). Retrying.","lane":"operator","step":"6","t":315.904,"wall":1788877299.9820151}
+{"kind":"cmd-start","label":"microduck env up --sim","lane":"cli","step":"6","t":315.922,"wall":1788877299.9994783}
+{"kind":"log","label":"2026-09-08T14:21:40.257264Z  WARN robotd: starting service=\"robotd\" build=0.10.0 (rev unknown, not a CI build) exe=~/git/microduck/target/debug/robotd pid=2391666","lane":"robotd","t":316.193,"wall":1788877300.2710834}
+{"kind":"log","label":"2026-09-08T14:21:40.257902Z  INFO robotd: serving robot IPC path=~/.cache/duck-sim/duck-a.sock mode=\"660\" model_api=1","lane":"robotd","t":316.194,"wall":1788877300.271219}
+{"kind":"log","label":"2026-09-08T14:21:40.257946Z  WARN robotd: --sim: the body is in MuJoCo addr=127.0.0.1:7801","lane":"robotd","t":316.194,"wall":1788877300.2713034}
+{"kind":"log","label":"2026-09-08T14:21:40.258139Z  WARN duck_control::sim: no simulated body; retrying every tick until it answers addr=127.0.0.1:7801 error=serial port 127.0.0.1:7801: Connection refused (os error 111)","lane":"robotd","t":316.194,"wall":1788877300.2713544}
+{"kind":"log","label":"2026-09-08T14:21:40.258171Z  WARN robotd: no answer from the motor bus; waiting, not commanding anything error=serial port 127.0.0.1:7801: Connection refused (os error 111) attempt=1","lane":"robotd","t":316.194,"wall":1788877300.2714005}
+{"kind":"stderr","label":"waiting for duck-a to report healthy (~/.cache/duck-sim/duck-a.sock)...","lane":"cli","step":"6","t":316.376,"wall":1788877300.4540582}
+{"kind":"log","label":"== scene.xml: 1 duck(s), starting at SIT","lane":"body","t":316.546,"wall":1788877300.6238096}
+{"kind":"log","label":"==   duck 0: robotd --sim 127.0.0.1:7801","lane":"body","t":316.546,"wall":1788877300.6239355}
+{"kind":"log","label":"2026-09-08T14:21:41.260362Z  INFO duck_control::sim: simulated body addr=127.0.0.1:7801 protocol=1","lane":"robotd","t":317.199,"wall":1788877301.27619}
+{"kind":"log","label":"2026-09-08T14:21:41.260807Z  WARN robotd: the motor bus answered; holding the pose found at startup attempt=1 hz=50.0","lane":"robotd","t":317.199,"wall":1788877301.2763345}
+{"kind":"log","label":"2026-09-08T14:21:41.260839Z  WARN robotd: seated boot detected \u2014 will stand up via the sitstand policy deviation=\"0.33\"","lane":"robotd","t":317.199,"wall":1788877301.2763922}
+{"kind":"log","label":"== duck 0: daemon connected from ('127.0.0.1', 56268)","lane":"body","t":317.199,"wall":1788877301.276453}
+{"kind":"log","label":"2026-09-08T14:21:41.340762Z  WARN robotd: policy loaded mode=\"walk\" walk=~/git/microduck/policies/alpha_walking.onnx stand=Some(\"~/git/microduck/policies/alpha_stand.onnx\") sitstand=Some(\"~/git/microduck/policies/alpha_sitstand.onnx\") ground_pick=Some(\"~/git/microduck/policies/alpha_ground_pick.onnx\") kicks=true roulade=Some(\"~/git/microduck/polici","lane":"robotd","t":317.299,"wall":1788877301.3767743}
+{"kind":"log","label":"2026-09-08T14:21:41.340819Z  WARN robotd: control loop running joints=15 hz=50.0 driving=true","lane":"robotd","t":317.299,"wall":1788877301.3769145}
+{"kind":"log","label":"2026-09-08T14:21:41.341973Z  WARN robotd::sound: no voice bank \u2014 sounds are skipped (run `sounds ensure-bank`) bank=/var/lib/robot/sounds","lane":"robotd","t":317.299,"wall":1788877301.3769736}
+{"elapsed":1.621,"kind":"cmd-end","label":"microduck env up --sim","lane":"cli","out":"steps/11-microduck-env-up-sim.out","rc":0,"stderr_lines":1,"stdout_first":"microduck-cli env up: healthy (sim)","stdout_lines":3,"step":"6","t":317.544,"wall":1788877301.6211686}
+{"kind":"cmd-start","label":"microduck duck health","lane":"cli","step":"7","t":334.148,"wall":1788877318.2259207}
+{"elapsed":0.117,"kind":"cmd-end","label":"microduck duck health","lane":"cli","out":"steps/12-microduck-duck-health.out","rc":0,"stderr_lines":0,"stdout_first":"# duck-a: healthy","stdout_lines":8,"step":"7","t":334.265,"wall":1788877318.3426418}
+{"kind":"note","label":"waiting 4 s for the body's first frames (env up returns before the IMU is ready)","lane":"operator","step":"7","t":334.284,"wall":1788877318.362003}
+{"kind":"cmd-start","label":"microduck duck health","lane":"cli","step":"7","t":338.305,"wall":1788877322.3822162}
+{"elapsed":0.117,"kind":"cmd-end","label":"microduck duck health","lane":"cli","out":"steps/13-microduck-duck-health.out","rc":0,"stderr_lines":0,"stdout_first":"# duck-a: healthy","stdout_lines":8,"step":"7","t":338.422,"wall":1788877322.4991612}
+{"file":"shots/s0-seated.jpg","kind":"shot","label":"viewer after env up: the duck starts seated","lane":"viewer","size":[720,491],"step":"7","t":339.463,"wall":1788877323.5410316,"window":true}
+{"kind":"cmd-start","label":"microduck duck init --apply","lane":"cli","step":"7","t":339.502,"wall":1788877323.580088}
+{"kind":"log","label":"2026-09-08T14:22:03.642433Z  WARN duck_control::safety: torque on=true","lane":"robotd","t":339.606,"wall":1788877323.6834683}
+{"kind":"log","label":"2026-09-08T14:22:03.642683Z  WARN robotd: robot.init: seated boot \u2014 rising via the sitstand policy","lane":"robotd","t":339.606,"wall":1788877323.6836}
+{"elapsed":0.122,"kind":"cmd-end","label":"microduck duck init --apply","lane":"cli","out":"steps/14-microduck-duck-init-apply.out","rc":0,"stderr_lines":0,"stdout_first":"init accepted: ramping to the home pose","stdout_lines":1,"step":"7","t":339.625,"wall":1788877323.702535}
+{"file":"shots/s1-init-ramp.jpg","kind":"shot","label":"init in progress: rising via the sitstand policy","lane":"viewer","size":[720,491],"step":"7","t":343.624,"wall":1788877327.7017043,"window":true}
+{"kind":"cmd-start","label":"microduck duck enable --apply","lane":"cli","step":"7","t":348.651,"wall":1788877332.728932}
+{"elapsed":0.117,"kind":"cmd-end","label":"microduck duck enable --apply","lane":"cli","out":"steps/15-microduck-duck-enable-apply.out","rc":0,"stderr_lines":0,"stdout_first":"enable {\"on\": true}: enabled \u2014 driving","stdout_lines":1,"step":"7","t":348.768,"wall":1788877332.8456814}
+{"file":"shots/s2-stand-1.jpg","kind":"shot","label":"standing after enable (policy=stand)","lane":"viewer","size":[720,491],"step":"7","t":350.782,"wall":1788877334.8593097,"window":true}
+{"kind":"cmd-start","label":"microduck duck monitor --frames 5 --json","lane":"cli","step":"7","t":350.82,"wall":1788877334.8973799}
+{"elapsed":0.569,"kind":"cmd-end","label":"microduck duck monitor --frames 5 --json","lane":"cli","out":"steps/16-microduck-duck-monitor-frames-5-json.out","rc":0,"stderr_lines":0,"stdout_first":"{\"head\": [0.0, 0.0, 0.0, 0.0], \"joints\": [-0.003872343489086848, -0.08952946963603543, -0.4347491767909174, 0.03983985238696346, 0.4697779316673706, 0.2154111056783121, 0.4448287176902556, -0.02720002069642095, 0.038977255427241266, 0.0, -0.007646417652183267, 0.09704637040104826, 0.3944267514509347","stdout_lines":5,"step":"7","t":351.389,"wall":1788877335.4663496}
+{"file":"shots/s3-stand-2.jpg","kind":"shot","label":"standing, second shot 4 s later","lane":"viewer","size":[720,491],"step":"7","t":356.404,"wall":1788877340.4816291,"window":true}
+{"kind":"cmd-start","label":"microduck duck health","lane":"cli","step":"7","t":356.442,"wall":1788877340.5201254}
+{"elapsed":0.118,"kind":"cmd-end","label":"microduck duck health","lane":"cli","out":"steps/17-microduck-duck-health.out","rc":0,"stderr_lines":0,"stdout_first":"# duck-a: healthy","stdout_lines":8,"step":"7","t":356.561,"wall":1788877340.6386588}
+{"kind":"cmd-start","label":"microduck duck look --x 0.2 --y 0.4 --z -0.1 --apply","lane":"cli","step":"8","t":375.171,"wall":1788877359.24827}
+{"elapsed":0.117,"kind":"cmd-end","label":"microduck duck look --x 0.2 --y 0.4 --z -0.1 --apply","lane":"cli","out":"steps/18-microduck-duck-look-x-0-2-y-0-4-z-0-1-apply.out","rc":0,"stderr_lines":0,"stdout_first":"looking at (0.2, 0.4, -0.1); head {'head_pitch': 0.9883019891520989, 'head_roll': 0.0, 'head_yaw': 1.015663333146598, 'neck_pitch': 0.0}","stdout_lines":1,"step":"8","t":375.288,"wall":1788877359.3652532}
+{"file":"shots/s4-look.jpg","kind":"shot","label":"head turned ~60\u00b0 after duck look","lane":"viewer","size":[720,491],"step":"8","t":377.817,"wall":1788877361.8950236,"window":true}
+{"kind":"cmd-start","label":"microduck policy list --duck duck-a","lane":"cli","step":"8","t":377.856,"wall":1788877361.9337847}
+{"elapsed":0.117,"kind":"cmd-end","label":"microduck policy list --duck duck-a","lane":"cli","out":"steps/19-microduck-policy-list-duck-duck-a.out","rc":0,"stderr_lines":0,"stdout_first":"# policy list (robot.subscribe)","stdout_lines":14,"step":"8","t":377.973,"wall":1788877362.0508888}
+{"kind":"cmd-start","label":"microduck duck do roulade --apply","lane":"cli","step":"8","t":378.005,"wall":1788877362.082364}
+{"kind":"log","label":"2026-09-08T14:22:42.162978Z  WARN robotd: skill started skill=\"roulade\"","lane":"robotd","t":378.091,"wall":1788877362.169047}
+{"elapsed":0.134,"kind":"cmd-end","label":"microduck duck do roulade --apply","lane":"cli","out":"steps/20-microduck-duck-do-roulade-apply.out","rc":0,"stderr_lines":0,"stdout_first":"do roulade (roulade): accepted","stdout_lines":1,"step":"8","t":378.138,"wall":1788877362.216109}
+{"file":"shots/s5-roulade-a.jpg","kind":"shot","label":"roulade skill, 2 s in","lane":"viewer","size":[720,491],"step":"8","t":381.204,"wall":1788877365.2817643,"window":true}
+{"file":"shots/s6-roulade-b.jpg","kind":"shot","label":"roulade skill, 5 s in","lane":"viewer","size":[720,491],"step":"8","t":385.223,"wall":1788877369.3006628,"window":true}
+{"file":"shots/s7-after-roulade.jpg","kind":"shot","label":"after the roulade: re-homed, standing","lane":"viewer","size":[720,491],"step":"8","t":396.266,"wall":1788877380.3433611,"window":true}
+{"kind":"cmd-start","label":"microduck duck move --vx 0.15 --duration 3 --apply","lane":"cli","step":"8","t":396.291,"wall":1788877380.3690774}
+{"file":"shots/s8-move.jpg","kind":"shot","label":"during duck move (walk network selected; duck leans, no gait at this pin)","lane":"viewer","size":[720,491],"step":"8","t":398.79,"wall":1788877382.8672857,"window":true}
+{"elapsed":3.141,"kind":"cmd-end","label":"microduck duck move --vx 0.15 --duration 3 --apply","lane":"cli","out":"steps/21-microduck-duck-move-vx-0-15-duration-3-apply.out","rc":0,"stderr_lines":0,"stdout_first":"shot s8-move.png (1468, 1026) window=True","stdout_lines":2,"step":"8","t":399.432,"wall":1788877383.5097785}
+{"file":"shots/s9-after-move.jpg","kind":"shot","label":"after duck move stopped","lane":"viewer","size":[720,491],"step":"8","t":401.437,"wall":1788877385.5146139,"window":true}
+{"kind":"cmd-start","label":"microduck duck quack","lane":"cli","step":"8","t":401.463,"wall":1788877385.5409632}
+{"elapsed":0.119,"kind":"cmd-end","label":"microduck duck quack","lane":"cli","out":"steps/22-microduck-duck-quack.out","rc":0,"stderr_lines":0,"stdout_first":"quack: duck-a (tag chirp)","stdout_lines":1,"step":"8","t":401.582,"wall":1788877385.6599283}
+{"kind":"cmd-start","label":"microduck duck record --seconds 5 > senses.jsonl","lane":"cli","step":"8","t":401.614,"wall":1788877385.6912704}
+{"kind":"stderr","label":"[SENSE stage=record source=pad event=record-source-absent] dropped reason=record-source-absent: no link to padd (DUCK_PAD_SOCKET, /run/padd): pad.input is not recorded","lane":"engine","step":"8","t":401.69,"wall":1788877385.76806}
+{"kind":"stderr","label":"[SENSE stage=record source=tof event=record-source-absent] dropped reason=record-source-absent: no link to tofd (<state>/<duck>-tof.sock): tof.stream is not recorded","lane":"engine","step":"8","t":401.691,"wall":1788877385.7682788}
+{"kind":"stderr","label":"recorded 174 records over 5.00s to - (health=10, hello=1, remote=5, state=158)","lane":"cli","step":"8","t":406.715,"wall":1788877390.7931345}
+{"elapsed":5.113,"kind":"cmd-end","label":"microduck duck record --seconds 5 > senses.jsonl","lane":"cli","out":"steps/23-microduck-duck-record-seconds-5-senses-jsonl.out","rc":0,"stderr_lines":3,"stdout_first":"","stdout_lines":0,"step":"8","t":406.726,"wall":1788877390.8039422}
+{"kind":"cmd-start","label":"microduck rules check --rules ./my-rules.toml --duck duck-a","lane":"cli","step":"9","t":429.017,"wall":1788877413.094883}
+{"elapsed":0.134,"kind":"cmd-end","label":"microduck rules check --rules ./my-rules.toml --duck duck-a","lane":"cli","out":"steps/24-microduck-rules-check-rules-my-rules-toml-duck-duck-a.out","rc":0,"stderr_lines":0,"stdout_first":"# rules check","stdout_lines":8,"step":"9","t":429.152,"wall":1788877413.2292612}
+{"kind":"cmd-start","label":"microduck rules engine run --duck duck-a --rules ./my-rules.toml --apply --max-ticks 300 --json","lane":"engine","step":"9","t":429.184,"wall":1788877413.2614982}
+{"kind":"stderr","label":"[SENSE stage=liveness source=~/.cache/duck-sim/state.json event=no-heartbeat] dropped reason=no-heartbeat: FileNotFoundError: [Errno 2] No such file or directory: '~/.cache/duck-sim/state.json'","lane":"engine","step":"9","t":429.253,"wall":1788877413.3309264}
+{"kind":"stderr","label":"[SENSE stage=start source=~/.cache/duck-sim/duck-a.sock event=connect] opening the robot control socket","lane":"engine","step":"9","t":429.253,"wall":1788877413.3310597}
+{"kind":"stderr","label":"[SENSE stage=start source=~/.cache/duck-sim/duck-a.sock event=hello] daemon api_version=16","lane":"engine","step":"9","t":429.254,"wall":1788877413.3315046}
+{"kind":"stderr","label":"[SENSE stage=start source=~/.cache/duck-sim/duck-a.sock event=health] healthy","lane":"engine","step":"9","t":429.254,"wall":1788877413.3319004}
+{"kind":"stderr","label":"[SENSE stage=start source=~/.cache/duck-sim/duck-a.sock event=init] robot.init","lane":"engine","step":"9","t":429.254,"wall":1788877413.331989}
+{"kind":"stderr","label":"[SENSE stage=start source=~/.cache/duck-sim/duck-a.sock event=enable] enabled \u2014 driving","lane":"engine","step":"9","t":429.254,"wall":1788877413.3320842}
+{"kind":"log","label":"2026-09-08T14:23:33.341837Z  WARN robotd: robot.init: re-homing from the current pose HOME_RAMP=2s","lane":"robotd","t":429.266,"wall":1788877413.3433619}
+{"kind":"stderr","label":"[SENSE stage=start source=~/.cache/duck-sim/duck-a.sock event=armed] 4 rule(s) loaded, idle registered","lane":"engine","step":"9","t":429.275,"wall":1788877413.3522887}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=fired] look -> look-1","lane":"engine","step":"9","t":429.285,"wall":1788877413.362355}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.020s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.305,"wall":1788877413.3827178}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.040s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.325,"wall":1788877413.40266}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.060s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.345,"wall":1788877413.4225557}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.080s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.365,"wall":1788877413.442537}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.100s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.385,"wall":1788877413.4625611}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.120s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.405,"wall":1788877413.4828706}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.140s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.425,"wall":1788877413.502854}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.160s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.445,"wall":1788877413.5226486}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.180s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.465,"wall":1788877413.5425606}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.200s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.485,"wall":1788877413.5625694}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.220s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.505,"wall":1788877413.5826316}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.240s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.525,"wall":1788877413.6027977}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.260s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.545,"wall":1788877413.6225698}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.280s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.565,"wall":1788877413.6425319}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.300s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.585,"wall":1788877413.663064}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.320s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.605,"wall":1788877413.682795}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.340s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.625,"wall":1788877413.7029192}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.360s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.645,"wall":1788877413.7226436}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.380s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.665,"wall":1788877413.742886}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.400s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.685,"wall":1788877413.7626343}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.420s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.705,"wall":1788877413.7828155}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.440s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.725,"wall":1788877413.802643}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.460s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.745,"wall":1788877413.8225622}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.480s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.765,"wall":1788877413.8427513}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.500s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.785,"wall":1788877413.862999}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.520s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.805,"wall":1788877413.8824353}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.540s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.825,"wall":1788877413.9027054}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.560s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.845,"wall":1788877413.9225318}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.580s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.865,"wall":1788877413.9425719}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.600s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.885,"wall":1788877413.9624157}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.620s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.905,"wall":1788877413.9826884}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.640s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.925,"wall":1788877414.0027707}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.660s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.945,"wall":1788877414.0227084}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.680s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":429.965,"wall":1788877414.0426798}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":429.985,"wall":1788877414.0625792}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":429.985,"wall":1788877414.062738}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":429.985,"wall":1788877414.0627592}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":429.985,"wall":1788877414.0627754}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":429.985,"wall":1788877414.0627906}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":429.985,"wall":1788877414.0628066}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.005,"wall":1788877414.082546}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.005,"wall":1788877414.0826826}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.005,"wall":1788877414.0827036}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.005,"wall":1788877414.0827205}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.005,"wall":1788877414.082737}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.005,"wall":1788877414.0827522}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.025,"wall":1788877414.1026652}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.025,"wall":1788877414.102819}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.025,"wall":1788877414.1028411}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.025,"wall":1788877414.1028593}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.025,"wall":1788877414.102876}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.025,"wall":1788877414.1028924}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.045,"wall":1788877414.122559}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.045,"wall":1788877414.1226947}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.045,"wall":1788877414.1227157}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.045,"wall":1788877414.1227326}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.045,"wall":1788877414.122749}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.045,"wall":1788877414.122772}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.065,"wall":1788877414.1425946}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.065,"wall":1788877414.1427495}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.065,"wall":1788877414.1427813}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.065,"wall":1788877414.1427982}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.065,"wall":1788877414.1428132}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.065,"wall":1788877414.1428285}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.085,"wall":1788877414.1625404}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.085,"wall":1788877414.1626766}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.085,"wall":1788877414.1626978}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.085,"wall":1788877414.162715}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.085,"wall":1788877414.162731}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.085,"wall":1788877414.162747}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.105,"wall":1788877414.1824868}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.105,"wall":1788877414.1826434}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.105,"wall":1788877414.1826656}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.105,"wall":1788877414.1826823}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.105,"wall":1788877414.1826987}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.105,"wall":1788877414.182715}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.125,"wall":1788877414.2028854}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.125,"wall":1788877414.2030246}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.125,"wall":1788877414.2030454}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.125,"wall":1788877414.203062}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.125,"wall":1788877414.203078}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.125,"wall":1788877414.2030938}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.145,"wall":1788877414.2224658}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.145,"wall":1788877414.2226117}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.145,"wall":1788877414.2226355}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.145,"wall":1788877414.2226837}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.145,"wall":1788877414.2226992}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.145,"wall":1788877414.2227147}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.165,"wall":1788877414.2425368}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.165,"wall":1788877414.2426744}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.165,"wall":1788877414.2426963}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.165,"wall":1788877414.2427135}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.165,"wall":1788877414.2427292}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.165,"wall":1788877414.2427454}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.185,"wall":1788877414.262544}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.185,"wall":1788877414.2626925}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.185,"wall":1788877414.2627134}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.185,"wall":1788877414.2627301}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.185,"wall":1788877414.262746}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.185,"wall":1788877414.262762}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.205,"wall":1788877414.2825453}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.205,"wall":1788877414.282681}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.205,"wall":1788877414.2827032}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.205,"wall":1788877414.2827215}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.205,"wall":1788877414.2827377}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.205,"wall":1788877414.2827537}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.225,"wall":1788877414.3027754}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.225,"wall":1788877414.3029246}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.225,"wall":1788877414.302946}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.225,"wall":1788877414.302963}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.225,"wall":1788877414.3029933}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.225,"wall":1788877414.303009}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.245,"wall":1788877414.3225684}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.245,"wall":1788877414.322704}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.245,"wall":1788877414.3227348}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.245,"wall":1788877414.3227527}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.245,"wall":1788877414.322769}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.245,"wall":1788877414.3227847}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.265,"wall":1788877414.3425572}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.265,"wall":1788877414.342708}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.265,"wall":1788877414.3427303}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.265,"wall":1788877414.3427472}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.265,"wall":1788877414.3427634}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.265,"wall":1788877414.3427794}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.285,"wall":1788877414.3625174}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.285,"wall":1788877414.362648}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.285,"wall":1788877414.3626688}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.285,"wall":1788877414.3626857}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.285,"wall":1788877414.3627017}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.285,"wall":1788877414.3627172}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.305,"wall":1788877414.3826602}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.305,"wall":1788877414.3828073}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.305,"wall":1788877414.3828278}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.305,"wall":1788877414.3828447}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.305,"wall":1788877414.382861}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.305,"wall":1788877414.3828886}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.325,"wall":1788877414.4027576}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.325,"wall":1788877414.4029813}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.325,"wall":1788877414.4030027}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.325,"wall":1788877414.4030201}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.325,"wall":1788877414.4030364}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.325,"wall":1788877414.4030528}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.345,"wall":1788877414.4225907}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.345,"wall":1788877414.4227366}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.345,"wall":1788877414.4227576}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.345,"wall":1788877414.422775}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.345,"wall":1788877414.4227912}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.345,"wall":1788877414.422807}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.365,"wall":1788877414.4431283}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.366,"wall":1788877414.4432895}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.366,"wall":1788877414.4433117}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.366,"wall":1788877414.443341}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.366,"wall":1788877414.4433572}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.366,"wall":1788877414.4433727}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.385,"wall":1788877414.4625702}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.385,"wall":1788877414.4627168}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.385,"wall":1788877414.4627373}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.385,"wall":1788877414.462755}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.385,"wall":1788877414.4627705}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.385,"wall":1788877414.462791}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.405,"wall":1788877414.4825413}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.405,"wall":1788877414.4826713}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.405,"wall":1788877414.4826934}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.405,"wall":1788877414.4827104}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.405,"wall":1788877414.4827268}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.405,"wall":1788877414.4827433}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.425,"wall":1788877414.5028021}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.425,"wall":1788877414.5030398}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.425,"wall":1788877414.503061}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.425,"wall":1788877414.503079}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.425,"wall":1788877414.5030954}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.425,"wall":1788877414.5031111}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.445,"wall":1788877414.5226436}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.445,"wall":1788877414.522783}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.445,"wall":1788877414.5228045}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.445,"wall":1788877414.5228217}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.445,"wall":1788877414.522838}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.445,"wall":1788877414.5228536}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.465,"wall":1788877414.542645}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.465,"wall":1788877414.5427947}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.465,"wall":1788877414.5428154}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.465,"wall":1788877414.5428321}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.465,"wall":1788877414.5428486}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.465,"wall":1788877414.5428643}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.485,"wall":1788877414.5627055}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.485,"wall":1788877414.5628517}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.485,"wall":1788877414.5628812}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.485,"wall":1788877414.5628984}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.485,"wall":1788877414.5629146}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.485,"wall":1788877414.5629303}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.505,"wall":1788877414.5826523}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.505,"wall":1788877414.5828075}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.505,"wall":1788877414.5828288}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.505,"wall":1788877414.582846}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.505,"wall":1788877414.5828621}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.505,"wall":1788877414.5828779}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.525,"wall":1788877414.6026266}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.525,"wall":1788877414.6028643}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.525,"wall":1788877414.6028862}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.525,"wall":1788877414.6029034}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.525,"wall":1788877414.602919}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.525,"wall":1788877414.6029353}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.545,"wall":1788877414.6226563}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.545,"wall":1788877414.6227992}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.545,"wall":1788877414.6228201}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.545,"wall":1788877414.6228373}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.545,"wall":1788877414.6228535}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.545,"wall":1788877414.6228693}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.565,"wall":1788877414.642658}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.565,"wall":1788877414.6428123}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.565,"wall":1788877414.642835}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.565,"wall":1788877414.642852}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.565,"wall":1788877414.642868}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.565,"wall":1788877414.6428843}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.585,"wall":1788877414.6629672}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.585,"wall":1788877414.663113}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.585,"wall":1788877414.663134}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.585,"wall":1788877414.663151}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.586,"wall":1788877414.6631672}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.586,"wall":1788877414.6631827}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.605,"wall":1788877414.6828249}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.605,"wall":1788877414.68296}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.605,"wall":1788877414.6829896}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.605,"wall":1788877414.6830075}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.605,"wall":1788877414.683024}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.605,"wall":1788877414.68304}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.625,"wall":1788877414.7027323}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.625,"wall":1788877414.7029727}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.625,"wall":1788877414.7029934}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.625,"wall":1788877414.7030115}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.625,"wall":1788877414.7030275}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.625,"wall":1788877414.7030432}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.645,"wall":1788877414.7226465}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.645,"wall":1788877414.7227843}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.645,"wall":1788877414.7228184}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.645,"wall":1788877414.7228346}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.645,"wall":1788877414.7228503}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.645,"wall":1788877414.7228653}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.665,"wall":1788877414.7428122}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.665,"wall":1788877414.7429497}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.665,"wall":1788877414.7429705}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.665,"wall":1788877414.7429867}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.665,"wall":1788877414.7430024}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.665,"wall":1788877414.7430177}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.685,"wall":1788877414.763094}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.686,"wall":1788877414.7633615}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.686,"wall":1788877414.763387}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.686,"wall":1788877414.7634063}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.686,"wall":1788877414.7634249}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.686,"wall":1788877414.7634423}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.705,"wall":1788877414.782676}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.705,"wall":1788877414.7828188}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.705,"wall":1788877414.7828398}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.705,"wall":1788877414.7828567}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.705,"wall":1788877414.782873}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.705,"wall":1788877414.7828887}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.725,"wall":1788877414.8026767}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.725,"wall":1788877414.802885}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.725,"wall":1788877414.8029072}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.725,"wall":1788877414.8029609}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.725,"wall":1788877414.802988}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.725,"wall":1788877414.8030133}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.745,"wall":1788877414.8225496}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.745,"wall":1788877414.8226933}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.745,"wall":1788877414.8227158}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.745,"wall":1788877414.8227339}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.745,"wall":1788877414.8227515}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.745,"wall":1788877414.8227687}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.765,"wall":1788877414.8426445}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.765,"wall":1788877414.8427758}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.765,"wall":1788877414.8427978}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.765,"wall":1788877414.8428168}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.765,"wall":1788877414.8428345}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.765,"wall":1788877414.8428516}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.785,"wall":1788877414.862648}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.785,"wall":1788877414.8627787}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.785,"wall":1788877414.862801}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.785,"wall":1788877414.8628197}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.785,"wall":1788877414.862837}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.785,"wall":1788877414.8628545}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.805,"wall":1788877414.8824675}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.805,"wall":1788877414.8825936}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.805,"wall":1788877414.8826156}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.805,"wall":1788877414.8826337}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.805,"wall":1788877414.882661}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.805,"wall":1788877414.8826761}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.825,"wall":1788877414.9027886}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.825,"wall":1788877414.9030344}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.825,"wall":1788877414.9030561}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.825,"wall":1788877414.903074}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.825,"wall":1788877414.9030902}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.825,"wall":1788877414.903106}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.845,"wall":1788877414.9225526}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.845,"wall":1788877414.922687}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.845,"wall":1788877414.9227085}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.845,"wall":1788877414.9227257}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.845,"wall":1788877414.9227505}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.845,"wall":1788877414.9227667}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.865,"wall":1788877414.9426498}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.865,"wall":1788877414.942791}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.865,"wall":1788877414.9428127}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.865,"wall":1788877414.9428298}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.865,"wall":1788877414.9428463}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.865,"wall":1788877414.9428618}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.885,"wall":1788877414.962648}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.885,"wall":1788877414.9627779}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.885,"wall":1788877414.9627988}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.885,"wall":1788877414.9628158}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.885,"wall":1788877414.9628315}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.885,"wall":1788877414.962859}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.905,"wall":1788877414.9827178}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.905,"wall":1788877414.9828596}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.905,"wall":1788877414.9828804}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.905,"wall":1788877414.9828975}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.905,"wall":1788877414.982913}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.905,"wall":1788877414.9829288}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.925,"wall":1788877415.0026183}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.925,"wall":1788877415.002764}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.925,"wall":1788877415.0027914}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.925,"wall":1788877415.0028093}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.925,"wall":1788877415.0028257}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.925,"wall":1788877415.0028412}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.945,"wall":1788877415.0225582}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.945,"wall":1788877415.0227106}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.945,"wall":1788877415.0227313}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.945,"wall":1788877415.0227478}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.945,"wall":1788877415.022763}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.945,"wall":1788877415.0227783}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.965,"wall":1788877415.0426323}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.965,"wall":1788877415.0427644}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.965,"wall":1788877415.042786}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.965,"wall":1788877415.0428126}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.965,"wall":1788877415.0428286}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.965,"wall":1788877415.0428438}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":430.985,"wall":1788877415.0626435}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":430.985,"wall":1788877415.0627968}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":430.985,"wall":1788877415.062818}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":430.985,"wall":1788877415.0628352}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":430.985,"wall":1788877415.0628514}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":430.985,"wall":1788877415.0628674}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.005,"wall":1788877415.0828686}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.005,"wall":1788877415.083005}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.005,"wall":1788877415.0830255}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.005,"wall":1788877415.0830426}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.005,"wall":1788877415.0830584}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.005,"wall":1788877415.0830743}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.025,"wall":1788877415.102929}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.026,"wall":1788877415.1031852}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.026,"wall":1788877415.1032066}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.026,"wall":1788877415.103224}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.026,"wall":1788877415.1032512}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.026,"wall":1788877415.1032708}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.045,"wall":1788877415.1225643}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.045,"wall":1788877415.1227133}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.045,"wall":1788877415.1227343}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.045,"wall":1788877415.1227512}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.045,"wall":1788877415.1227674}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.045,"wall":1788877415.122783}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.065,"wall":1788877415.1426709}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.065,"wall":1788877415.1428354}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.065,"wall":1788877415.1428573}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.065,"wall":1788877415.142874}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.065,"wall":1788877415.14289}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.065,"wall":1788877415.1429062}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.085,"wall":1788877415.162706}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.085,"wall":1788877415.1628423}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.085,"wall":1788877415.1628633}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.085,"wall":1788877415.1628904}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.085,"wall":1788877415.1629066}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.085,"wall":1788877415.1629224}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.105,"wall":1788877415.182556}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.105,"wall":1788877415.1826832}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.105,"wall":1788877415.1827052}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.105,"wall":1788877415.182722}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.105,"wall":1788877415.1827378}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.105,"wall":1788877415.1827543}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.125,"wall":1788877415.2027676}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.125,"wall":1788877415.2030275}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.125,"wall":1788877415.2030487}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.125,"wall":1788877415.2030656}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.125,"wall":1788877415.2030814}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.125,"wall":1788877415.203097}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.145,"wall":1788877415.22281}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.145,"wall":1788877415.2229726}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.145,"wall":1788877415.2230108}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.145,"wall":1788877415.2230277}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.145,"wall":1788877415.223044}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.145,"wall":1788877415.22306}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.165,"wall":1788877415.2426379}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.165,"wall":1788877415.242773}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.165,"wall":1788877415.2427995}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.165,"wall":1788877415.2428167}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.165,"wall":1788877415.2428334}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.165,"wall":1788877415.242858}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.185,"wall":1788877415.262629}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.185,"wall":1788877415.2627733}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.185,"wall":1788877415.2627938}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.185,"wall":1788877415.2628105}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.185,"wall":1788877415.262826}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.185,"wall":1788877415.2628415}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.205,"wall":1788877415.282649}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.205,"wall":1788877415.282787}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.205,"wall":1788877415.2828088}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.205,"wall":1788877415.2828257}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.205,"wall":1788877415.2828524}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.205,"wall":1788877415.2828684}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.225,"wall":1788877415.302866}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.225,"wall":1788877415.3031058}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.225,"wall":1788877415.3031282}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.226,"wall":1788877415.3031616}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.226,"wall":1788877415.3031778}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.226,"wall":1788877415.3031943}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.245,"wall":1788877415.3226547}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.245,"wall":1788877415.322797}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.245,"wall":1788877415.3228183}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.245,"wall":1788877415.322835}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.245,"wall":1788877415.3228512}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.245,"wall":1788877415.322867}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.265,"wall":1788877415.3424797}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.265,"wall":1788877415.3426266}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.265,"wall":1788877415.3426502}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.265,"wall":1788877415.3426673}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.265,"wall":1788877415.3426836}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.265,"wall":1788877415.3426995}
+{"kind":"log","label":"2026-09-08T14:23:35.341864Z  WARN robotd: at the home pose; the policy has the robot","lane":"robotd","t":431.276,"wall":1788877415.353304}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.285,"wall":1788877415.3626127}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.285,"wall":1788877415.3627384}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.285,"wall":1788877415.3627589}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.285,"wall":1788877415.3627763}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.285,"wall":1788877415.3627925}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.285,"wall":1788877415.3628078}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.305,"wall":1788877415.3826587}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.305,"wall":1788877415.3827994}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.305,"wall":1788877415.3828337}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.305,"wall":1788877415.38285}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.305,"wall":1788877415.3828657}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.305,"wall":1788877415.3828807}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.325,"wall":1788877415.4025993}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.325,"wall":1788877415.4028199}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.325,"wall":1788877415.402843}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.325,"wall":1788877415.4028618}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.325,"wall":1788877415.4028788}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.325,"wall":1788877415.4029164}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.345,"wall":1788877415.4226174}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.345,"wall":1788877415.4227588}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.345,"wall":1788877415.422779}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.345,"wall":1788877415.422796}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.345,"wall":1788877415.4228117}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.345,"wall":1788877415.4228268}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.365,"wall":1788877415.4426312}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.365,"wall":1788877415.44277}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.365,"wall":1788877415.4427915}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.365,"wall":1788877415.4428086}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.365,"wall":1788877415.442825}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.365,"wall":1788877415.442841}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.385,"wall":1788877415.4626126}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.385,"wall":1788877415.4627554}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.385,"wall":1788877415.462776}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.385,"wall":1788877415.46282}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.385,"wall":1788877415.4628367}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.385,"wall":1788877415.4628527}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.405,"wall":1788877415.482602}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.405,"wall":1788877415.4827344}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.405,"wall":1788877415.4827554}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.405,"wall":1788877415.4827726}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.405,"wall":1788877415.4827883}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.405,"wall":1788877415.4828045}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.425,"wall":1788877415.5028536}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.425,"wall":1788877415.5030677}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.425,"wall":1788877415.5030944}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.425,"wall":1788877415.5031154}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.425,"wall":1788877415.5031347}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.426,"wall":1788877415.5031545}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.445,"wall":1788877415.522554}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.445,"wall":1788877415.522697}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.445,"wall":1788877415.522718}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.445,"wall":1788877415.5227349}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.445,"wall":1788877415.522762}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.445,"wall":1788877415.5227783}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.465,"wall":1788877415.5425377}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.465,"wall":1788877415.5426853}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.465,"wall":1788877415.542706}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.465,"wall":1788877415.5427232}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.465,"wall":1788877415.5427523}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.465,"wall":1788877415.542767}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.485,"wall":1788877415.5626054}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.485,"wall":1788877415.5627408}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.485,"wall":1788877415.5627623}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.485,"wall":1788877415.562779}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.485,"wall":1788877415.5627947}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.485,"wall":1788877415.562811}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.505,"wall":1788877415.5826375}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.505,"wall":1788877415.5827851}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.505,"wall":1788877415.5828066}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.505,"wall":1788877415.5828238}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.505,"wall":1788877415.5828412}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.505,"wall":1788877415.5828567}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.525,"wall":1788877415.602932}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.525,"wall":1788877415.603131}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.525,"wall":1788877415.603152}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.526,"wall":1788877415.603169}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.526,"wall":1788877415.6031864}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.526,"wall":1788877415.603204}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.545,"wall":1788877415.6227164}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.545,"wall":1788877415.622856}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.545,"wall":1788877415.6228766}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.545,"wall":1788877415.6228936}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.545,"wall":1788877415.6229088}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.545,"wall":1788877415.6229374}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.565,"wall":1788877415.64267}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.565,"wall":1788877415.642819}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.565,"wall":1788877415.642841}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.565,"wall":1788877415.6428578}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.565,"wall":1788877415.6428864}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.565,"wall":1788877415.6429026}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.585,"wall":1788877415.662651}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.585,"wall":1788877415.6628006}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.585,"wall":1788877415.6628213}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.585,"wall":1788877415.6628385}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.585,"wall":1788877415.6628547}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.585,"wall":1788877415.6628702}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.605,"wall":1788877415.682931}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.605,"wall":1788877415.6830826}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.605,"wall":1788877415.6831036}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.605,"wall":1788877415.6831205}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.605,"wall":1788877415.6831365}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.605,"wall":1788877415.6831522}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.625,"wall":1788877415.702927}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.625,"wall":1788877415.7031531}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.626,"wall":1788877415.7031777}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.626,"wall":1788877415.7031991}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.626,"wall":1788877415.7032185}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.626,"wall":1788877415.7032454}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.645,"wall":1788877415.7225401}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.645,"wall":1788877415.7226872}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.645,"wall":1788877415.7227085}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.645,"wall":1788877415.7227254}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.645,"wall":1788877415.7227423}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.645,"wall":1788877415.7227583}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.665,"wall":1788877415.7426288}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.665,"wall":1788877415.742771}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.665,"wall":1788877415.742792}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.665,"wall":1788877415.742809}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.665,"wall":1788877415.742825}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.665,"wall":1788877415.7428408}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.685,"wall":1788877415.762539}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.685,"wall":1788877415.762678}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.685,"wall":1788877415.7626998}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.685,"wall":1788877415.7627168}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.685,"wall":1788877415.7627327}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.685,"wall":1788877415.7627604}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.705,"wall":1788877415.7825134}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.705,"wall":1788877415.7826443}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.705,"wall":1788877415.782665}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.705,"wall":1788877415.7826812}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.705,"wall":1788877415.7826977}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.705,"wall":1788877415.7827134}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.725,"wall":1788877415.8028255}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.725,"wall":1788877415.8030355}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.725,"wall":1788877415.803057}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.725,"wall":1788877415.8030736}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.725,"wall":1788877415.8030894}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.725,"wall":1788877415.8031054}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.745,"wall":1788877415.8225734}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.745,"wall":1788877415.822703}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.745,"wall":1788877415.8227239}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.745,"wall":1788877415.8227403}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.745,"wall":1788877415.8227556}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.745,"wall":1788877415.8227713}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] do","lane":"engine","step":"9","t":431.765,"wall":1788877415.8425653}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] idle","lane":"engine","step":"9","t":431.765,"wall":1788877415.8427072}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] look","lane":"engine","step":"9","t":431.765,"wall":1788877415.8427284}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] mode","lane":"engine","step":"9","t":431.765,"wall":1788877415.842745}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] move","lane":"engine","step":"9","t":431.765,"wall":1788877415.8427615}
+{"kind":"stderr","label":"[SENSE stage=rule source=fallen-inhibit event=inhibits] sound","lane":"engine","step":"9","t":431.765,"wall":1788877415.8427773}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.500s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.785,"wall":1788877415.8625307}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.520s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.805,"wall":1788877415.8825328}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.540s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.825,"wall":1788877415.9028208}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.560s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.845,"wall":1788877415.9225564}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.580s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.865,"wall":1788877415.942478}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.600s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.885,"wall":1788877415.9624298}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.620s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.905,"wall":1788877415.9825513}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.640s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.925,"wall":1788877416.002808}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.660s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.945,"wall":1788877416.02254}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.680s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.965,"wall":1788877416.0425186}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.700s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":431.985,"wall":1788877416.0626268}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.720s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.005,"wall":1788877416.082648}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.740s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.025,"wall":1788877416.1028912}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.760s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.045,"wall":1788877416.122551}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.780s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.065,"wall":1788877416.142641}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.800s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.085,"wall":1788877416.1626225}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.820s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.105,"wall":1788877416.1825457}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.840s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.125,"wall":1788877416.202696}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.860s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.145,"wall":1788877416.2227137}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.880s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.165,"wall":1788877416.2426488}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.900s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.185,"wall":1788877416.2627923}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.920s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.205,"wall":1788877416.2826045}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.940s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.225,"wall":1788877416.3027844}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.960s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.245,"wall":1788877416.3226056}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 2.980s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.265,"wall":1788877416.3426375}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.000s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.285,"wall":1788877416.3626604}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.020s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.305,"wall":1788877416.3824992}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.040s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.325,"wall":1788877416.4024444}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.060s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.345,"wall":1788877416.4222946}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.080s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.365,"wall":1788877416.4425979}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.100s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.385,"wall":1788877416.4625905}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.120s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.405,"wall":1788877416.4826698}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.140s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.425,"wall":1788877416.5028143}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.160s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.445,"wall":1788877416.5224671}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.180s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.465,"wall":1788877416.542536}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.200s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.485,"wall":1788877416.5625262}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.220s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.505,"wall":1788877416.5825074}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.240s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.525,"wall":1788877416.6026688}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.260s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.545,"wall":1788877416.6225302}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.280s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.565,"wall":1788877416.6425693}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.300s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.585,"wall":1788877416.662533}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.320s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.605,"wall":1788877416.6824975}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.340s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.625,"wall":1788877416.7028203}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.360s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.645,"wall":1788877416.7225254}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.380s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.665,"wall":1788877416.7425456}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.400s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.685,"wall":1788877416.7625113}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.420s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.705,"wall":1788877416.782529}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.440s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.725,"wall":1788877416.8027737}
+{"file":"shots/s10-engine.jpg","kind":"shot","label":"engine live: rule verify-look fired, head at (0.5, 0, 0.1)","lane":"viewer","size":[720,491],"step":"9","t":432.73,"wall":1788877416.8080785,"window":true}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.460s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.745,"wall":1788877416.8225822}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.480s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.765,"wall":1788877416.842725}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.500s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.785,"wall":1788877416.8626277}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.520s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.805,"wall":1788877416.8824773}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.540s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.825,"wall":1788877416.9027357}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.560s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.845,"wall":1788877416.9225523}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.580s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.865,"wall":1788877416.9426198}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.600s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.885,"wall":1788877416.9626982}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.620s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.905,"wall":1788877416.9825108}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.640s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.925,"wall":1788877417.0025692}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.660s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.945,"wall":1788877417.022568}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.680s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.965,"wall":1788877417.0425508}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.700s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":432.985,"wall":1788877417.0625331}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.720s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.005,"wall":1788877417.082647}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.740s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.025,"wall":1788877417.102823}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.760s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.045,"wall":1788877417.1225548}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.780s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.065,"wall":1788877417.142552}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.800s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.085,"wall":1788877417.1624987}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.820s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.105,"wall":1788877417.182409}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.840s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.125,"wall":1788877417.2026632}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.860s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.145,"wall":1788877417.2225423}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.880s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.165,"wall":1788877417.2426085}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.900s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.185,"wall":1788877417.2625508}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.920s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.205,"wall":1788877417.2827353}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.940s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.225,"wall":1788877417.3026867}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.960s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.245,"wall":1788877417.3226187}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 3.980s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.265,"wall":1788877417.3425465}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.000s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.285,"wall":1788877417.3625546}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.020s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.305,"wall":1788877417.3825123}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.040s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.325,"wall":1788877417.4026785}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.060s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.345,"wall":1788877417.4225357}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.080s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.365,"wall":1788877417.4425104}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.100s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.385,"wall":1788877417.4626255}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.120s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.405,"wall":1788877417.482749}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.140s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.425,"wall":1788877417.502693}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.160s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.445,"wall":1788877417.5225277}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.180s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.465,"wall":1788877417.5425482}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.200s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.485,"wall":1788877417.5625398}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.220s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.505,"wall":1788877417.5831537}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.240s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.525,"wall":1788877417.6027093}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.260s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.545,"wall":1788877417.6225214}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.280s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.565,"wall":1788877417.6426015}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.300s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.585,"wall":1788877417.662627}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.320s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.605,"wall":1788877417.682612}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.340s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.625,"wall":1788877417.7026281}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.360s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.645,"wall":1788877417.722443}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.380s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.665,"wall":1788877417.742516}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.400s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.685,"wall":1788877417.762711}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.420s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.705,"wall":1788877417.7825263}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.440s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.725,"wall":1788877417.8027463}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.460s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.745,"wall":1788877417.822382}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.480s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.765,"wall":1788877417.8425975}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.500s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.785,"wall":1788877417.8625393}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.520s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.805,"wall":1788877417.8824258}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.540s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.825,"wall":1788877417.9027085}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.560s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.845,"wall":1788877417.9225218}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.580s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.865,"wall":1788877417.9424908}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.601s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.885,"wall":1788877417.9629793}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.620s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.905,"wall":1788877417.9826016}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.640s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.925,"wall":1788877418.0027122}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.660s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.945,"wall":1788877418.0225487}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.680s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.965,"wall":1788877418.0424242}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.700s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":433.985,"wall":1788877418.0626152}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.720s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.005,"wall":1788877418.0825574}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.740s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.025,"wall":1788877418.1028636}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.760s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.045,"wall":1788877418.122545}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.780s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.065,"wall":1788877418.1425488}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.800s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.085,"wall":1788877418.1625326}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.820s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.105,"wall":1788877418.1825306}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.840s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.125,"wall":1788877418.202762}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.860s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.145,"wall":1788877418.2224603}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.880s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.165,"wall":1788877418.2425234}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.900s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.185,"wall":1788877418.2625604}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.920s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.205,"wall":1788877418.2825234}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.940s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.225,"wall":1788877418.3027892}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.960s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.245,"wall":1788877418.3225825}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 4.980s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.265,"wall":1788877418.3424737}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=fired] look -> look-2","lane":"engine","step":"9","t":434.285,"wall":1788877418.362594}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.020s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.305,"wall":1788877418.382563}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.040s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.325,"wall":1788877418.4026644}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.060s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.345,"wall":1788877418.4225452}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.080s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.365,"wall":1788877418.4424648}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.100s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.385,"wall":1788877418.4626763}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.120s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.405,"wall":1788877418.4825444}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.140s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.425,"wall":1788877418.502767}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.160s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.445,"wall":1788877418.5225675}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.180s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.465,"wall":1788877418.5425658}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.200s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.485,"wall":1788877418.5625193}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.220s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.505,"wall":1788877418.5825148}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.240s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.525,"wall":1788877418.602748}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.260s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.545,"wall":1788877418.62259}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.280s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.565,"wall":1788877418.6424978}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.300s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.585,"wall":1788877418.6625316}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.320s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.605,"wall":1788877418.6825776}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.340s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.625,"wall":1788877418.7027552}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.360s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.645,"wall":1788877418.7225611}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.380s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.665,"wall":1788877418.742502}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.400s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.685,"wall":1788877418.7626288}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.420s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.705,"wall":1788877418.7826197}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.440s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.725,"wall":1788877418.8028908}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.460s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.745,"wall":1788877418.8225648}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.480s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.765,"wall":1788877418.8426228}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.500s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.785,"wall":1788877418.8626103}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.520s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.805,"wall":1788877418.8825786}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.540s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.825,"wall":1788877418.9029884}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.560s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.845,"wall":1788877418.9224994}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.580s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.865,"wall":1788877418.9425519}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.600s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.885,"wall":1788877418.9625237}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.620s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.905,"wall":1788877418.9827824}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.640s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.925,"wall":1788877419.0026078}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.660s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.945,"wall":1788877419.022468}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.680s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.965,"wall":1788877419.0424309}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.700s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":434.985,"wall":1788877419.062449}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.720s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.005,"wall":1788877419.082451}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.740s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.025,"wall":1788877419.1024492}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.760s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.045,"wall":1788877419.1226068}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.780s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.065,"wall":1788877419.142561}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.800s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.085,"wall":1788877419.1625216}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.820s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.105,"wall":1788877419.1827161}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.840s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.125,"wall":1788877419.2026494}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.860s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.145,"wall":1788877419.2225957}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.880s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.165,"wall":1788877419.242619}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.900s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.185,"wall":1788877419.2626028}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.920s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.205,"wall":1788877419.2828257}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.940s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.225,"wall":1788877419.302724}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.960s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.245,"wall":1788877419.3226712}
+{"kind":"stderr","label":"[SENSE stage=rule source=verify-look event=cooldown] dropped reason=cooldown: fired 0.980s ago, cooldown_s is 5.0","lane":"engine","step":"9","t":435.265,"wall":1788877419.3425376}
+{"elapsed":6.101,"kind":"cmd-end","label":"microduck rules engine run --duck duck-a --rules ./my-rules.toml --apply --max-ticks 300 --json","lane":"engine","out":"steps/25-microduck-rules-engine-run-duck-duck-a-rules-my-rules-toml-a.out","rc":0,"stderr_lines":757,"stdout_first":"shot s10-engine.png (1468, 1026) window=True","stdout_lines":2,"step":"9","t":435.285,"wall":1788877419.3629203}
+{"kind":"cmd-start","label":"microduck rules intent stop","lane":"cli","step":"9","t":435.304,"wall":1788877419.3820922}
+{"elapsed":0.065,"kind":"cmd-end","label":"microduck rules intent stop","lane":"cli","out":"steps/26-microduck-rules-intent-stop.out","rc":0,"stderr_lines":0,"stdout_first":"intent stop: admitted","stdout_lines":1,"step":"9","t":435.37,"wall":1788877419.4472601}
+{"kind":"cmd-start","label":"free -g","lane":"operator","step":"10","t":454.655,"wall":1788877438.7327173}
+{"elapsed":0.004,"kind":"cmd-end","label":"free -g","lane":"operator","out":"steps/27-free-g.out","rc":0,"stderr_lines":0,"stdout_first":"               total        used        free      shared  buff/cache   available","stdout_lines":3,"step":"10","t":454.659,"wall":1788877438.736393}
+{"kind":"cmd-start","label":"WANDB_MODE=offline microduck policy smoke Mjlab-Velocity-Flat-MicroDuck --json","lane":"train","step":"10","t":454.68,"wall":1788877438.7571642}
+{"kind":"stderr","label":"elapsed 0:18.55 maxrss 3206020 KB","lane":"train","step":"10","t":473.233,"wall":1788877457.3106592}
+{"elapsed":18.58,"kind":"cmd-end","label":"WANDB_MODE=offline microduck policy smoke Mjlab-Velocity-Flat-MicroDuck --json","lane":"train","out":"steps/28-WANDB-MODE-offline-microduck-policy-smoke-Mjlab-Velocity-Fla.out","rc":0,"stderr_lines":1,"stdout_first":"{\"argv\": [\"uv\", \"run\", \"train\", \"Mjlab-Velocity-Flat-MicroDuck\", \"--env.scene.num-envs\", \"64\", \"--agent.max_iterations\", \"5\"], \"cwd\": \"~/git/microduck_rl\", \"ok\": true, \"returncode\": 0, \"stdout\": \"[mdp] Patches 1-2 active: NaN-safe reward/advantage\\n[mdp] Patch 4 active: ONNX export filters","stdout_lines":1,"step":"10","t":473.26,"wall":1788877457.337516}
+{"file":"shots/s11-before-down.jpg","kind":"shot","label":"before env down: still standing","lane":"viewer","size":[720,491],"step":"11","t":474.378,"wall":1788877458.4560094,"window":true}
+{"kind":"cmd-start","label":"microduck env down","lane":"cli","step":"11","t":474.405,"wall":1788877458.4824934}
+{"kind":"log","label":"2026-09-08T14:24:18.581604Z  INFO robotd: shutting down","lane":"robotd","t":474.534,"wall":1788877458.6115024}
+{"kind":"log","label":"2026-09-08T14:24:18.582970Z  INFO robotd: control loop stopped","lane":"robotd","t":474.555,"wall":1788877458.6323285}
+{"kind":"log","label":"== duck 0: daemon disconnected","lane":"body","t":474.555,"wall":1788877458.6324608}
+{"elapsed":0.721,"kind":"cmd-end","label":"microduck env down","lane":"cli","out":"steps/29-microduck-env-down.out","rc":0,"stderr_lines":0,"stdout_first":"microduck-cli env down: state dir ~/.cache/duck-sim","stdout_lines":3,"step":"11","t":475.126,"wall":1788877459.2036319}
+{"kind":"cmd-start","label":"microduck env status","lane":"cli","step":"11","t":475.145,"wall":1788877459.222173}
+{"elapsed":0.061,"kind":"cmd-end","label":"microduck env status","lane":"cli","out":"steps/30-microduck-env-status.out","rc":0,"stderr_lines":0,"stdout_first":"microduck-cli env status: state dir ~/.cache/duck-sim","stdout_lines":1,"step":"11","t":475.206,"wall":1788877459.2832978}
+{"kind":"cmd-start","label":"pgrep -af 'robotd|body_server'","lane":"operator","step":"11","t":475.225,"wall":1788877459.3026767}
+{"elapsed":0.028,"kind":"cmd-end","label":"pgrep -af 'robotd|body_server'","lane":"operator","out":"steps/31-pgrep-af-robotd-body-server.out","rc":0,"stderr_lines":0,"stdout_first":"(nothing)","stdout_lines":1,"step":"11","t":475.253,"wall":1788877459.331138}
+{"kind":"stderr","label":"python3: can't open file '/tmp/claude-1000/-home-spark-git-microduck-cli/62bbbc56-026b-414b-99dc-ea9016c23a9b/scratchpad/docs/tools/check_tutorial.py': [Errno 2] No such file or directory","lane":"checks","step":"checks","t":502.559,"wall":1788877486.6368241}
+{"kind":"cmd-start","label":"uv run black --check microduck_cli tests docs/tools","lane":"checks","step":"gates","t":510.916,"wall":1788877494.9933798}
+{"kind":"stderr","label":"   Building microduck-cli @ file://~/git/microduck-cli","lane":"checks","step":"gates","t":510.936,"wall":1788877495.0133977}
+{"kind":"stderr","label":"      Built microduck-cli @ file://~/git/microduck-cli","lane":"checks","step":"gates","t":511.522,"wall":1788877495.6001303}
+{"kind":"stderr","label":"Uninstalled 1 package in 2ms","lane":"checks","step":"gates","t":511.528,"wall":1788877495.6051579}
+{"kind":"stderr","label":"Installed 1 package in 1ms","lane":"checks","step":"gates","t":511.529,"wall":1788877495.606221}
+{"kind":"stderr","label":"All done! \u2728 \ud83c\udf70 \u2728","lane":"checks","step":"gates","t":511.84,"wall":1788877495.917818}
+{"kind":"stderr","label":"99 files would be left unchanged.","lane":"checks","step":"gates","t":511.84,"wall":1788877495.918009}
+{"elapsed":0.951,"kind":"cmd-end","label":"uv run black --check microduck_cli tests docs/tools","lane":"checks","out":"steps/33-uv-run-black-check-microduck-cli-tests-docs-tools.out","rc":0,"stderr_lines":6,"stdout_first":"","stdout_lines":0,"step":"gates","t":511.867,"wall":1788877495.9443603}
+{"kind":"cmd-start","label":"uv run isort --check-only microduck_cli tests docs/tools","lane":"checks","step":"gates","t":511.886,"wall":1788877495.9637313}
+{"elapsed":0.143,"kind":"cmd-end","label":"uv run isort --check-only microduck_cli tests docs/tools","lane":"checks","out":"steps/34-uv-run-isort-check-only-microduck-cli-tests-docs-tools.out","rc":0,"stderr_lines":0,"stdout_first":"","stdout_lines":0,"step":"gates","t":512.03,"wall":1788877496.1071942}
+{"kind":"cmd-start","label":"uv run flake8 microduck_cli tests docs/tools","lane":"checks","step":"gates","t":512.064,"wall":1788877496.14158}
+{"elapsed":0.213,"kind":"cmd-end","label":"uv run flake8 microduck_cli tests docs/tools","lane":"checks","out":"steps/35-uv-run-flake8-microduck-cli-tests-docs-tools.out","rc":0,"stderr_lines":0,"stdout_first":"","stdout_lines":0,"step":"gates","t":512.277,"wall":1788877496.3550823}
+{"kind":"cmd-start","label":"uv run bandit -q -c pyproject.toml -r microduck_cli","lane":"checks","step":"gates","t":512.31,"wall":1788877496.387827}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: only is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.606,"wall":1788877496.6838899}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: used is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.606,"wall":1788877496.6840847}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: with is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.6841552}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: a is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.6842012}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.684256}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.684298}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.684334}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.684368}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: True is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.6844022}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.6844382}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.6844733}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.6845078}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: False is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.607,"wall":1788877496.6845417}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: only is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7036245}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: used is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.703736}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: with is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7037857}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7038271}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7038646}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7039003}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7039342}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: True is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.703968}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7040038}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7040374}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: from is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.70407}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: lane is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7041125}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: py is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.626,"wall":1788877496.7041485}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: builders is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.627,"wall":1788877496.7041833}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.627,"wall":1788877496.7042165}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.627,"wall":1788877496.704261}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: True is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.627,"wall":1788877496.7042959}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.731515}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7316384}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: only is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7316887}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7317364}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7317765}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: True is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.731812}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7318466}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7318807}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: built is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7319145}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: here is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.731949}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7319827}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7320158}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: True is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.654,"wall":1788877496.7320502}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: only is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.713,"wall":1788877496.7909184}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: used is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.713,"wall":1788877496.7910907}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: with is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.713,"wall":1788877496.7911432}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.791184}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.7912514}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.7912989}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.7913363}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: True is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.7913716}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.791408}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.791444}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: no is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.7914772}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.79151}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: no is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.791543}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: user is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.7915757}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: input is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.714,"wall":1788877496.7916093}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: only is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.727,"wall":1788877496.804759}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: used is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.727,"wall":1788877496.804905}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: with is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.727,"wall":1788877496.8049533}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.727,"wall":1788877496.8049922}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.727,"wall":1788877496.8050282}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.727,"wall":1788877496.805062}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.727,"wall":1788877496.8050957}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: True is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.727,"wall":1788877496.8051481}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.728,"wall":1788877496.8051865}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.728,"wall":1788877496.8052216}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: no is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.728,"wall":1788877496.8052714}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.728,"wall":1788877496.805317}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: no is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.728,"wall":1788877496.8053539}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: user is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.728,"wall":1788877496.8053885}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: input is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.728,"wall":1788877496.8054216}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.813489}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.8135858}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: only is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.813633}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: never is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.8136709}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.813707}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: True is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.8137422}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: fixed is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.813777}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: argv is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.8138108}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: shell is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.8138442}
+{"kind":"stderr","label":"[manager]\tWARNING\tTest in comment: False is not a test name or id, ignoring","lane":"checks","step":"gates","t":512.736,"wall":1788877496.8138776}
+{"elapsed":0.544,"kind":"cmd-end","label":"uv run bandit -q -c pyproject.toml -r microduck_cli","lane":"checks","out":"steps/36-uv-run-bandit-q-c-pyproject-toml-r-microduck-cli.out","rc":0,"stderr_lines":83,"stdout_first":"","stdout_lines":0,"step":"gates","t":512.854,"wall":1788877496.9318416}
+{"kind":"cmd-start","label":"uv run teken cli doctor . --strict","lane":"checks","step":"gates","t":512.886,"wall":1788877496.9637022}
+{"kind":"stderr","label":"healthy: 26/26 passed, 0 errors, 0 warnings","lane":"checks","step":"gates","t":514.944,"wall":1788877499.0213237}
+{"elapsed":2.068,"kind":"cmd-end","label":"uv run teken cli doctor . --strict","lane":"checks","out":"steps/37-uv-run-teken-cli-doctor-strict.out","rc":0,"stderr_lines":1,"stdout_first":"[structure]","stdout_lines":40,"step":"gates","t":514.954,"wall":1788877499.0319934}
+{"kind":"cmd-start","label":"markdownlint-cli2 **/*.md","lane":"checks","step":"gates","t":514.987,"wall":1788877499.0649872}
+{"elapsed":0.546,"kind":"cmd-end","label":"markdownlint-cli2 **/*.md","lane":"checks","out":"steps/38-markdownlint-cli2-md.out","rc":0,"stderr_lines":0,"stdout_first":"markdownlint-cli2 v0.21.0 (markdownlint v0.40.0)","stdout_lines":4,"step":"gates","t":515.533,"wall":1788877499.6108253}
+{"kind":"cmd-start","label":"uv run pytest -n auto --cov=microduck_cli --cov-report=term","lane":"checks","step":"gates","t":515.566,"wall":1788877499.6433623}
+{"elapsed":6.688,"kind":"cmd-end","label":"uv run pytest -n auto --cov=microduck_cli --cov-report=term","lane":"checks","out":"steps/39-uv-run-pytest-n-auto-cov-microduck-cli-cov-report-term.out","rc":0,"stderr_lines":0,"stdout_first":"bringing up nodes...","stdout_lines":82,"step":"gates","t":522.254,"wall":1788877506.3313367}
+{"kind":"cmd-start","label":"npm run build (jetson-ai-lab fork, branch docs/microduck-on-jetson)","lane":"checks","step":"site","t":524.227,"wall":1788877508.3049467}
+{"elapsed":6.632,"kind":"cmd-end","label":"npm run build (jetson-ai-lab fork, branch docs/microduck-on-jetson)","lane":"checks","out":"steps/40-npm-run-build-jetson-ai-lab-fork-branch-docs-microduck-on-je.out","rc":0,"stderr_lines":0,"stdout_first":"17:25:14 \u25b6 /tutorial-intro.html","stdout_lines":15,"step":"site","t":530.859,"wall":1788877514.9369113}
+{"kind":"cmd-start","label":"docs/tools/check_tutorial.py <tutorial> --record <8 records> --images-dir <fork images>","lane":"checks","step":"checks","t":546.92,"wall":1788877530.9971688}
+{"elapsed":0.029,"kind":"cmd-end","label":"docs/tools/check_tutorial.py <tutorial> --record <8 records> --images-dir <fork images>","lane":"checks","out":"steps/41-docs-tools-check-tutorial-py-tutorial-record-8-records-image.out","rc":0,"stderr_lines":0,"stdout_first":"HIT docs/verification/2026-09-07-spark-retest.md: uv tool install microduck-cli==0.9.4","stdout_lines":29,"step":"checks","t":546.949,"wall":1788877531.0264263}
+{"kind":"cmd-start","label":"MICRODUCK_LIVE=1 uv run pytest -m live -n0 -v tests/live   (fake body)","lane":"checks","step":"live","t":555.099,"wall":1788877539.1764355}
+{"elapsed":8.396,"kind":"cmd-end","label":"MICRODUCK_LIVE=1 uv run pytest -m live -n0 -v tests/live   (fake body)","lane":"checks","out":"steps/42-MICRODUCK-LIVE-1-uv-run-pytest-m-live-n0-v-tests-live-fake-b.out","rc":0,"stderr_lines":0,"stdout_first":"============================= test session starts ==============================","stdout_lines":26,"step":"live","t":563.494,"wall":1788877547.572111}
+{"kind":"cmd-start","label":"MICRODUCK_LIVE=1 MICRODUCK_LIVE_BODY=sim MICRODUCK_LIVE_SIM=1 MICRODUCK_LIVE_HEADLESS=0 uv run pytest -m live -n0 -v tests/live   (MuJoCo body, windowed)","lane":"checks","step":"live","t":563.53,"wall":1788877547.607687}
+{"elapsed":25.558,"kind":"cmd-end","label":"MICRODUCK_LIVE=1 MICRODUCK_LIVE_BODY=sim MICRODUCK_LIVE_SIM=1 MICRODUCK_LIVE_HEADLESS=0 uv run pytest -m live -n0 -v tests/live   (MuJoCo body, windowed)","lane":"checks","out":"steps/43-MICRODUCK-LIVE-1-MICRODUCK-LIVE-BODY-sim-MICRODUCK-LIVE-SIM.out","rc":0,"stderr_lines":0,"stdout_first":"============================= test session starts ==============================","stdout_lines":25,"step":"live","t":589.088,"wall":1788877573.1655204}
+{"kind":"note","label":"run complete: tutorial steps 1-11 pass (env up needed a second attempt), all checks green; desktop lock restored","lane":"operator","step":"end","t":607.708,"wall":1788877591.7859254}

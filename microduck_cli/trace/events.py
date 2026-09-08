@@ -333,6 +333,17 @@ def _redact_home(text: str) -> str:
     return _HOME_PATH_RE.sub("~", text)
 
 
+def _redact_home_in(value: Any) -> Any:
+    """Redact every ``/home/<user>`` inside nested strings (``stdout_first``, ...)."""
+    if isinstance(value, str):
+        return _redact_home(value)
+    if isinstance(value, dict):
+        return {key: _redact_home_in(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_home_in(item) for item in value]
+    return value
+
+
 def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
     """Adopt an external run directory (``src``) into ``dst``.
 
@@ -340,7 +351,8 @@ def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
     and ``meta.json``. Every line is validated first — the first bad line
     raises :class:`CliError` and nothing is written to *dst*. When
     ``redact_home`` (the default), every ``/home/<user>`` occurrence in an
-    event's ``label`` is rewritten to ``~``. ``shots/*`` and ``meta.json`` are
+    event's ``label`` (and in every string under its per-kind fields) is
+    rewritten to ``~``. ``shots/*`` and ``meta.json`` are
     copied verbatim; when *src* has no ``meta.json`` a minimal one is written
     with ``t0_wall`` derived from the first event (``wall - t``, so the
     adopted events line up on ``t == 0`` at that wall time) — deterministic,
@@ -360,6 +372,7 @@ def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
     if redact_home:
         for event in events:
             event.label = _redact_home(event.label)
+            event.extra = _redact_home_in(event.extra)
 
     dst.ensure()
     if dst.events_path.exists():
