@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `trace serve` binds loopback only; `--allow-remote` is the explicit, unauthenticated escape hatch. Plans and sidecars are validated before a run directory exists; imports validate everything before touching the destination and clean up a run directory they created on failure (review fix-ups on the first PR round).
+
 - The `trace` noun (`microduck trace`) — eight verbs: `overview`, `plan` (build a plan from TOML or a tutorial's fenced commands, sidecar-augmented), `run` (execute a plan end to end, tracing every command), `exec` (trace one arbitrary command), `import` (adopt an externally recorded run), `render`, `serve`, `list`.
 - The trace run directory (`<state>/trace/<UTC stamp>/`: `events.jsonl`, `meta.json`, `steps/*.out`/`.err`, `shots/*`) and its two rendered outputs — `trace.html` (an Artifact fragment) and `index.html` (the same fragment wrapped in a skeleton).
 - `docs/traces/2026-09-08-spark-tutorial/` — the committed example run, imported and rendered from the 2026-09-08 Spark tutorial trace, with `tests/test_trace_example.py` re-rendering it and diffing byte-for-byte against the committed pages.
