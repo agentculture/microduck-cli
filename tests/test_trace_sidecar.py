@@ -12,7 +12,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from microduck_cli.trace.plan import from_tutorial
+from microduck_cli.trace.plan import dump_plan, from_tutorial, load_plan
 
 SIDECAR_PATH = Path(__file__).resolve().parents[1] / "docs" / "traces" / "tutorial.sidecar.toml"
 
@@ -76,3 +76,14 @@ def test_sidecar_matches_three_embedded_commands() -> None:
 
     free_g = by_cmd["free -g"]
     assert free_g.lane == "operator"
+
+
+def test_sidecar_merged_plan_survives_dump_and_reload() -> None:
+    text = SIDECAR_PATH.read_text(encoding="utf-8")
+    sidecar = tomllib.loads(text)
+
+    plan = from_tutorial(FIXTURE_TUTORIAL, sidecar=sidecar)
+    dumped = dump_plan(plan)
+    reloaded = load_plan(dumped)
+
+    assert [s.cmd for s in reloaded.steps] == [s.cmd for s in plan.steps]

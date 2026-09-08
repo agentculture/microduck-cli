@@ -236,3 +236,145 @@ def test_load_plan_defaults_when_title_and_meta_absent():
     assert plan.title == ""
     assert plan.meta == {}
     assert plan.steps[0].lane == "cli"
+
+
+# ---------------------------------------------------------------------------
+# (g) _validate_step: every field rule, one failing example each
+# ---------------------------------------------------------------------------
+
+
+def _step_toml(body: str) -> str:
+    return '[[step]]\nstep = "1"\ncmd = "x"\n' + body
+
+
+def test_load_plan_rejects_non_string_label():
+    text = _step_toml("label = 5\n")
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "label" in excinfo.value.message
+
+
+def test_load_plan_rejects_non_string_step_field():
+    text = '[[step]]\nstep = 1\nlabel = "x"\ncmd = "x"\n'
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "step" in excinfo.value.message
+
+
+def test_load_plan_rejects_non_numeric_sleep_before():
+    text = _step_toml('sleep_before = "fast"\n')
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "sleep_before" in excinfo.value.message
+
+
+def test_load_plan_rejects_negative_sleep_after():
+    text = _step_toml("sleep_after = -1.0\n")
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "sleep_after" in excinfo.value.message
+
+
+def test_load_plan_rejects_non_int_retry():
+    text = _step_toml('retry = "one"\n')
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "retry" in excinfo.value.message
+
+
+def test_load_plan_rejects_bool_retry():
+    text = _step_toml("retry = true\n")
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "retry" in excinfo.value.message
+
+
+def test_load_plan_rejects_non_numeric_timeout_s():
+    text = _step_toml('timeout_s = "later"\n')
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "timeout_s" in excinfo.value.message
+
+
+def test_load_plan_rejects_non_positive_timeout_s():
+    text = _step_toml("timeout_s = 0\n")
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "timeout_s" in excinfo.value.message
+
+
+def test_load_plan_rejects_shot_with_path_separator():
+    text = _step_toml('shot = "sub/frame.png"\n')
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "shot" in excinfo.value.message
+
+
+def test_load_plan_rejects_shot_starting_with_dot():
+    text = _step_toml('shot = ".hidden"\n')
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "shot" in excinfo.value.message
+
+
+def test_load_plan_rejects_non_string_note():
+    text = _step_toml("note = 5\n")
+    with pytest.raises(CliError) as excinfo:
+        load_plan(text)
+    assert "note" in excinfo.value.message
+
+
+# ---------------------------------------------------------------------------
+# (h) sidecar override validation in from_tutorial
+# ---------------------------------------------------------------------------
+
+
+def test_sidecar_rejects_unknown_override_key():
+    sidecar = {"echo hello": {"bogus_field": 1}}
+    with pytest.raises(CliError) as excinfo:
+        from_tutorial(FIXTURE_TUTORIAL, sidecar=sidecar)
+    assert "bogus_field" in excinfo.value.message
+
+
+def test_sidecar_override_with_bad_field_value_raises():
+    sidecar = {"echo hello": {"retry": "one"}}
+    with pytest.raises(CliError) as excinfo:
+        from_tutorial(FIXTURE_TUTORIAL, sidecar=sidecar)
+    assert "retry" in excinfo.value.message
+
+
+def test_sidecar_override_with_bad_shot_name_raises():
+    sidecar = {"echo hello": {"shot": "../escape"}}
+    with pytest.raises(CliError) as excinfo:
+        from_tutorial(FIXTURE_TUTORIAL, sidecar=sidecar)
+    assert "shot" in excinfo.value.message
+
+
+# ---------------------------------------------------------------------------
+# (i) a valid sidecar (same shape as docs/traces/tutorial.sidecar.toml) still
+#     merges cleanly, and the roundtrip through TOML stays valid.
+# ---------------------------------------------------------------------------
+
+
+def test_valid_sidecar_shaped_like_the_tutorial_fixture_merges_with_zero_unmatched():
+    sidecar = {
+        "echo hello": {
+            "sleep_before": 1.5,
+            "sleep_after": 2,
+            "shot": "s0-after-echo",
+            "retry": 1,
+            "timeout_s": 30,
+            "note": "first run",
+            "lane": "operator",
+            "label": "say hello",
+        },
+        "git status": {"lane": "operator"},
+    }
+    plan = from_tutorial(FIXTURE_TUTORIAL, sidecar=sidecar)
+    assert "unmatched" not in plan.meta
+
+
+def test_load_plan_of_dump_plan_of_from_tutorial_passes_validation():
+    plan = from_tutorial(FIXTURE_TUTORIAL, sidecar={"echo hello": {"sleep_before": 0.5}})
+    reloaded = load_plan(dump_plan(plan))
+    assert [s.cmd for s in reloaded.steps] == [s.cmd for s in plan.steps]
