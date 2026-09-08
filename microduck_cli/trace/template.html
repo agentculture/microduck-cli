@@ -1,0 +1,485 @@
+<title>MicroDuck Run Trace</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@500;600;700&family=Red+Hat+Text:wght@400;500&family=Red+Hat+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#0f141c; --panel:#161c26; --panel2:#1d2431; --line:#2b3543; --line2:#38445a;
+    --fg:#e9e6dd; --muted:#98a0ae; --dim:#5d6677;
+    --cli:#c27f12; --robotd:#189f82; --rl:#8f74e0; --viewer:#3489dc; --checks:#4ea858; --op:#c9c2b2;
+    --cli-ink:#f0b445; --robotd-ink:#4fd1b3; --rl-ink:#b9a6f3; --viewer-ink:#7fb8f0; --checks-ink:#86d48c;
+    --bad:#e0645a;
+    --mono:"Red Hat Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:"Red Hat Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --disp:"Red Hat Display","Red Hat Text",system-ui,sans-serif;
+  }
+  html{color-scheme:dark;background:var(--bg)}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.45}
+  .wrap{max-width:1440px;margin:0 auto;padding:14px 18px 40px;display:grid;gap:12px;
+        grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr)}
+  header{grid-column:1/-1;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  h1{font-family:var(--disp);font-size:17px;font-weight:600;margin:0;letter-spacing:.01em;text-wrap:balance}
+  h1 small{color:var(--muted);font-weight:400;margin-left:8px;font-family:var(--sans);font-size:13px}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button,select{font:inherit;font-family:var(--mono);font-size:12px;background:var(--panel2);color:var(--fg);
+        border:1px solid var(--line);border-radius:4px;padding:5px 10px;cursor:pointer}
+  button:hover{border-color:var(--muted)} button:focus-visible,select:focus-visible{outline:2px solid var(--cli-ink);outline-offset:1px}
+  button.primary{background:var(--fg);color:var(--bg);border-color:var(--fg);min-width:74px}
+  label.ctl{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:center}
+  .clock{font-family:var(--mono);font-variant-numeric:tabular-nums;display:flex;gap:16px;align-items:baseline;margin-left:auto}
+  .clock div{display:flex;flex-direction:column;align-items:flex-end}
+  .clock .big{font-size:24px;font-weight:500;letter-spacing:.02em}
+  .clock .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted)}
+  .map{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px;min-width:0;margin:0}
+  .map svg{width:100%;height:auto;display:block}
+  figcaption{font-size:11.5px;color:var(--muted);margin:6px 4px 0}
+  .side{display:flex;flex-direction:column;gap:10px;min-width:0}
+  .frame{background:#000;border:1px solid var(--line);border-radius:6px;overflow:hidden;position:relative;aspect-ratio:1468/1014}
+  .frame .crop{position:absolute;inset:0;overflow:hidden}
+  .frame img{display:block;position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover}
+  .frame img.cropped{object-fit:fill}
+  .frame .tag{position:absolute;left:8px;bottom:8px;right:8px;font-family:var(--mono);font-size:11px;color:var(--fg);
+        background:rgba(15,20,28,.78);padding:4px 8px;border-radius:3px;display:flex;gap:10px;justify-content:space-between}
+  .frame .tag span:last-child{color:var(--viewer-ink);white-space:nowrap}
+  .frame .empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-family:var(--mono);font-size:12px;text-align:center;padding:20px}
+  .caps{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .cap{display:grid;grid-template-columns:72px 1fr;gap:8px;align-items:start;border-left:3px solid var(--line);padding-left:10px;min-height:34px}
+  .cap .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+  .cap .v{font-size:13px;overflow-wrap:anywhere;color:var(--fg)}
+  .cap .v.mono{font-family:var(--mono);font-size:12px}
+  .cap .v.empty{color:var(--dim)}
+  .cap.step{border-color:var(--fg)} .cap.op{border-color:var(--op)} .cap.cli{border-color:var(--cli)} .cap.engine{border-color:var(--cli)}
+  .cap.robotd{border-color:var(--robotd)} .cap.body{border-color:var(--rl)} .cap.train{border-color:var(--rl)} .cap.checks{border-color:var(--checks)}
+  .cap .v .rc{font-family:var(--mono);font-size:11px;margin-left:6px;color:var(--checks-ink)} .cap .v .rc.bad{color:var(--bad)}
+  .tl{grid-column:1/-1;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 8px 4px;overflow-x:auto}
+  .tl svg{width:100%;height:auto;display:block;min-width:760px}
+  .legend{grid-column:1/-1;display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--muted);align-items:center}
+  .legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(--c)}
+  .legend span.nodot::before{display:none}
+  section.ref{grid-column:1/-1;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(360px,1fr))}
+  .ref h2{font-family:var(--disp);font-size:13px;font-weight:600;margin:0 0 8px;letter-spacing:.02em;color:var(--fg)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;min-width:0}
+  .ladder{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+  .ladder button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:6px 9px;font-family:var(--sans);font-size:12px;border-radius:4px;background:var(--panel2)}
+  .ladder button .n{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+  .ladder button .s{font-family:var(--mono);font-size:10px} .ok{color:var(--checks-ink)} .bad-t{color:var(--bad)}
+  .ladder button.cur{border-color:var(--cli-ink)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  td.m{font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+  .pill{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;padding:1px 7px;border-radius:9px;border:1px solid var(--checks);color:var(--checks-ink)}
+  .pill.bad{border-color:var(--bad);color:var(--bad)}
+  .notes{font-size:13px;color:var(--muted);max-width:74ch;line-height:1.55}
+  .notes p{margin:0 0 8px} .notes b{color:var(--fg);font-weight:500}
+  .notes code{font-family:var(--mono);font-size:12px;color:var(--fg)}
+  /* svg map */
+  .band rect{fill:none;stroke:var(--c);stroke-opacity:.35;stroke-dasharray:3 4}
+  .band text{font-family:var(--mono);font-size:10.5px;fill:var(--c);letter-spacing:.08em}
+  .band text.sub{fill:var(--muted);letter-spacing:0;font-family:var(--sans);font-size:10.5px}
+  .node rect{fill:var(--panel2);stroke:var(--line2);stroke-width:1.2;transition:stroke .2s,filter .2s}
+  .node text.name{font-family:var(--mono);font-size:12.5px;font-weight:500;fill:var(--fg)}
+  .node text.sub{font-family:var(--sans);font-size:10px;fill:var(--muted)}
+  .node text.state{font-family:var(--mono);font-size:9.5px;fill:var(--dim)}
+  .node.warm rect{stroke:var(--c);stroke-opacity:.6}
+  .node.on rect{stroke:var(--c);stroke-width:2;filter:drop-shadow(0 0 9px color-mix(in srgb,var(--c) 60%,transparent))}
+  .node.on text.state{fill:var(--c)}
+  .node .dot{fill:var(--c);opacity:.25} .node.on .dot{opacity:1} .node.warm .dot{opacity:.6}
+  .edge{fill:none;stroke:var(--line2);stroke-width:1.3}
+  .edge.on{stroke:var(--c);stroke-width:2.2;stroke-dasharray:6 6;animation:flow .6s linear infinite}
+  .elabel{font-family:var(--mono);font-size:9px;fill:var(--dim)} .elabel.on{fill:var(--c)}
+  @keyframes flow{to{stroke-dashoffset:-12}}
+  .lane-name{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+  .tick{font-family:var(--mono);font-size:9.5px;fill:var(--dim)}
+  .stepmark{font-family:var(--mono);font-size:9.5px;fill:var(--muted)}
+  .playhead{stroke:var(--fg);stroke-width:1.2}
+  .scrub{fill:transparent;cursor:crosshair}
+  @media (prefers-reduced-motion:reduce){.edge.on{animation:none}}
+  @media (max-width:980px){.wrap{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><span id="h-title">MicroDuck Run Trace</span> <small id="h-sub"></small></h1>
+    <div class="controls">
+      <button class="primary" id="play">Play</button>
+      <button id="restart">⟲ Start</button>
+      <button id="next" title="jump to the next command">Next ▸</button>
+      <label class="ctl">speed <select id="speed"><option>1</option><option>2</option><option selected>4</option><option>8</option><option>16</option></select></label>
+      <label class="ctl">step <select id="jump"></select></label>
+    </div>
+    <div class="clock">
+      <div><span class="big" id="t-run">00:00.0</span><span class="lbl">run time</span></div>
+      <div><span class="big" id="t-wall">--:--:--</span><span class="lbl">wall clock (local)</span></div>
+      <div><span class="big" id="t-step">—</span><span class="lbl">tutorial step</span></div>
+    </div>
+  </header>
+
+  <figure class="map">
+    <svg id="map" viewBox="0 0 980 600" role="img" aria-label="The three tiers of the MicroDuck stack: the microduck-cli wheel on top, the pollen microduck daemon in the middle and microduck_rl at the bottom, with the operator on the left and the viewer and GPU on the right; nodes light up and edges animate as the captured run plays back">
+      <defs>
+        <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker>
+      </defs>
+      <g id="bands"></g>
+      <g id="edges"></g>
+      <g id="elabels"></g>
+      <g id="nodes"></g>
+    </svg>
+    <figcaption>Three tiers, one socket. A box lights while that part is working; a dashed edge shows traffic in that direction at this moment; a faint colored outline means the process is up and waiting.</figcaption>
+  </figure>
+
+  <aside class="side">
+    <div class="frame">
+      <div class="crop" id="crop"><img id="frame" alt="The MuJoCo viewer window at this moment of the run" hidden></div>
+      <div class="empty" id="frame-empty">no viewer yet — the window opens at step 6</div>
+      <div class="tag" hidden id="frame-tag"><span id="frame-cap"></span><span id="frame-t"></span></div>
+    </div>
+    <div class="caps">
+      <div class="cap step"><span class="k">Step</span><span class="v empty" id="c-step">…</span></div>
+      <div class="cap op"><span class="k">Operator</span><span class="v empty" id="c-op">…</span></div>
+      <div class="cap cli"><span class="k">CLI</span><span class="v empty mono" id="c-cli">…</span></div>
+      <div class="cap cli"><span class="k">Output</span><span class="v empty mono" id="c-out">…</span></div>
+      <div class="cap engine"><span class="k">Engine</span><span class="v empty mono" id="c-engine">…</span></div>
+      <div class="cap robotd"><span class="k">robotd</span><span class="v empty mono" id="c-robotd">…</span></div>
+      <div class="cap body"><span class="k">duck-body</span><span class="v empty mono" id="c-body">…</span></div>
+      <div class="cap train"><span class="k">Trainer</span><span class="v empty mono" id="c-train">…</span></div>
+      <div class="cap checks"><span class="k">Checks</span><span class="v empty mono" id="c-checks">…</span></div>
+    </div>
+  </aside>
+
+  <div class="tl"><svg id="tlsvg" viewBox="0 0 1360 262" role="img" aria-label="Eight-lane timeline of the run with a moving playhead; click to scrub"></svg></div>
+
+  <div class="legend">
+    <span style="--c:var(--op)">operator</span><span style="--c:var(--cli)">microduck-cli</span><span style="--c:var(--robotd)">robotd (microduck)</span>
+    <span style="--c:var(--rl)">microduck_rl</span><span style="--c:var(--viewer)">viewer</span><span style="--c:var(--checks)">checks</span>
+    <span class="nodot">· click the timeline to scrub · space plays and pauses · ← → step by command</span>
+  </div>
+
+  <section class="ref">
+    <div class="panel" style="grid-column:1/-1">
+      <h2>The eleven steps and the checks</h2>
+      <div class="ladder" id="ladder"></div>
+    </div>
+    <div class="panel">
+      <h2>What each tier did in this run</h2>
+      <table>
+        <thead><tr><th>Tier</th><th>Pinned at</th><th>Ran</th></tr></thead>
+        <tbody>
+          <tr><td class="m" style="color:var(--cli-ink)">microduck-cli</td><td class="m">0.9.6 wheel</td><td>Every command the operator typed: the doctor, the stack lifecycle, the gated duck verbs, the 300-tick rules engine and the smoke launcher. Zero runtime dependencies.</td></tr>
+          <tr><td class="m" style="color:var(--robotd-ink)">microduck</td><td class="m">sim-remote-io @ 0cd676d</td><td><code style="font-family:var(--mono)">robotd --sim</code>, API 16, the 50 Hz control loop, the seated-boot stand-up, the roulade skill and the walk network, loading its ONNX policies through the RL venv's onnxruntime.</td></tr>
+          <tr><td class="m" style="color:var(--rl-ink)">microduck_rl</td><td class="m">develop @ 29e887e</td><td>The MuJoCo body behind TCP port 7801 with its viewer window, the venv (torch 2.9.1+cu129, onnxruntime 1.24.4, mujoco 3.10), and the trainer for the 64-env smoke on the GB10.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel" id="checks-panel" hidden>
+      <h2>Checks after the run</h2>
+      <table id="checks"><thead><tr><th>Check</th><th>Result</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="panel" style="grid-column:1/-1" id="notes-panel" hidden>
+      <h2>Read this before trusting the pictures</h2>
+      <div class="notes" id="notes"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+/*DATA*/
+</script>
+<script>
+(function(){
+  const events = EVENTS, spans = SPANS;
+  const T_END = META.t_end != null ? META.t_end : Math.max(1, ...events.map(e => e.t), ...spans.map(s => s.t1));
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  document.getElementById("h-title").textContent = META.title || "MicroDuck Run Trace";
+  document.getElementById("h-sub").textContent = [META.box, META.date, META.subtitle].filter(Boolean).join(" · ");
+  // ---- the map ----------------------------------------------------------
+  const C = {cli:"var(--cli)", robotd:"var(--robotd)", rl:"var(--rl)", viewer:"var(--viewer)", checks:"var(--checks)", op:"var(--op)"};
+  const NODES = [
+    {id:"op",     x:18,  y:238, w:118, h:128, c:C.op,     name:"operator",      sub:["an agent over SSH","or a human at","a terminal"], state:"idle"},
+    {id:"env",    x:172, y:58,  w:150, h:70,  c:C.cli,    name:"env",           sub:["doctor · up · down · status","spawns and reaps the stack"], state:"idle"},
+    {id:"duck",   x:344, y:58,  w:168, h:70,  c:C.cli,    name:"duck verbs",    sub:["health init enable look do","move quack monitor record"], state:"idle"},
+    {id:"engine", x:534, y:58,  w:150, h:70,  c:C.cli,    name:"rules engine",  sub:["50 Hz tick, rules as data","the one socket owner"], state:"idle"},
+    {id:"policy", x:706, y:58,  w:126, h:70,  c:C.cli,    name:"policy",        sub:["list · smoke · train","argv builders only"], state:"idle"},
+    {id:"checks", x:846, y:58,  w:120, h:70,  c:C.checks, name:"checks",        sub:["gates · live suites","tutorial checker"], state:"idle"},
+    {id:"robotd", x:300, y:250, w:230, h:78,  c:C.robotd, name:"robotd --sim",  sub:["API 16 · control loop 50 Hz · 15 joints","JSON-RPC on ~/.cache/duck-sim/duck-a.sock"], state:"down"},
+    {id:"onnx",   x:580, y:250, w:190, h:78,  c:C.robotd, name:"ONNX policies", sub:["alpha_walking · alpha_stand · sitstand","roulade · kicks · ground_pick"], state:"idle"},
+    {id:"body",   x:300, y:452, w:230, h:78,  c:C.rl,     name:"duck-body",     sub:["MuJoCo 3.10 body_server","TCP NDJSON 127.0.0.1:7801, protocol 1"], state:"down"},
+    {id:"venv",   x:580, y:452, w:190, h:78,  c:C.rl,     name:".venv",         sub:["torch 2.9.1+cu129 · mujoco","onnxruntime 1.24.4 · warp 1.12"], state:"idle"},
+    {id:"train",  x:800, y:452, w:166, h:78,  c:C.rl,     name:"train",         sub:["Mjlab-Velocity-Flat-MicroDuck","64 envs · 5 iterations · GB10"], state:"idle"},
+    {id:"viewer", x:800, y:250, w:166, h:78,  c:C.viewer, name:"viewer window", sub:["MuJoCo : scene on :1","1468×1026, GNOME"], state:"closed"},
+  ];
+  const BANDS = [
+    {y:22,  h:120, c:C.cli,    name:"MICRODUCK-CLI 0.9.6 · THE WHEEL", sub:"uv tool install · zero runtime deps · argparse wiring over the duck, rules and train packages", x:160, w:810},
+    {y:214, h:130, c:C.robotd, name:"POLLEN-ROBOTICS/MICRODUCK · sim-remote-io @ 0cd676d", sub:"cargo build -p robotd · the daemon that would run on the duck's own board", x:288, w:682},
+    {y:416, h:130, c:C.rl,     name:"POLLEN-ROBOTICS/MICRODUCK_RL · develop @ 29e887e", sub:"uv sync · the MuJoCo body, the venv robotd borrows onnxruntime from, and the trainer", x:288, w:682},
+  ];
+  const EDGES = [
+    {id:"op-cli",      d:"M136,270 C160,200 160,140 172,100", c:C.op,     l:{x:120,y:170,t:"argv, --apply"}},
+    {id:"env-robotd",  d:"M247,128 C247,190 300,200 320,250", c:C.cli,    l:{x:200,y:200,t:"spawn; wait for healthy"}},
+    {id:"env-body",    d:"M232,128 C232,300 280,400 320,452", c:C.cli,    l:{x:186,y:404,t:"spawn body_server"}},
+    {id:"duck-robotd", d:"M428,128 L428,250",                  c:C.cli,    l:{x:432,y:196,t:"JSON-RPC: notifications + requests"}},
+    {id:"engine-robotd",d:"M609,128 C609,190 520,210 500,250", c:C.cli,   l:{x:560,y:206,t:"one socket, 50 Hz"}},
+    {id:"robotd-body", d:"M395,328 L395,452",                  c:C.robotd, l:{x:300,y:396,t:"motor bus → :7801"}},
+    {id:"body-robotd", d:"M435,452 L435,328",                  c:C.rl,     l:{x:440,y:396,t:"IMU, joints ←"}},
+    {id:"robotd-onnx", d:"M530,289 L580,289",                  c:C.robotd, l:{x:532,y:282,t:"infer"}},
+    {id:"onnx-venv",   d:"M675,328 L675,452",                  c:C.rl,     l:{x:680,y:396,t:"libonnxruntime.so"}},
+    {id:"body-viewer", d:"M530,470 C640,420 720,330 800,300",  c:C.rl,     l:{x:690,y:372,t:"GLFW window"}},
+    {id:"policy-train",d:"M769,128 C769,300 860,380 883,452",  c:C.cli,    l:{x:790,y:404,t:"uv run train …"}},
+    {id:"viewer-op",   d:"M800,270 C560,150 260,200 136,300",  c:C.viewer, l:{x:250,y:236,t:"gnome-screenshot"}},
+    {id:"cli-checks",  d:"M832,93 L846,93",                    c:C.checks, l:null},
+  ];
+  const svg = document.getElementById("map");
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (n, a, txt) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
+  const gB = document.getElementById("bands");
+  for (const b of BANDS) {
+    const g = el("g", {class:"band", style:`--c:${b.c}`});
+    g.appendChild(el("rect", {x:b.x, y:b.y, width:b.w, height:b.h, rx:6}));
+    g.appendChild(el("text", {x:b.x+10, y:b.y+15}, b.name));
+    g.appendChild(el("text", {x:b.x+10, y:b.y+29, class:"sub"}, b.sub));
+    gB.appendChild(g);
+  }
+  const gE = document.getElementById("edges"), gL = document.getElementById("elabels");
+  const edgeEl = {};
+  for (const e of EDGES) {
+    const p = el("path", {id:"e-"+e.id, class:"edge", d:e.d, style:`--c:${e.c}`, "marker-end":"url(#arr)"});
+    p.style.color = "var(--line2)";
+    gE.appendChild(p); edgeEl[e.id] = p;
+    if (e.l) { const t = el("text", {class:"elabel", x:e.l.x, y:e.l.y, id:"l-"+e.id, style:`--c:${e.c}`}, e.l.t); gL.appendChild(t); }
+  }
+  const gN = document.getElementById("nodes"), nodeEl = {}, stateEl = {};
+  for (const n of NODES) {
+    const g = el("g", {class:"node", id:"n-"+n.id, style:`--c:${n.c}`});
+    g.appendChild(el("rect", {x:n.x, y:n.y, width:n.w, height:n.h, rx:5}));
+    g.appendChild(el("circle", {class:"dot", cx:n.x+11, cy:n.y+14, r:3.5}));
+    g.appendChild(el("text", {class:"name", x:n.x+20, y:n.y+18}, n.name));
+    n.sub.forEach((s, i) => g.appendChild(el("text", {class:"sub", x:n.x+10, y:n.y+34+i*13}, s)));
+    const st = el("text", {class:"state", x:n.x+n.w-8, y:n.y+n.h-8, "text-anchor":"end"}, n.state);
+    g.appendChild(st); gN.appendChild(g); nodeEl[n.id] = g; stateEl[n.id] = st;
+  }
+  // ---- activity model -----------------------------------------------------
+  const cliNode = label => {
+    if (/^microduck env /.test(label)) return "env";
+    if (/rules engine run/.test(label)) return "engine";
+    if (/^microduck rules /.test(label)) return "engine";
+    if (/policy smoke/.test(label)) return "policy";
+    if (/policy list/.test(label)) return "policy";
+    if (/^microduck duck /.test(label)) return "duck";
+    if (/microduck --version|uv tool install/.test(label)) return "env";
+    return "env";
+  };
+  const spanNodes = s => {
+    if (s.lane === "checks") return ["checks", "op"];
+    if (s.lane === "operator") return ["op"];
+    if (s.lane === "microduck") return ["op", "robotd"];
+    if (s.lane === "rl") return ["op", "venv"];
+    if (s.lane === "train") return ["op", "policy", "train", "venv"];
+    if (s.lane === "engine") return ["op", "engine", "robotd"];
+    const n = cliNode(s.label); const out = ["op", n];
+    if (n === "duck" || n === "policy") out.push("robotd");
+    if (/duck (do|enable|init|move)/.test(s.label)) out.push("onnx");
+    if (/env up/.test(s.label)) out.push("robotd", "body");
+    return out;
+  };
+  const spanEdges = s => {
+    if (s.lane === "train") return ["op-cli", "policy-train"];
+    if (s.lane === "engine") return ["op-cli", "engine-robotd", "robotd-body", "body-robotd"];
+    if (s.lane === "checks") return ["cli-checks"];
+    if (s.lane !== "cli") return [];
+    const n = cliNode(s.label);
+    if (n === "duck" || n === "policy") { const e = ["op-cli", "duck-robotd"]; if (/duck (do|enable|init|move)/.test(s.label)) e.push("robotd-onnx"); if (/duck (do|enable|init|move|look)/.test(s.label)) e.push("robotd-body"); return e; }
+    if (/env up/.test(s.label)) return ["op-cli", "env-robotd", "env-body"];
+    if (/env (down|status)/.test(s.label)) return ["op-cli", "env-robotd", "env-body"];
+    return ["op-cli"];
+  };
+  // sim up windows: from a successful env up to env down; and the windowed live suite
+  const upWindows = [];
+  { let up = null;
+    for (const s of spans) {
+      if (/env up/.test(s.label) && s.rc === 0) up = s.t1;
+      if (/env up/.test(s.label) && s.rc !== 0) upWindows.push([s.t0 + 1.2, s.t1, "robotd-only"]);
+      if (/env down/.test(s.label) && up != null) { upWindows.push([up, s.t1, "sim"]); up = null; }
+      if (/MuJoCo body, windowed/.test(s.label)) upWindows.push([s.t0 + 3, s.t1 - 1, "sim"]);
+    } }
+  const shotsSorted = events.filter(e => e.kind === "shot");
+  const STEP_TITLES = Object.assign({"0":"pre-flight"}, META.step_titles || {});
+  function stepAt(t) {
+    let cur = "0";
+    for (const s of spans) if (s.t0 <= t + 0.001) cur = s.step;
+    return cur;
+  }
+  const HOLD = 1.4;
+  let lastRendered = -1;
+  function render(t) {
+    const on = new Set(), warm = new Set(), edgesOn = new Set(), states = {};
+    for (const [a, b, kind] of upWindows) if (t >= a && t <= b) { warm.add("robotd"); states.robotd = "up · 50 Hz"; if (kind === "sim") { warm.add("body"); warm.add("viewer"); warm.add("onnx"); warm.add("venv"); states.body = "up · :7801"; states.viewer = "open"; } else { states.body = "gone"; } }
+    const active = spans.filter(s => s.t0 <= t && t <= s.t1 + 0.35);
+    for (const s of active) { spanNodes(s).forEach(n => on.add(n)); spanEdges(s).forEach(e => edgesOn.add(e)); }
+    // recent instantaneous events
+    let lastRobotd = null, lastBody = null, lastEngine = null, lastTrain = null, lastOp = null, lastChecks = null, lastCliErr = null;
+    for (const e of events) {
+      if (e.t > t) break;
+      const recent = t - e.t <= HOLD;
+      if (e.lane === "robotd") { lastRobotd = e; if (recent) { on.add("robotd"); if (/policy loaded/.test(e.label)) { on.add("onnx"); edgesOn.add("robotd-onnx"); edgesOn.add("onnx-venv"); } if (/simulated body|motor bus answered/.test(e.label)) { edgesOn.add("body-robotd"); on.add("body"); } if (/no answer|no simulated body/.test(e.label)) edgesOn.add("robotd-body"); } }
+      else if (e.lane === "body") { lastBody = e; if (recent) { on.add("body"); if (/connected/.test(e.label)) edgesOn.add("robotd-body"); } }
+      else if (e.lane === "engine") { lastEngine = e; if (recent) { on.add("engine"); edgesOn.add("engine-robotd"); if (e.ev === "fired") { on.add("robotd"); edgesOn.add("robotd-body"); } } }
+      else if (e.lane === "train") { lastTrain = e; }
+      else if (e.lane === "operator") { lastOp = e; if (recent) on.add("op"); }
+      else if (e.lane === "checks") { lastChecks = e; }
+      else if (e.lane === "cli" && e.kind === "stderr") { lastCliErr = e; }
+      else if (e.lane === "viewer") { if (t - e.t <= 2.2) { on.add("viewer"); edgesOn.add("viewer-op"); on.add("op"); } }
+    }
+    for (const n of NODES) {
+      const g = nodeEl[n.id];
+      g.classList.toggle("on", on.has(n.id)); g.classList.toggle("warm", !on.has(n.id) && warm.has(n.id));
+      stateEl[n.id].textContent = on.has(n.id) ? "active" : (states[n.id] || n.state);
+    }
+    for (const e of EDGES) { const p = edgeEl[e.id]; const isOn = edgesOn.has(e.id); p.classList.toggle("on", isOn); p.style.color = isOn ? e.c : "var(--line2)"; const l = document.getElementById("l-"+e.id); if (l) l.classList.toggle("on", isOn); }
+    // captions
+    const step = stepAt(t);
+    setCap("c-step", `${/^\d+$/.test(step) ? "Step " + step + " — " : ""}${STEP_TITLES[step] || step}`);
+    document.getElementById("t-step").textContent = /^\d+$/.test(step) ? step : (step === "0" ? "—" : step);
+    setCap("c-op", lastOp ? lastOp.label : null);
+    const curCmd = active.filter(s => s.lane !== "checks").slice(-1)[0] || [...spans].reverse().find(s => s.t1 <= t && s.lane !== "checks");
+    if (curCmd) {
+      const running = curCmd.t1 > t;
+      setCap("c-cli", curCmd.label, true, running ? `<span class="rc">running</span>` : `<span class="rc ${curCmd.rc ? "bad" : ""}">exit ${curCmd.rc} · ${curCmd.t1 - curCmd.t0 < 0.2 ? "<0.2" : (curCmd.t1 - curCmd.t0).toFixed(1)} s</span>`);
+      setCap("c-out", running ? (lastCliErr && lastCliErr.t >= curCmd.t0 ? lastCliErr.label : null) : (curCmd.first || (lastCliErr && lastCliErr.t >= curCmd.t0 ? lastCliErr.label : null)));
+    } else { setCap("c-cli", null); setCap("c-out", null); }
+    setCap("c-engine", lastEngine && t - lastEngine.t < 40 ? engineLine(lastEngine) : null);
+    setCap("c-robotd", lastRobotd ? lastRobotd.label : null);
+    setCap("c-body", lastBody ? lastBody.label : null);
+    setCap("c-train", trainLine(t, lastTrain));
+    const chk = active.find(s => s.lane === "checks") || [...spans].reverse().find(s => s.lane === "checks" && s.t1 <= t);
+    setCap("c-checks", chk ? chk.label + (chk.t1 > t ? "" : ` · exit ${chk.rc}${chk.first ? " · " + chk.first : ""}`) : null);
+    // frame
+    let shot = null; for (const s of shotsSorted) if (s.t <= t) shot = s;
+    const img = document.getElementById("frame"), tag = document.getElementById("frame-tag"), empty = document.getElementById("frame-empty");
+    const simUp = upWindows.some(([a, b, k]) => k === "sim" && t >= a && t <= b);
+    const sh = shot && SHOTS[shot.shot];
+    if (sh && (simUp || t - shot.t < 30)) {
+      if (img.dataset.k !== shot.shot) {
+        img.src = sh.src; img.dataset.k = shot.shot;
+        const g = sh.geometry;
+        if (!sh.window && g && g.screen && g.w > 0 && g.h > 0) {
+          img.classList.add("cropped");
+          img.style.width = (g.screen[0] / g.w * 100) + "%"; img.style.height = (g.screen[1] / g.h * 100) + "%";
+          img.style.left = (-g.x / g.w * 100) + "%"; img.style.top = (-g.y / g.h * 100) + "%";
+        } else { img.classList.remove("cropped"); img.style.cssText = ""; }
+      }
+      img.hidden = false; tag.hidden = false; empty.hidden = true;
+      document.getElementById("frame-cap").textContent = shot.label; document.getElementById("frame-t").textContent = fmt(shot.t);
+    } else {
+      img.hidden = true; tag.hidden = true; empty.hidden = false;
+      empty.textContent = shotsSorted.length === 0 ? (META.headless ? "headless run: no viewer" : "no viewer frames in this run")
+        : (shot ? "the simulation is down" : "no viewer frame yet");
+    }
+    // ladder highlight
+    document.querySelectorAll("#ladder button").forEach(b => b.classList.toggle("cur", b.dataset.step === step));
+  }
+  function engineLine(e) {
+    if (e.n && e.n > 1) return `${e.label.replace(/\] .*$/, "]")} ×${e.n} in 0.2 s`;
+    return e.label;
+  }
+  function trainLine(t, last) {
+    const s = spans.find(x => x.lane === "train"); if (!s || t < s.t0) return null;
+    if (t > s.t1 + 30) return null;
+    if (t >= s.t1) return META.smoke ? `ok: ${META.smoke.ok} · ${META.smoke.elapsed_s} s · ${META.smoke.maxrss_gb} GB peak RSS · ${META.smoke.warp}` : `finished · exit ${s.rc}`;
+    let acc = s.t0 + 5.5;  // Warp init + kernel cache loads before iteration 0 (position interpolated)
+    if (t < acc) return "uv run train … Warp 1.12 initialised, cached mujoco-warp kernels loading";
+    for (const [i, d] of (META.iterations || [])) { acc += d; if (t < acc) return `learning iteration ${i}/5 · ${d.toFixed(2)} s (interpolated position)`; }
+    return "exporting the smoke-gate record";
+  }
+  function setCap(id, text, mono, suffix) {
+    const v = document.getElementById(id);
+    if (text == null || text === "") { v.textContent = "…"; v.classList.add("empty"); return; }
+    v.classList.remove("empty"); v.textContent = text; if (suffix) v.insertAdjacentHTML("beforeend", suffix);
+  }
+  const fmt = t => { const m = Math.floor(t / 60), s = (t - m * 60); return `${String(m).padStart(2, "0")}:${s.toFixed(1).padStart(4, "0")}`; };
+  const fmtWall = t => { if (META.t0_wall == null) return "--:--:--"; const d = new Date((META.t0_wall + t) * 1000); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`; };
+  // ---- timeline -----------------------------------------------------------
+  const LANES = [["operator","operator",C.op],["cli","microduck-cli",C.cli],["engine","rules engine",C.cli],["robotd","robotd",C.robotd],["body","duck-body",C.rl],["train","trainer",C.rl],["viewer","viewer",C.viewer],["checks","checks",C.checks]];
+  const tl = document.getElementById("tlsvg"), X0 = 96, X1 = 1350, Y0 = 14, LH = 24;
+  const xOf = t => X0 + (X1 - X0) * t / T_END;
+  const tOf = x => Math.max(0, Math.min(T_END, (x - X0) / (X1 - X0) * T_END));
+  LANES.forEach(([id, name, c], i) => {
+    const y = Y0 + i * LH;
+    tl.appendChild(el("line", {x1:X0, x2:X1, y1:y+LH, y2:y+LH, stroke:"var(--line)", "stroke-width":.6}));
+    tl.appendChild(el("text", {class:"lane-name", x:X0-8, y:y+LH/2+4, "text-anchor":"end"}, name));
+  });
+  // up windows as faint fills on robotd/body/viewer
+  for (const [a, b, kind] of upWindows) {
+    const rows = kind === "sim" ? [3, 4, 6] : [3];
+    for (const r of rows) tl.appendChild(el("rect", {x:xOf(a), y:Y0+r*LH+3, width:Math.max(1, xOf(b)-xOf(a)), height:LH-6, fill:LANES[r][2], opacity:.14}));
+  }
+  const laneIdx = Object.fromEntries(LANES.map(([id], i) => [id, i]));
+  for (const s of spans) {
+    const li = laneIdx[s.lane === "microduck" || s.lane === "rl" ? "operator" : s.lane]; if (li == null) continue;
+    const w = Math.max(2.5, xOf(s.t1) - xOf(s.t0));
+    tl.appendChild(el("rect", {x:xOf(s.t0), y:Y0+li*LH+6, width:w, height:LH-12, rx:1.5, fill:s.rc === 0 ? LANES[li][2] : "var(--bad)", opacity:.85}));
+  }
+  for (const e of events) {
+    const li = laneIdx[e.lane]; if (li == null) continue;
+    if (e.lane === "viewer") { tl.appendChild(el("circle", {cx:xOf(e.t), cy:Y0+li*LH+LH/2, r:3.2, fill:LANES[li][2]})); continue; }
+    const h = e.lane === "engine" && e.n ? Math.min(LH-8, 3 + e.n) : LH-10;
+    tl.appendChild(el("rect", {x:xOf(e.t)-.5, y:Y0+li*LH+LH/2-h/2, width:1, height:h, fill:LANES[li][2], opacity:e.n ? .5 : .9}));
+  }
+  // step boundaries + time axis
+  const AXY = Y0 + LANES.length * LH;
+  let seenSteps = new Set();
+  for (const s of spans) { if (!/^\d+$/.test(s.step) || seenSteps.has(s.step) || s.step === "0") continue; seenSteps.add(s.step);
+    tl.appendChild(el("line", {x1:xOf(s.t0), x2:xOf(s.t0), y1:Y0, y2:AXY, stroke:"var(--line2)", "stroke-width":.7, "stroke-dasharray":"2 3"}));
+    tl.appendChild(el("text", {class:"stepmark", x:xOf(s.t0)+3, y:AXY+13}, "step " + s.step)); }
+  { const s = spans.find(x => x.lane === "checks"); if (s) { tl.appendChild(el("line", {x1:xOf(s.t0), x2:xOf(s.t0), y1:Y0, y2:AXY, stroke:"var(--line2)", "stroke-width":.7, "stroke-dasharray":"2 3"})); tl.appendChild(el("text", {class:"stepmark", x:xOf(s.t0)+3, y:AXY+13}, "checks")); } }
+  for (let t = 0; t <= T_END; t += 60) { tl.appendChild(el("line", {x1:xOf(t), x2:xOf(t), y1:AXY, y2:AXY+4, stroke:"var(--dim)"})); tl.appendChild(el("text", {class:"tick", x:xOf(t), y:AXY+26, "text-anchor":"middle"}, fmt(t).slice(0, 5))); }
+  const playhead = el("line", {class:"playhead", x1:X0, x2:X0, y1:Y0-4, y2:AXY+2}); tl.appendChild(playhead);
+  const scrub = el("rect", {class:"scrub", x:X0, y:0, width:X1-X0, height:AXY+30}); tl.appendChild(scrub);
+  const seekFromPointer = ev => { const pt = tl.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(tl.getScreenCTM().inverse()); seek(tOf(p.x)); };
+  let dragging = false;
+  scrub.addEventListener("pointerdown", ev => { dragging = true; scrub.setPointerCapture(ev.pointerId); seekFromPointer(ev); });
+  scrub.addEventListener("pointermove", ev => { if (dragging) seekFromPointer(ev); });
+  scrub.addEventListener("pointerup", () => dragging = false);
+  // ---- ladder + checks table ---------------------------------------------
+  const ladder = document.getElementById("ladder"), jump = document.getElementById("jump");
+  const ladderSteps = [];
+  for (const s of spans) { if (s.step === "0") continue; const k = s.step; let e = ladderSteps.find(x => x.step === k); if (!e) { e = {step:k, t0:s.t0, ok:true, n:0}; ladderSteps.push(e); } e.n++; if (s.rc !== 0) e.retry = true; }
+  for (const e of ladderSteps) {
+    const b = document.createElement("button"); b.dataset.step = e.step;
+    const title = STEP_TITLES[e.step] || e.step;
+    b.innerHTML = `<span class="n">${esc(/^\d+$/.test(e.step) ? "step " + e.step : e.step)}</span><span>${esc(title)}</span><span class="s ${e.retry ? "bad-t" : "ok"}">${e.retry ? "pass on 2nd attempt" : "pass"} · ${fmt(e.t0)}</span>`;
+    b.addEventListener("click", () => seek(e.t0 - 0.5)); ladder.appendChild(b);
+    const o = document.createElement("option"); o.value = e.t0 - 0.5; o.textContent = (/^\d+$/.test(e.step) ? e.step + " " : "") + title; jump.appendChild(o);
+  }
+  jump.addEventListener("change", () => seek(parseFloat(jump.value)));
+  if (Array.isArray(META.checks) && META.checks.length) {
+    document.getElementById("checks-panel").hidden = false;
+    const tb = document.querySelector("#checks tbody");
+    for (const [name, res, st] of META.checks) { const tr = document.createElement("tr"); tr.innerHTML = `<td class="m">${esc(name)}</td><td>${esc(res)}</td><td><span class="pill ${st === "pass" ? "" : "bad"}">${esc(st)}</span></td>`; tb.appendChild(tr); }
+  }
+  if (Array.isArray(META.notes) && META.notes.length) {
+    document.getElementById("notes-panel").hidden = false;
+    const nd = document.getElementById("notes");
+    for (const n of META.notes) { const p = document.createElement("p"); const m = /^\*\*(.+?)\*\*\s*([\s\S]*)$/.exec(n); p.innerHTML = m ? `<b>${esc(m[1])}</b> ${esc(m[2])}` : esc(n); nd.appendChild(p); }
+  }
+  // ---- transport ----------------------------------------------------------
+  let t = 0, playing = false, raf = null, last = null;
+  const playBtn = document.getElementById("play"), speedSel = document.getElementById("speed");
+  function seek(nt) { t = Math.max(0, Math.min(T_END, nt)); draw(); }
+  function draw() {
+    playhead.setAttribute("x1", xOf(t)); playhead.setAttribute("x2", xOf(t));
+    document.getElementById("t-run").textContent = fmt(t); document.getElementById("t-wall").textContent = fmtWall(t);
+    render(t);
+  }
+  function tick(now) {
+    if (!playing) return;
+    if (last != null) { t += (now - last) / 1000 * parseFloat(speedSel.value); if (t >= T_END) { t = T_END; stop(); } }
+    last = now; draw(); if (playing) raf = requestAnimationFrame(tick);
+  }
+  function start() { if (t >= T_END) t = 0; playing = true; last = null; playBtn.textContent = "Pause"; raf = requestAnimationFrame(tick); }
+  function stop() { playing = false; playBtn.textContent = "Play"; if (raf) cancelAnimationFrame(raf); }
+  playBtn.addEventListener("click", () => playing ? stop() : start());
+  document.getElementById("restart").addEventListener("click", () => { stop(); seek(0); });
+  const nextCmd = dir => { const list = spans.map(s => s.t0).sort((a, b) => a - b); const n = dir > 0 ? list.find(x => x > t + 0.05) : [...list].reverse().find(x => x < t - 0.05); if (n != null) seek(n); };
+  document.getElementById("next").addEventListener("click", () => nextCmd(1));
+  document.addEventListener("keydown", ev => { if (ev.target.tagName === "SELECT" || ev.target.tagName === "INPUT") return; if (ev.code === "Space") { ev.preventDefault(); playing ? stop() : start(); } if (ev.code === "ArrowRight") nextCmd(1); if (ev.code === "ArrowLeft") nextCmd(-1); });
+  seek(META.open_at != null ? META.open_at : (shotsSorted.length ? shotsSorted[Math.min(2, shotsSorted.length - 1)].t + 0.5 : 0));
+})();
+</script>
