@@ -1,0 +1,2 @@
+{"kind":"note","label":"running from /home/spark/git/microduck-cli on Spark","lane":"operator","t":0.0,"wall":2000.0}
+{"file":"frame1.jpg","kind":"shot","label":"frame","lane":"viewer","size":[640,480],"t":1.0,"wall":2001.0,"window":true}
