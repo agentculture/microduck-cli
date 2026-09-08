@@ -329,3 +329,94 @@ def test_page_keeps_its_structural_ids(tmp_path):
     out = render(_write_run(tmp_path, _basic_events(), shots=["s0.png"]))
     for anchor in ('id="map"', 'id="tlsvg"', 'id="frame"', 'id="ladder"'):
         assert anchor in out.index_html
+
+
+def _events_of(html: str) -> list[dict]:
+    return json.loads(re.search(r"const EVENTS=(\[.*?\]);$", html, re.M).group(1))
+
+
+def _spans_of(html: str) -> list[dict]:
+    return json.loads(re.search(r"const SPANS=(\[.*?\]);$", html, re.M).group(1))
+
+
+def test_timeline_routes_events_through_the_same_lane_map_as_spans():
+    # Qodo 3959991560: events on the microduck / rl lanes fell through laneIdx[e.lane]
+    src = template_text()
+    timeline = src[src.index("laneIdx[laneOf(s.lane)]") :]
+    events_loop = timeline[timeline.index("for (const e of events)") :]
+    assert "laneIdx[laneOf(e.lane)]" in events_loop[:200]
+    assert "laneIdx[e.lane]" not in src
+
+
+def test_rl_lane_event_is_kept_in_the_data(tmp_path):
+    events = _basic_events() + [_event(3.0, "rl", "note", "venv probe ok", step="4")]
+    out = render(_write_run(tmp_path, events))
+    lanes = [e["lane"] for e in _events_of(out.trace_html)]
+    assert "rl" in lanes
+
+
+def test_non_numeric_elapsed_falls_back_to_the_span_bounds(tmp_path):
+    # Qodo 3959991597
+    events = [
+        _event(1.0, "cli", "cmd-start", "microduck env doctor", step="5"),
+        _event(1.5, "cli", "cmd-end", "microduck env doctor", step="5", rc=0, elapsed="soon"),
+        _event(4.0, "cli", "cmd-end", "orphan", rc=0, elapsed=["x"]),
+    ]
+    out = render(_write_run(tmp_path, events))
+    spans = {s["label"]: s for s in _spans_of(out.trace_html)}
+    assert spans["microduck env doctor"]["t0"] == 1.0
+    assert spans["microduck env doctor"]["t1"] == 1.5
+    assert spans["orphan"]["t0"] == 4.0
+    assert spans["orphan"]["t1"] == 4.0
+
+
+@pytest.mark.parametrize("bad_n", ["three", [3], {"n": 3}])
+def test_engine_count_of_the_wrong_type_does_not_break_render(tmp_path, bad_n):
+    # Qodo 3959991605
+    events = [
+        _event(2.5, "engine", "stderr", "[SENSE stage=rule source=r event=cooldown] x", n=bad_n),
+        _event(2.6, "engine", "stderr", "[SENSE stage=rule source=r event=fired] y", n=bad_n),
+    ]
+    out = render(_write_run(tmp_path, events))
+    recs = _events_of(out.trace_html)
+    fired = next(r for r in recs if r["ev"] == "fired")
+    assert "n" not in fired or isinstance(fired["n"], int)
+    cooldown = next(r for r in recs if r["ev"] == "cooldown")
+    assert cooldown["n"] == 1
+
+
+def test_wrong_typed_per_kind_extras_never_raise(tmp_path):
+    events = [
+        _event(1.0, "cli", "cmd-start", "c1", step="7"),
+        _event(
+            1.2,
+            "cli",
+            "cmd-end",
+            "c1",
+            step="7",
+            rc="zero",
+            elapsed=None,
+            stdout_first=["not", "a", "str"],
+            stdout_lines="many",
+            stderr_lines={"n": 1},
+            out=3,
+        ),
+        _event(2.0, "viewer", "shot", "frame", file="shots/s0.png", window="yes", size="big"),
+        _event(2.1, "viewer", "shot", "frame2", file="shots/s1.png", geometry=[1, 2, 3]),
+        _event(2.5, "engine", "stderr", "[SENSE stage=x event=fired] z", n=None, ev=5, stage=[]),
+        _event(3.5, "robotd", "log", "robotd: text"),
+    ]
+    out = render(_write_run(tmp_path, events, shots=["s0.png", "s1.png"]))
+    spans = _spans_of(out.trace_html)
+    assert spans[0]["rc"] is None
+    assert spans[0]["outn"] is None
+    assert spans[0]["errn"] is None
+    assert spans[0]["first"] == ""
+    shots = json.loads(re.search(r"const SHOTS=(\{.*?\});$", out.trace_html, re.M).group(1))
+    assert shots["shots/s0.png"]["window"] is True
+    assert shots["shots/s0.png"]["size"] is None
+    assert shots["shots/s1.png"]["geometry"] is None
+    recs = _events_of(out.trace_html)
+    assert any(r["t"] == 3.5 for r in recs)
+    for block in re.findall(r"<script>([\s\S]*?)</script>", out.index_html):
+        assert block.count("{") == block.count("}")
