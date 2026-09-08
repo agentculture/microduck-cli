@@ -69,12 +69,12 @@ No `/deviate` records were written during this run; the decisions below are capt
 
 ## Evidence
 
-- tests: `uv run pytest -n auto -q --cov=microduck_cli` at `f0b2610` — 1321 passed, 93 % (gate 60)
+- tests: `uv run pytest -n auto -q --cov=microduck_cli` at `f0b2610` — 1364 passed, 93 % (gate 60)
 - tests: `tests/test_trace_example.py` — pass (byte-for-byte re-render of the committed example)
 - lint: `black --check`, `isort --check-only`, `flake8`, `bandit -c pyproject.toml -r microduck_cli` — clean; `teken cli doctor . --strict` — 26/26; `markdownlint-cli2` — 0 errors
 - CI on PR #11 at `f0b2610`: test, lint, version-check, test-publish, GitGuardian, SonarCloud Code Analysis — pass; SonarCloud Quality Gate OK
-- reviews: colleague work item `ffde017a0177` (no blocking defects; two suggestions applied); Qodo 16 inline threads, all replied to and resolved
-- commits: `09d0c7e..f0b2610` on `feat/trace-noun` (33 commits)
+- reviews: colleague work item `ffde017a0177` (no blocking defects; two suggestions applied); Qodo 33 inline threads over two rounds, all replied to and resolved (one pushback)
+- commits: `09d0c7e..2a9b963` on `feat/trace-noun` (42 commits)
 - PRs: #11
 - runs: `~/.cache/duck-sim/trace/20260908T153635Z` (outside the tree); artifact of that run: <https://claude.ai/code/artifact/1bc089d7-449f-4ba1-963a-e74e6e511634>
 
@@ -94,7 +94,7 @@ No `/deviate` records were written during this run; the decisions below are capt
 
 ## Remaining Work / Follow-up
 
-- Qodo's re-review of the fix-up round was triggered (`/agentic_review`) and had not posted when this summary was written; any new findings go on this branch.
+- Qodo's second round posted 17 threads (15 bugs, 2 rule violations); 16 were fixed on this branch in four more file-disjoint branches (`f466ce6`, `6844aae`, `5f9d92b`, `b77fef8`) and one (overlong CLI lines) was pushed back with evidence — no line exceeds 100 characters and black/flake8 pass. All threads replied to and resolved.
 - The jetson-ai-lab tutorial still pins `microduck-cli==0.9.4` in Step 1; bump to the current release in the fork branch (separate PR).
 - Frames captured full-screen are ~400 KB PNGs each (4.9 MB page for the fresh run); a downscale option needs an image library and is deliberately out of this PR.
 - The first `env up --sim` failure from the morning run (body exited silently) remains unexplained; it did not recur in the traced run.
