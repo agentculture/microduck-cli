@@ -208,6 +208,83 @@ def test_import_of_a_directory_without_events_errors(
     assert "hint:" in capsys.readouterr().err
 
 
+def test_a_failed_import_removes_the_run_dir_it_created(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = tmp_path / "src"
+    empty.mkdir()
+    dst = tmp_path / "dst"
+
+    assert main(["trace", "import", str(empty), "--out", str(dst)]) == 1
+    capsys.readouterr()
+    assert not dst.exists()
+
+
+def test_a_failed_import_into_a_fresh_state_leaves_no_run_behind(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = tmp_path / "src"
+    empty.mkdir()
+    state = tmp_path / "state"
+
+    assert main(["trace", "import", str(empty), "--state", str(state)]) == 1
+    capsys.readouterr()
+
+    assert main(["trace", "list", "--state", str(state), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["runs"] == []
+
+
+def test_a_failed_import_leaves_an_existing_out_dir_alone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = tmp_path / "src"
+    empty.mkdir()
+    dst = tmp_path / "mine"
+    dst.mkdir()
+    (dst / "keepme.txt").write_text("mine\n", encoding="utf-8")
+
+    assert main(["trace", "import", str(empty), "--out", str(dst)]) == 1
+    capsys.readouterr()
+    assert dst.is_dir()
+    assert (dst / "keepme.txt").read_text(encoding="utf-8") == "mine\n"
+
+
+def _src_with_malformed_meta(tmp_path: Path) -> Path:
+    src = tmp_path / "bad-meta-src"
+    shutil.copytree(FIXTURES / "trace_import_src", src)
+    (src / "meta.json").write_text("{not json at all", encoding="utf-8")
+    return src
+
+
+def test_import_with_a_malformed_meta_is_the_two_line_contract(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    src = _src_with_malformed_meta(tmp_path)
+    rc = main(["trace", "import", str(src), "--state", str(tmp_path / "state")])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    lines = captured.err.strip().splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("error:")
+    assert lines[1].startswith("hint:")
+    assert "Traceback" not in captured.err
+
+
+def test_import_with_a_malformed_meta_json_mode(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    src = _src_with_malformed_meta(tmp_path)
+    rc = main(["trace", "import", str(src), "--state", str(tmp_path / "state"), "--json"])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    payload = json.loads(captured.err)
+    assert payload["code"] == 1
+    assert "meta.json" in payload["message"]
+    assert payload["remediation"]
+
+
 # --- exec -----------------------------------------------------------------
 
 
@@ -484,7 +561,7 @@ def test_run_pause_autolock_is_opt_in_and_confirmed_on_a_tty(
     calls: list[str] = []
 
     @contextmanager
-    def fake_pause():
+    def fake_pause(*, env=None):
         calls.append("paused")
         yield {}
 
@@ -521,6 +598,128 @@ def test_run_pause_autolock_is_opt_in_and_confirmed_on_a_tty(
     assert calls == ["paused"]
 
 
+def test_run_pauses_the_autolock_with_the_displays_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from contextlib import contextmanager
+
+    from microduck_cli.cli._commands import trace as trace_cmd
+    from microduck_cli.trace.capture import DisplayEnv
+
+    display = DisplayEnv(display=":9", xauthority="/tmp/x9", dbus="unix:path=/tmp/bus9")
+    seen: list[object] = []
+
+    @contextmanager
+    def fake_pause(*, env=None):
+        seen.append(env)
+        yield {}
+
+    monkeypatch.setattr(trace_cmd, "_discover_display", lambda: display)
+    monkeypatch.setattr(trace_cmd, "_pause_autolock", fake_pause)
+    monkeypatch.setattr(trace_cmd, "_isatty", lambda: False)
+
+    plan_path = tmp_path / "plan.toml"
+    plan_path.write_text(TWO_STEP_PLAN, encoding="utf-8")
+    rc = main(
+        [
+            "trace",
+            "run",
+            "--plan",
+            str(plan_path),
+            "--out",
+            str(tmp_path / "run"),
+            "--state",
+            str(tmp_path / "state"),
+            "--pause-autolock",
+            "--json",
+        ]
+    )
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["headless"] is False
+    assert seen == [display]
+
+
+# --- the package functions the noun delegates to --------------------------
+
+
+def test_run_traced_derives_headless_and_drops_the_shot(tmp_path: Path) -> None:
+    from microduck_cli.trace.plan import load_plan
+    from microduck_cli.trace.runner import run_traced
+
+    plan = load_plan(TWO_STEP_PLAN)
+    run = RunDir(tmp_path / "run")
+    taken: list[str] = []
+
+    traced = run_traced(
+        plan,
+        run,
+        pause_autolock=False,
+        display_env=None,
+        state_dir=str(tmp_path / "state"),
+        shot=lambda *a, **k: taken.append("shot"),
+    )
+    assert traced.headless is True
+    assert traced.autolock_paused is False
+    assert traced.plan_result.steps_run == 2
+    assert taken == []
+
+
+def test_list_runs_is_ordered_and_carries_the_title(tmp_path: Path) -> None:
+    from microduck_cli.trace.events import ensure_run_dir, list_runs, update_meta
+
+    state = tmp_path / "state"
+    for stamp in ("20260102T000000Z", "20260101T000000Z"):
+        run = ensure_run_dir(state / "trace" / stamp, 1000.0)
+        update_meta(run, title=f"run {stamp}")
+    (state / "trace" / "20260101T000000Z" / "index.html").write_text("x", encoding="utf-8")
+
+    runs = list_runs(str(state))
+    assert [r.stamp for r in runs] == ["20260101T000000Z", "20260102T000000Z"]
+    assert runs[0].rendered is True
+    assert runs[1].rendered is False
+    assert runs[0].title == "run 20260101T000000Z"
+
+
+def test_update_meta_keeps_the_keys_it_was_not_given(tmp_path: Path) -> None:
+    from microduck_cli.trace.events import ensure_run_dir, update_meta
+
+    run = ensure_run_dir(tmp_path / "run", 1234.5)
+    meta = update_meta(run, title="a title")
+    assert meta["t0_wall"] == 1234.5
+    assert meta["title"] == "a title"
+    assert update_meta(run, title=None)["title"] == "a title"
+
+
+def test_list_json_reports_the_title(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    plan_path = tmp_path / "plan.toml"
+    plan_path.write_text(TWO_STEP_PLAN, encoding="utf-8")
+    state = tmp_path / "state"
+    assert (
+        main(
+            [
+                "trace",
+                "run",
+                "--plan",
+                str(plan_path),
+                "--state",
+                str(state),
+                "--headless",
+                "--title",
+                "Named run",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert main(["trace", "list", "--state", str(state), "--json"]) == 0
+    runs = json.loads(capsys.readouterr().out)["runs"]
+    assert len(runs) == 1
+    assert runs[0]["title"] == "Named run"
+
+
 # --- serve ----------------------------------------------------------------
 
 
@@ -543,6 +742,56 @@ def test_serve_check_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) ->
 def test_serve_of_a_missing_run_dir_errors(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["trace", "serve", "/no/such/dir", "--check"]) == 1
     assert "hint:" in capsys.readouterr().err
+
+
+def test_serve_refuses_a_non_loopback_host_without_allow_remote(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    copy = tmp_path / "example"
+    shutil.copytree(EXAMPLE, copy)
+    assert main(["trace", "serve", str(copy), "--host", "0.0.0.0", "--check"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    lines = captured.err.strip().splitlines()
+    assert lines[0].startswith("error:")
+    assert lines[1].startswith("hint:")
+    assert "0.0.0.0" in lines[0]
+    # The hint names the CLI's flag, not the library keyword.
+    assert "--allow-remote" in lines[1]
+
+
+def test_serve_non_loopback_host_json_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    copy = tmp_path / "example"
+    shutil.copytree(EXAMPLE, copy)
+    assert main(["trace", "serve", str(copy), "--host", "0.0.0.0", "--check", "--json"]) == 1
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["code"] == 1
+    assert "loopback-only" in payload["message"]
+
+
+def test_serve_allow_remote_passes_the_host_through(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from microduck_cli.cli._commands import trace as trace_cmd
+    from microduck_cli.trace import serve as serve_mod
+
+    seen: dict[str, object] = {}
+
+    def spy(run_dir, **kwargs):
+        seen.update(kwargs)
+        return serve_mod.serve(run_dir, **{**kwargs, "host": "127.0.0.1"})
+
+    monkeypatch.setattr(trace_cmd, "_serve", spy)
+    copy = tmp_path / "example"
+    shutil.copytree(EXAMPLE, copy)
+
+    rc = main(["trace", "serve", str(copy), "--host", "0.0.0.0", "--allow-remote", "--check"])
+    assert rc == 0
+    assert seen["host"] == "0.0.0.0"
+    assert seen["allow_remote"] is True
+    assert capsys.readouterr().out.strip().endswith("/index.html")
 
 
 # --- the module stays thin wiring ----------------------------------------
@@ -568,6 +817,27 @@ def test_trace_command_module_imports_only_public_trace_names() -> None:
     for module, name in trace_imports:
         assert not name.startswith("_"), f"{module}.{name} is private"
         assert module.count(".") == 2, f"{module} is not a microduck_cli.trace submodule"
+
+
+def _attribute_names() -> set[str]:
+    return {node.attr for node in ast.walk(_module_tree()) if isinstance(node, ast.Attribute)}
+
+
+@pytest.mark.parametrize("attr", ["iterdir", "listdir", "read_meta", "write_meta", "events_path"])
+def test_trace_command_module_does_not_touch_the_run_dir_itself(attr: str) -> None:
+    # Directory traversal, meta mutation and reading events.jsonl are the
+    # package's job (events.list_runs / update_meta / count_events).
+    assert attr not in _attribute_names()
+
+
+def test_trace_command_module_never_names_the_events_file_as_a_path() -> None:
+    literals = {
+        node.value
+        for node in ast.walk(_module_tree())
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    # It appears inside help/overview prose, never as a path segment of its own.
+    assert "events.jsonl" not in literals
 
 
 def test_trace_command_module_defines_no_loop_or_thread_of_its_own() -> None:

@@ -29,11 +29,25 @@ The verbs
 * ``trace render`` / ``trace serve`` / ``trace list`` — regenerate the pages,
   serve them over loopback, and list what has been recorded.
 
+What is deliberately *not* here
+------------------------------
+Nothing in this module lists a directory, counts events, edits a ``meta.json``
+or decides how a run is wrapped. Those are the package's:
+:func:`~microduck_cli.trace.events.list_runs`,
+:func:`~microduck_cli.trace.events.count_shots`,
+:func:`~microduck_cli.trace.events.update_meta` /
+:func:`~microduck_cli.trace.events.append_note`,
+:func:`~microduck_cli.trace.events.ensure_run_dir` and
+:func:`~microduck_cli.trace.runner.run_traced`, which owns the
+autolock-pause-and-display policy of a traced run. What stays here is what is
+caller-facing: parsing argv, asking the operator for consent on a TTY, choosing
+the exit code and formatting the result.
+
 Test seams
 ----------
 Module attributes a test monkeypatches, mirroring ``_commands/rules.py``:
 ``_clock`` (the wall clock a new run dir is stamped with), ``_discover_display``,
-``_pause_autolock``, ``_run_plan``, ``_exec_one``, ``_serve`` and ``_isatty``.
+``_pause_autolock``, ``_run_traced``, ``_exec_one``, ``_serve`` and ``_isatty``.
 """
 
 from __future__ import annotations
@@ -51,10 +65,22 @@ from microduck_cli.cli._output import PROG, STATE_DIR_HELP, emit_diagnostic, emi
 from microduck_cli.duck.gate import Consent, confirm_on_tty, consent
 from microduck_cli.explain.trace import AUDIENCE, TAGLINE, VERBS
 from microduck_cli.trace.capture import capture_frame, discover_display, pause_autolock
-from microduck_cli.trace.events import RunDir, import_run, new_run_dir
+from microduck_cli.trace.events import (
+    TRACE_SUBDIR,
+    RunDir,
+    append_note,
+    count_shots,
+    ensure_run_dir,
+    import_run,
+    list_runs,
+    new_run_dir,
+    newest_run,
+    remove_empty_run_dir,
+    update_meta,
+)
 from microduck_cli.trace.plan import Plan, dump_plan, from_tutorial, load_plan
 from microduck_cli.trace.render import write as render_write
-from microduck_cli.trace.runner import default_state_dir, exec_one, run_plan
+from microduck_cli.trace.runner import default_state_dir, exec_one, run_traced
 from microduck_cli.trace.serve import serve as serve_run_dir
 
 _SUBJECT = f"{PROG} trace"
@@ -63,9 +89,6 @@ _PURPOSE = (
     "with wall-clock stamps, and render the MicroDuck Run Trace page from them."
 )
 
-#: The subdirectory of the state directory holding run directories.
-TRACE_SUBDIR = "trace"
-
 # ---------------------------------------------------------------------------
 # Test seams
 # ---------------------------------------------------------------------------
@@ -73,7 +96,7 @@ TRACE_SUBDIR = "trace"
 _clock: Callable[[], float] = time.time
 _discover_display = discover_display
 _pause_autolock = pause_autolock
-_run_plan = run_plan
+_run_traced = run_traced
 _exec_one = exec_one
 _serve = serve_run_dir
 
@@ -97,10 +120,6 @@ def _json_mode(args: argparse.Namespace) -> bool:
 
 def _state_dir(args: argparse.Namespace) -> str:
     return getattr(args, "state", None) or default_state_dir()
-
-
-def _trace_root(args: argparse.Namespace) -> Path:
-    return Path(_state_dir(args)) / TRACE_SUBDIR
 
 
 def _read_text(path: str, what: str) -> str:
@@ -144,11 +163,7 @@ def _make_run_dir(out: str | None, args: argparse.Namespace) -> RunDir:
     """``--out`` when given (created), else a fresh ``<state>/trace/<stamp>``."""
     try:
         if out:
-            run_dir = RunDir(Path(out))
-            run_dir.ensure()
-            if not run_dir.read_meta():
-                run_dir.write_meta({"t0_wall": _clock()})
-            return run_dir
+            return ensure_run_dir(out, _clock())
         return new_run_dir(_state_dir(args), _clock())
     except OSError as exc:
         raise CliError(
@@ -156,22 +171,6 @@ def _make_run_dir(out: str | None, args: argparse.Namespace) -> RunDir:
             f"cannot create the run directory: {exc.strerror or exc}",
             "pass a writable --out, or set --state to a writable directory",
         ) from exc
-
-
-def _newest_run_dir(args: argparse.Namespace) -> RunDir | None:
-    root = _trace_root(args)
-    if not root.is_dir():
-        return None
-    candidates = sorted(p for p in root.iterdir() if p.is_dir())
-    return RunDir(candidates[-1]) if candidates else None
-
-
-def _event_count(run_dir: RunDir) -> int:
-    path = run_dir.events_path
-    if not path.is_file():
-        return 0
-    with path.open("r", encoding="utf-8") as handle:
-        return sum(1 for line in handle if line.strip())
 
 
 def _sizes(paths: tuple[str, str]) -> list[dict[str, Any]]:
@@ -303,22 +302,13 @@ def cmd_trace_plan(args: argparse.Namespace) -> int:
 def _display_for_run(args: argparse.Namespace, run_dir: RunDir) -> Any:
     """The display to capture through, or ``None`` (headless, with a note)."""
     if args.headless:
-        _note(run_dir, "capture disabled: --headless")
+        append_note(run_dir, "capture disabled: --headless")
         return None
     display = _discover_display()
     if display is None:
-        _note(run_dir, "no display found: running headless (frames skipped)")
+        append_note(run_dir, "no display found: running headless (frames skipped)")
         emit_diagnostic("no display found — running headless; frames will be skipped")
     return display
-
-
-def _note(run_dir: RunDir, text: str) -> None:
-    """Record one operator note in the run's meta (no clock read of its own)."""
-    meta = run_dir.read_meta()
-    notes = list(meta.get("notes", []))
-    notes.append(text)
-    meta["notes"] = notes
-    run_dir.write_meta(meta)
 
 
 def _autolock_allowed() -> bool:
@@ -337,16 +327,21 @@ def cmd_trace_run(args: argparse.Namespace) -> int:
     json_mode = _json_mode(args)
     plan = load_plan(_read_text(args.plan, "plan"))
     run_dir = _make_run_dir(args.out, args)
-
-    meta = run_dir.read_meta()
-    meta["title"] = args.title or plan.title
-    run_dir.write_meta(meta)
+    update_meta(run_dir, title=args.title or plan.title)
 
     display = _display_for_run(args, run_dir)
-    shot = capture_frame if display is not None else None
-
-    paused = bool(args.pause_autolock and _autolock_allowed())
-    result = _execute(plan, run_dir, shot, display, args, paused=paused)
+    # Consent stays here: it is the only part of the run that talks to a person.
+    allowed = bool(args.pause_autolock and _autolock_allowed())
+    traced = _run_traced(
+        plan,
+        run_dir,
+        pause_autolock=allowed,
+        display_env=display,
+        state_dir=_state_dir(args),
+        shot=capture_frame,
+        pause=_pause_autolock,
+    )
+    result = traced.plan_result
 
     trace_path, index_path = _render(run_dir)
     payload = {
@@ -356,8 +351,8 @@ def cmd_trace_run(args: argparse.Namespace) -> int:
         "steps_run": result.steps_run,
         "failures": result.failures,
         "retried": result.retried,
-        "autolock_paused": paused,
-        "headless": display is None,
+        "autolock_paused": traced.autolock_paused,
+        "headless": traced.headless,
     }
     if json_mode:
         emit_result(payload, json_mode=True)
@@ -376,27 +371,6 @@ def cmd_trace_run(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS
 
 
-def _execute(
-    plan: Plan,
-    run_dir: RunDir,
-    shot: Any,
-    display: Any,
-    args: argparse.Namespace,
-    *,
-    paused: bool,
-) -> Any:
-    """Run the plan, optionally inside the autolock-pause context manager."""
-    kwargs = {
-        "shot": shot,
-        "display_env": display,
-        "state_dir": _state_dir(args),
-    }
-    if not paused:
-        return _run_plan(plan, run_dir, **kwargs)
-    with _pause_autolock():
-        return _run_plan(plan, run_dir, **kwargs)
-
-
 # ---------------------------------------------------------------------------
 # exec
 # ---------------------------------------------------------------------------
@@ -404,17 +378,15 @@ def _execute(
 
 def _exec_run_dir(args: argparse.Namespace) -> RunDir:
     if args.run:
-        run_dir = RunDir(Path(args.run))
         try:
-            run_dir.ensure()
+            return ensure_run_dir(args.run, _clock())
         except OSError as exc:
             raise CliError(
                 EXIT_ENV_ERROR,
                 f"cannot use the run directory: {args.run}: {exc.strerror or exc}",
                 "pass a writable --run path",
             ) from exc
-        return run_dir
-    existing = _newest_run_dir(args)
+    existing = newest_run(_state_dir(args))
     return existing if existing is not None else _make_run_dir(None, args)
 
 
@@ -451,14 +423,22 @@ def cmd_trace_exec(args: argparse.Namespace) -> int:
 
 
 def cmd_trace_import(args: argparse.Namespace) -> int:
+    # An --out the operator already had is theirs; a destination this verb
+    # created is ours to take back if the import never gets to write into it.
+    ours = not args.out or not Path(args.out).exists()
     dst = _make_run_dir(args.out, args)
-    count = import_run(args.src, dst, redact_home=not args.no_redact)
+    try:
+        count = import_run(args.src, dst, redact_home=not args.no_redact)
+    except CliError:
+        if ours:
+            remove_empty_run_dir(dst)
+        raise
     trace_path, index_path = _render(dst)
     payload = {
         "src": args.src,
         "run_dir": str(dst.path),
         "events": count,
-        "shots": len(sorted(dst.shots.iterdir())) if dst.shots.is_dir() else 0,
+        "shots": count_shots(dst),
         "index": index_path,
         "trace": trace_path,
         "redacted": not args.no_redact,
@@ -507,7 +487,16 @@ def cmd_trace_render(args: argparse.Namespace) -> int:
 def cmd_trace_serve(args: argparse.Namespace) -> int:
     run_dir = _existing_run_dir(args.run_dir)
     try:
-        handle = _serve(run_dir, port=args.port, host=args.host)
+        handle = _serve(run_dir, port=args.port, host=args.host, allow_remote=args.allow_remote)
+    except CliError as exc:
+        # The package refuses a non-loopback bind in library terms
+        # ("allow_remote=True"); at the CLI the operator's move is the flag.
+        raise CliError(
+            exc.code,
+            exc.message,
+            f"bind 127.0.0.1 (the default), or pass --allow-remote to serve on "
+            f"{args.host} — the server has no auth or TLS",
+        ) from exc
     except OSError as exc:
         raise CliError(
             EXIT_ENV_ERROR,
@@ -540,19 +529,18 @@ def cmd_trace_serve(args: argparse.Namespace) -> int:
 
 
 def cmd_trace_list(args: argparse.Namespace) -> int:
-    root = _trace_root(args)
-    runs: list[dict[str, Any]] = []
-    if root.is_dir():
-        for path in sorted(p for p in root.iterdir() if p.is_dir()):
-            run_dir = RunDir(path)
-            runs.append(
-                {
-                    "name": path.name,
-                    "path": str(path),
-                    "events": _event_count(run_dir),
-                    "rendered": (path / "index.html").is_file(),
-                }
-            )
+    state = _state_dir(args)
+    root = Path(state) / TRACE_SUBDIR
+    runs: list[dict[str, Any]] = [
+        {
+            "name": summary.stamp,
+            "path": summary.path,
+            "events": summary.events,
+            "rendered": summary.rendered,
+            "title": summary.title,
+        }
+        for summary in list_runs(state)
+    ]
     if _json_mode(args):
         emit_result({"root": str(root), "runs": runs}, json_mode=True)
         return EXIT_SUCCESS
@@ -681,6 +669,12 @@ def register(sub: argparse._SubParsersAction) -> None:
         "--port", type=int, default=0, help="Port to bind (0 = let the OS choose)."
     )
     serve_p.add_argument("--host", default="127.0.0.1", help="Host to bind (default: loopback).")
+    serve_p.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="Bind a non-loopback host; the server has no auth or TLS — only on "
+        "a trusted network.",
+    )
     serve_p.add_argument(
         "--check",
         action="store_true",
