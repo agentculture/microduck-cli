@@ -563,7 +563,9 @@ def test_run_pause_autolock_is_opt_in_and_confirmed_on_a_tty(
     @contextmanager
     def fake_pause(*, env=None):
         calls.append("paused")
-        yield {}
+        # A real pause yields the originals it saved; a falsy yield would mean
+        # nothing was actually paused, and the run must then report False.
+        yield {"idle-delay": "uint32 300", "lock-enabled": "true"}
 
     monkeypatch.setattr(trace_cmd, "_pause_autolock", fake_pause)
     monkeypatch.setattr(trace_cmd, "_isatty", lambda: False)

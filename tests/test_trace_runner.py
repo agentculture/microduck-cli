@@ -297,3 +297,75 @@ def test_run_plan_sleeps_and_shots(run_dir: RunDir, tmp_path: Path) -> None:
     notes = [e.label for e in _events(run_dir, "note")]
     assert "a note" in notes
     assert json.loads(run_dir.meta_path.read_text())["t0_wall"] == 1000.0
+
+
+def _one_step_plan() -> Plan:
+    return Plan(title="t", steps=[Step(step="1", label="l", cmd="true")])
+
+
+def test_run_traced_reports_paused_false_when_the_pause_yielded_nothing(tmp_path: Path) -> None:
+    from contextlib import contextmanager
+
+    from microduck_cli.trace.runner import run_traced
+
+    entered: list[str] = []
+
+    @contextmanager
+    def pause(*, env=None):
+        entered.append("entered")
+        yield {}
+
+    traced = run_traced(
+        _one_step_plan(),
+        RunDir(tmp_path / "run"),
+        pause_autolock=True,
+        display_env=None,
+        state_dir=str(tmp_path / "state"),
+        pause=pause,
+    )
+
+    assert entered == ["entered"]
+    assert traced.autolock_paused is False
+    assert traced.plan_result.steps_run == 1
+
+
+def test_run_traced_reports_paused_true_when_the_pause_yielded_state(tmp_path: Path) -> None:
+    from contextlib import contextmanager
+
+    from microduck_cli.trace.runner import run_traced
+
+    @contextmanager
+    def pause(*, env=None):
+        yield {"idle-delay": "uint32 300", "lock-enabled": "true"}
+
+    traced = run_traced(
+        _one_step_plan(),
+        RunDir(tmp_path / "run2"),
+        pause_autolock=True,
+        display_env=None,
+        state_dir=str(tmp_path / "state"),
+        pause=pause,
+    )
+
+    assert traced.autolock_paused is True
+
+
+def test_run_traced_reports_paused_false_when_the_pause_yields_none(tmp_path: Path) -> None:
+    from contextlib import contextmanager
+
+    from microduck_cli.trace.runner import run_traced
+
+    @contextmanager
+    def pause(*, env=None):
+        yield None
+
+    traced = run_traced(
+        _one_step_plan(),
+        RunDir(tmp_path / "run3"),
+        pause_autolock=True,
+        display_env=None,
+        state_dir=str(tmp_path / "state"),
+        pause=pause,
+    )
+
+    assert traced.autolock_paused is False

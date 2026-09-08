@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import functools
 import http.server
+import os
 import threading
+import uuid
 import webbrowser
 from dataclasses import dataclass
 
@@ -28,7 +30,15 @@ __all__ = ["ServeHandle", "serve"]
 # once, next to the loopback guard that makes it true.
 _SCHEME = "http"  # NOSONAR - loopback-only static server; TLS would be theatre and needs a cert
 #: Hosts that keep the server on this machine. Anything else needs ``allow_remote``.
-_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "localhost", ""})
+#: An empty host is deliberately *not* here: to :mod:`socketserver` it is the
+#: wildcard bind — every interface on the box — which is the opposite of
+#: loopback, so it has to be refused like any other off-box address.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "localhost"})
+
+#: Where a request that resolved outside the run dir is sent instead. The name
+#: is generated per process so it cannot collide with a real file in a run dir;
+#: it does not exist, so the stdlib handler answers 404 the ordinary way.
+_DENIED_NAME = f".microduck-denied-{uuid.uuid4().hex}"
 
 
 def _check_host(host: str, allow_remote: bool) -> None:
@@ -48,6 +58,27 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002 - stdlib name
         return None
+
+
+class _RootedHandler(_QuietHandler):
+    """A quiet handler that cannot be walked out of the run dir by a symlink.
+
+    :meth:`http.server.SimpleHTTPRequestHandler.translate_path` already strips
+    ``..`` from the *URL*, but it happily follows a symlink inside the served
+    directory to anywhere on the filesystem — and a run dir is written by a
+    trace run, not by the person browsing it. So the translated path is
+    resolved with :func:`os.path.realpath` and checked against the resolved
+    root; anything landing outside is redirected to a per-process name that
+    does not exist, which the stdlib turns into an ordinary 404.
+    """
+
+    def translate_path(self, path: str) -> str:
+        translated = super().translate_path(path)
+        root = os.path.realpath(self.directory)
+        resolved = os.path.realpath(translated)
+        if resolved != root and not resolved.startswith(root + os.sep):
+            return os.path.join(root, _DENIED_NAME)
+        return translated
 
 
 @dataclass
@@ -86,10 +117,14 @@ def serve(
     a run dir holds a whole session's output and this server has no auth, so a
     non-loopback bind raises :class:`~microduck_cli.cli._errors.CliError`
     (:data:`~microduck_cli.cli._errors.EXIT_USER_ERROR`) unless the caller
-    passes ``allow_remote=True`` to say it means it.
+    passes ``allow_remote=True`` to say it means it. An empty *host* is the
+    wildcard bind, so it is refused on the same terms.
+
+    Served files are confined to *run_dir*: a symlink inside it that points
+    outside is answered 404 rather than followed (:class:`_RootedHandler`).
     """
     _check_host(host, allow_remote)
-    handler = functools.partial(_QuietHandler, directory=str(run_dir.path))
+    handler = functools.partial(_RootedHandler, directory=str(run_dir.path))
     server = http.server.ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     bound_host, bound_port = server.server_address[:2]
