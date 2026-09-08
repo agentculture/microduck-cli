@@ -47,8 +47,11 @@ a caller.
 from __future__ import annotations
 
 import json
+import math
+import os
 import re
 import shutil
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -202,11 +205,31 @@ class RunDir:
         self.shots.mkdir(parents=True, exist_ok=True)
 
     def read_meta(self) -> dict[str, Any]:
-        """The parsed ``meta.json``, or ``{}`` when it does not exist yet."""
+        """The parsed ``meta.json``, or ``{}`` when it does not exist yet.
+
+        Raises :class:`CliError` when the file cannot be read as UTF-8, is not
+        valid JSON, or does not decode to a JSON object — a caller downstream
+        (``update_meta``, ``append_note``, ``ensure_run_dir``) must never see a
+        list or scalar where it expects a mapping.
+        """
         if not self.meta_path.exists():
             return {}
-        with self.meta_path.open("r", encoding="utf-8") as handle:
-            return json.load(handle)
+        text = _read_text_or_raise(self.meta_path, "meta.json")
+        try:
+            meta = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise CliError(
+                EXIT_USER_ERROR,
+                f"{self.meta_path}: invalid JSON ({exc})",
+                "fix or remove meta.json",
+            ) from exc
+        if not isinstance(meta, dict):
+            raise CliError(
+                EXIT_USER_ERROR,
+                f"{self.meta_path}: meta.json must be a JSON object",
+                "meta.json must contain a single JSON object",
+            )
+        return meta
 
     def write_meta(self, meta: dict[str, Any]) -> None:
         """Overwrite ``meta.json`` with *meta*, pretty-printed and sorted."""
@@ -328,7 +351,7 @@ def _summarise(path: Path) -> RunSummary:
     title: str | None = None
     try:
         meta = run_dir.read_meta()
-    except (OSError, json.JSONDecodeError):
+    except (CliError, OSError, json.JSONDecodeError):
         meta = {}
     raw_title = meta.get("title")
     if isinstance(raw_title, str):
@@ -425,6 +448,12 @@ def validate_line(obj: Any, lineno: int) -> Event:
             f"{_EVENTS_FILENAME} line {lineno}: invalid 't' (not a number)",
             "'t' must be a float, seconds since meta.t0_wall",
         )
+    if not math.isfinite(t_value):
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{_EVENTS_FILENAME} line {lineno}: invalid 't' (not finite)",
+            "'t' must be a finite float, seconds since meta.t0_wall (NaN/inf are refused)",
+        )
 
     wall_value = obj["wall"]
     if not _is_number(wall_value):
@@ -432,6 +461,12 @@ def validate_line(obj: Any, lineno: int) -> Event:
             EXIT_USER_ERROR,
             f"{_EVENTS_FILENAME} line {lineno}: invalid 'wall' (not a number)",
             "'wall' must be a float epoch timestamp",
+        )
+    if not math.isfinite(wall_value):
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{_EVENTS_FILENAME} line {lineno}: invalid 'wall' (not finite)",
+            "'wall' must be a finite float epoch timestamp (NaN/inf are refused)",
         )
 
     step = obj.get("step")
@@ -482,7 +517,7 @@ def load_events(run_dir: RunDir) -> list[Event]:
     path = run_dir.events_path
     if not path.exists():
         return []
-    return _parse_events(path.read_text(encoding="utf-8"))
+    return _parse_events(_read_text_or_raise(path, "events"))
 
 
 def _redact_home(text: str) -> str:
@@ -501,7 +536,7 @@ def _redact_home_in(value: Any) -> Any:
 
 
 def _read_text_or_raise(path: Path, what: str) -> str:
-    """``path.read_text`` wrapped so any ``OSError`` becomes a :class:`CliError`."""
+    """``path.read_text`` wrapped so ``OSError``/bad-encoding becomes a :class:`CliError`."""
     try:
         return path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -509,6 +544,12 @@ def _read_text_or_raise(path: Path, what: str) -> str:
             EXIT_USER_ERROR,
             f"{path}: cannot read {what} ({exc})",
             "check that the path exists, is a file, and is readable",
+        ) from exc
+    except UnicodeDecodeError as exc:
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{path}: not valid UTF-8 at byte {exc.start}",
+            f"{what} must be UTF-8 encoded text",
         ) from exc
 
 
@@ -580,28 +621,103 @@ def import_run(src: str, dst: RunDir, *, redact_home: bool = True) -> int:
         t0_wall = events[0].wall - events[0].t if events else 0.0
         meta = {"t0_wall": t0_wall}
 
+    shots_to_copy = _safe_shots_to_copy(src_path / "shots")
+
     # Every read above succeeded and validated — only now do we touch dst.
     dst.ensure()
 
-    if dst.shots.is_dir():
-        for item in dst.shots.iterdir():
-            if item.is_file():
-                item.unlink()
+    staging = Path(tempfile.mkdtemp(prefix=".import-", dir=str(dst.path)))
+    try:
+        _stage_import(staging, events, meta, shots_to_copy)
+    except OSError as exc:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise CliError(
+            EXIT_USER_ERROR,
+            f"{src}: import failed while staging ({exc})",
+            "check that the source shots are readable and the destination has room",
+        ) from exc
 
-    if dst.events_path.exists():
-        dst.events_path.unlink()
-    for event in events:
-        append_event(dst, event)
-
-    shots_src = src_path / "shots"
-    if shots_src.is_dir():
-        for item in sorted(shots_src.iterdir()):
-            if item.is_file():
-                shutil.copy2(item, dst.shots / item.name)
-
-    dst.write_meta(meta)
+    _swap_staged_import(dst, staging)
 
     return len(events)
+
+
+def _safe_shots_to_copy(shots_src: Path) -> list[Path]:
+    """Regular, non-symlinked files directly under *shots_src*, safe to copy.
+
+    A symlink is never followed — a link planted in ``src/shots`` could point
+    at an arbitrary host file, and copying its target would smuggle it into
+    the run. ``item.resolve()`` is also required to land back inside
+    *shots_src* itself, which catches a symlinked ancestor directory (e.g.
+    *shots_src* reached through a symlinked parent) that ``is_symlink()``
+    alone would miss.
+    """
+    if not shots_src.is_dir():
+        return []
+    resolved_root = shots_src.resolve()
+    selected: list[Path] = []
+    for item in sorted(shots_src.iterdir()):
+        if item.is_symlink():
+            continue
+        if not item.is_file():
+            continue
+        if item.resolve().parent != resolved_root:
+            continue
+        selected.append(item)
+    return selected
+
+
+def _stage_import(
+    staging: Path,
+    events: list[Event],
+    meta: dict[str, Any],
+    shots_to_copy: list[Path],
+) -> None:
+    """Write the would-be ``dst`` contents under *staging*, touching nothing else.
+
+    Raises ``OSError`` (never :class:`CliError`) on any failure so the caller
+    can attribute it to the import and clean up *staging* uniformly.
+    """
+    events_tmp = staging / _EVENTS_FILENAME
+    with events_tmp.open("w", encoding="utf-8") as handle:
+        for event in events:
+            handle.write(json.dumps(event.to_json(), separators=(",", ":"), sort_keys=True))
+            handle.write("\n")
+
+    meta_tmp = staging / "meta.json"
+    with meta_tmp.open("w", encoding="utf-8") as handle:
+        json.dump(meta, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+    shots_tmp = staging / "shots"
+    shots_tmp.mkdir(parents=True, exist_ok=True)
+    for item in shots_to_copy:
+        shutil.copy2(item, shots_tmp / item.name)
+
+
+def _swap_staged_import(dst: RunDir, staging: Path) -> None:
+    """Move a fully-staged import into place, as atomically as the OS allows.
+
+    ``shots/`` is swapped by renaming the old directory aside, renaming the
+    staged one in, then removing the old one — each a single filesystem
+    rename, not a copy — and ``events.jsonl``/``meta.json`` follow via
+    ``os.replace`` (atomic on the same filesystem). By the time this runs,
+    every read and every staging write has already succeeded, so this is not
+    expected to fail; if it somehow does, later steps are not attempted and
+    *staging* (and any half-renamed leftovers) are left for the next run to
+    ignore rather than risking a second, riskier repair.
+    """
+    old_shots = dst.path / ".shots-old"
+    if old_shots.exists():
+        shutil.rmtree(old_shots, ignore_errors=True)
+    dst.shots.rename(old_shots)
+    (staging / "shots").rename(dst.shots)
+    shutil.rmtree(old_shots, ignore_errors=True)
+
+    os.replace(staging / _EVENTS_FILENAME, dst.events_path)
+    os.replace(staging / "meta.json", dst.meta_path)
+
+    shutil.rmtree(staging, ignore_errors=True)
 
 
 def remove_empty_run_dir(run_dir: RunDir) -> bool:
